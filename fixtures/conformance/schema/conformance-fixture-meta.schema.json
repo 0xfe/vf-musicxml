@@ -25,6 +25,10 @@
       "type": "string",
       "enum": ["active", "skip"]
     },
+    "parse_mode": {
+      "type": "string",
+      "enum": ["strict", "lenient"]
+    },
     "notes": {
       "type": "string"
     },
@@ -36,6 +40,27 @@
       "items": {
         "type": "string"
       }
+    },
+    "collision_audit": {
+      "type": "object",
+      "required": ["selector"],
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "padding": {
+          "type": "number"
+        },
+        "min_overlap_area": {
+          "type": "number"
+        },
+        "max_overlaps": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

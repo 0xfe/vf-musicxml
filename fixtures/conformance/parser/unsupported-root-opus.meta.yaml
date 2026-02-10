@@ -1,0 +1,9 @@
+id: parser-unsupported-root-opus
+source: https://www.w3.org/2021/06/musicxml40/
+category: parser
+expected: fail
+status: active
+notes: Uses MusicXML `opus` root, which is intentionally unsupported by current parser scope (`score-partwise` + normalized `score-timewise` only).
+linked_todo: R-003
+waivers:
+  - Expected-fail fixture for unsupported root coverage in conformance gating

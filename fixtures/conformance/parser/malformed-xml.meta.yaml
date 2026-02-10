@@ -1,0 +1,9 @@
+id: parser-malformed-xml
+source: local-fixture
+category: parser
+expected: fail
+status: active
+notes: Intentionally malformed XML fixture used to verify expected-fail conformance gating and report behavior.
+linked_todo: R-003
+waivers:
+  - Baseline expected-fail control fixture for conformance pipeline integrity

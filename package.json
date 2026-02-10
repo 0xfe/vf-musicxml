@@ -13,8 +13,8 @@
       "import": "./dist/public/index.js"
     },
     "./testkit": {
-      "types": "./dist/testkit/conformance.d.ts",
-      "import": "./dist/testkit/conformance.js"
+      "types": "./dist/testkit/index.d.ts",
+      "import": "./dist/testkit/index.js"
     }
   },
   "scripts": {
@@ -27,6 +27,7 @@
     "test:integration": "vitest run tests/integration",
     "test:svg": "vitest run tests/svg",
     "test:conformance": "vitest run tests/conformance",
+    "test:conformance:report": "CONFORMANCE_REPORT_OUT_DIR=artifacts/conformance vitest run tests/conformance/execution.test.ts",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "test:watch": "vitest"

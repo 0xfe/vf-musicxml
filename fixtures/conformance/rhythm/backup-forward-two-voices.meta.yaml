@@ -1,12 +1,12 @@
-id: smoke-minimal-partwise
+id: rhythm-backup-forward-two-voices
 source: https://www.w3.org/2021/06/musicxml40/musicxml-reference/examples/
-category: smoke
+category: rhythm
 expected: pass
 status: active
-notes: Baseline smoke fixture for parser+renderer and collision-audit plumbing.
+notes: Verifies backup/forward cursor movement and voice timeline normalization.
 linked_todo: R-003
 waivers:
-  - Early-stage smoke gate while broader conformance fixtures are staged
+  - Rendering currently draws first voice in M2/M3 baseline
 collision_audit:
   selector: .vf-notehead path
   max_overlaps: 0

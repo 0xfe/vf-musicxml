@@ -2,10 +2,26 @@ import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
+import { detectSvgOverlaps, extractSvgElementBounds, type SvgOverlap } from './svg-collision.js';
+
 /** Expected fixture behavior for the current implementation stage. */
 export type FixtureExpectation = 'pass' | 'fail';
 /** Fixture activation status in the conformance suite. */
 export type FixtureStatus = 'active' | 'skip';
+/** Parse strictness applied during conformance fixture execution. */
+export type FixtureParseMode = 'strict' | 'lenient';
+
+/**
+ * Optional collision-audit configuration applied to rendered fixture SVG.
+ * This keeps collision checks declarative so per-fixture sensitivity can be tuned
+ * without editing test code.
+ */
+export interface ConformanceCollisionAuditMeta {
+  selector: string;
+  padding?: number;
+  min_overlap_area?: number;
+  max_overlaps?: number;
+}
 
 /** Metadata contract for one conformance fixture sidecar file. */
 export interface ConformanceFixtureMeta {
@@ -14,9 +30,11 @@ export interface ConformanceFixtureMeta {
   category: string;
   expected: FixtureExpectation;
   status: FixtureStatus;
+  parse_mode?: FixtureParseMode;
   notes?: string;
   linked_todo?: string;
   waivers?: string[];
+  collision_audit?: ConformanceCollisionAuditMeta;
 }
 
 /** Resolved fixture record including metadata and score file paths. */
@@ -24,6 +42,17 @@ export interface ConformanceFixtureRecord {
   metaPath: string;
   scorePath: string;
   meta: ConformanceFixtureMeta;
+}
+
+/** Serializable result from executing a configured fixture collision audit. */
+export interface ConformanceCollisionAuditReport {
+  fixtureId: string;
+  selector: string;
+  elementCount: number;
+  overlapCount: number;
+  maxOverlaps: number;
+  pass: boolean;
+  overlaps: SvgOverlap[];
 }
 
 /** Validation error for malformed conformance metadata. */
@@ -105,8 +134,10 @@ function parseAndValidateMeta(filePath: string, input: unknown): ConformanceFixt
   }
 
   const notes = readOptionalString(filePath, obj, 'notes');
+  const parseMode = readOptionalParseMode(filePath, obj, 'parse_mode');
   const linkedTodo = readOptionalString(filePath, obj, 'linked_todo');
   const waivers = readOptionalStringArray(filePath, obj, 'waivers');
+  const collisionAudit = readOptionalCollisionAudit(filePath, obj, 'collision_audit');
 
   const meta: ConformanceFixtureMeta = {
     id,
@@ -119,11 +150,17 @@ function parseAndValidateMeta(filePath: string, input: unknown): ConformanceFixt
   if (notes !== undefined) {
     meta.notes = notes;
   }
+  if (parseMode !== undefined) {
+    meta.parse_mode = parseMode;
+  }
   if (linkedTodo !== undefined) {
     meta.linked_todo = linkedTodo;
   }
   if (waivers !== undefined) {
     meta.waivers = waivers;
+  }
+  if (collisionAudit !== undefined) {
+    meta.collision_audit = collisionAudit;
   }
 
   return meta;
@@ -152,6 +189,24 @@ function readOptionalString(filePath: string, obj: Record<string, unknown>, key:
   return value;
 }
 
+/** Read optional fixture parse-mode and validate enum membership. */
+function readOptionalParseMode(
+  filePath: string,
+  obj: Record<string, unknown>,
+  key: string
+): FixtureParseMode | undefined {
+  const value = obj[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (value !== 'strict' && value !== 'lenient') {
+    throw new ConformanceMetadataError(filePath, `'${key}' must be 'strict' or 'lenient'`);
+  }
+
+  return value;
+}
+
 /** Read an optional string-array metadata field. */
 function readOptionalStringArray(
   filePath: string,
@@ -168,6 +223,104 @@ function readOptionalStringArray(
   }
 
   return value;
+}
+
+/** Read and validate optional nested collision-audit metadata. */
+function readOptionalCollisionAudit(
+  filePath: string,
+  obj: Record<string, unknown>,
+  key: string
+): ConformanceCollisionAuditMeta | undefined {
+  const value = obj[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ConformanceMetadataError(filePath, `'${key}' must be an object`);
+  }
+
+  const collision = value as Record<string, unknown>;
+  const selector = readRequiredString(filePath, collision, 'selector');
+  const padding = readOptionalNumber(filePath, collision, 'padding');
+  const minOverlapArea = readOptionalNumber(filePath, collision, 'min_overlap_area');
+  const maxOverlaps = readOptionalNonNegativeInteger(filePath, collision, 'max_overlaps');
+
+  const result: ConformanceCollisionAuditMeta = { selector };
+  if (padding !== undefined) {
+    result.padding = padding;
+  }
+  if (minOverlapArea !== undefined) {
+    result.min_overlap_area = minOverlapArea;
+  }
+  if (maxOverlaps !== undefined) {
+    result.max_overlaps = maxOverlaps;
+  }
+
+  return result;
+}
+
+/** Read an optional numeric metadata field. */
+function readOptionalNumber(filePath: string, obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new ConformanceMetadataError(filePath, `'${key}' must be a finite number`);
+  }
+
+  return value;
+}
+
+/** Read an optional non-negative integer metadata field. */
+function readOptionalNonNegativeInteger(
+  filePath: string,
+  obj: Record<string, unknown>,
+  key: string
+): number | undefined {
+  const value = readOptionalNumber(filePath, obj, key);
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isInteger(value) || value < 0) {
+    throw new ConformanceMetadataError(filePath, `'${key}' must be a non-negative integer`);
+  }
+
+  return value;
+}
+
+/**
+ * Execute configured collision checks for one rendered fixture SVG.
+ * Returns `undefined` when the fixture has no `collision_audit` block.
+ */
+export function runConformanceCollisionAudit(
+  svgMarkup: string,
+  meta: ConformanceFixtureMeta
+): ConformanceCollisionAuditReport | undefined {
+  if (!meta.collision_audit) {
+    return undefined;
+  }
+
+  const selector = meta.collision_audit.selector;
+  const maxOverlaps = meta.collision_audit.max_overlaps ?? 0;
+  const elements = extractSvgElementBounds(svgMarkup, { selector });
+  const overlaps = detectSvgOverlaps(elements, {
+    padding: meta.collision_audit.padding,
+    minOverlapArea: meta.collision_audit.min_overlap_area
+  });
+
+  return {
+    fixtureId: meta.id,
+    selector,
+    elementCount: elements.length,
+    overlapCount: overlaps.length,
+    maxOverlaps,
+    pass: overlaps.length <= maxOverlaps,
+    overlaps
+  };
 }
 
 /** Resolve the score file that belongs to one metadata file. */

@@ -261,6 +261,15 @@ function parseMeasure(
           'backup'
         );
         warnedMissingDivisions = warnedMissingDivisions || durationTicks.warnedMissingDivisions;
+        if (durationTicks.ticks > streamCursorTicks) {
+          addDiagnostic(
+            ctx,
+            'BACKUP_BEFORE_MEASURE_START',
+            'warning',
+            `Backup duration ${durationTicks.ticks} exceeds current cursor ${streamCursorTicks}; clamping to measure start.`,
+            child
+          );
+        }
         streamCursorTicks = Math.max(0, streamCursorTicks - durationTicks.ticks);
         break;
       }
@@ -296,6 +305,15 @@ function parseMeasure(
   const expectedDuration = expectedMeasureDuration(effectiveAttributes.timeSignature, TICKS_PER_QUARTER);
   if (expectedDuration > 0) {
     const actualDuration = maxVoiceEnd(voiceTimelines);
+    if (streamCursorTicks > expectedDuration) {
+      addDiagnostic(
+        ctx,
+        'MEASURE_CURSOR_OVERFLOW',
+        'warning',
+        `Measure cursor overflow: expected ${expectedDuration} ticks but cursor ended at ${streamCursorTicks} ticks.`,
+        measureNode
+      );
+    }
     if (actualDuration > expectedDuration) {
       addDiagnostic(
         ctx,

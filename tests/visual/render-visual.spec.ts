@@ -26,4 +26,9 @@ test('renders a simple score to visible SVG in the browser', async ({ page }) =>
 
   const image = await svg.screenshot();
   expect(image.byteLength).toBeGreaterThan(5000);
+
+  await expect(svg).toHaveScreenshot('render-smoke-minimal-partwise.png', {
+    animations: 'disabled',
+    scale: 'css'
+  });
 });

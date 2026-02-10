@@ -1,0 +1,9 @@
+id: mxl-invalid-container
+source: local-fixture
+category: mxl
+expected: fail
+status: active
+notes: Non-ZIP payload with `.mxl` extension verifies invalid-container diagnostics and expected-fail conformance behavior.
+linked_todo: R-006
+waivers:
+  - Expected-fail fixture for malformed `.mxl` archive handling

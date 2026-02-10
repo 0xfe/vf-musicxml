@@ -152,6 +152,67 @@ describe('public API parser', () => {
     expect(result.diagnostics.some((d) => d.code === 'MXL_INVALID_ARCHIVE')).toBe(true);
   });
 
+  it('reports missing score payload when container.xml points at a non-existent rootfile', async () => {
+    const mxl = createStoredZip([
+      {
+        name: 'META-INF/container.xml',
+        data: `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="missing-score.xml" media-type="application/vnd.recordare.musicxml+xml" />
+  </rootfiles>
+</container>`
+      },
+      { name: 'score.xml', data: MINIMAL_PARTWISE }
+    ]);
+
+    const result = await parseMusicXMLAsync({ data: mxl, format: 'mxl' });
+
+    expect(result.score).toBeUndefined();
+    expect(result.diagnostics.some((d) => d.code === 'MXL_SCORE_FILE_NOT_FOUND')).toBe(true);
+  });
+
+  it('falls back to XML score discovery when container.xml is malformed', async () => {
+    const mxl = createStoredZip([
+      {
+        name: 'META-INF/container.xml',
+        data: '<container><rootfiles><rootfile full-path="score.xml"></container>'
+      },
+      { name: 'score.xml', data: MINIMAL_PARTWISE }
+    ]);
+
+    const result = await parseMusicXMLAsync({ data: mxl, format: 'mxl' });
+
+    expect(result.score).toBeDefined();
+    expect(result.diagnostics.some((d) => d.code === 'MXL_CONTAINER_INVALID')).toBe(true);
+  });
+
+  it('reports score read failures when MXL entry compression method is unsupported', async () => {
+    const mxl = createStoredZip([
+      { name: 'META-INF/container.xml', data: MXL_CONTAINER_XML },
+      {
+        name: 'score.xml',
+        data: MINIMAL_PARTWISE,
+        compressionMethod: 99
+      }
+    ]);
+
+    const result = await parseMusicXMLAsync({ data: mxl, format: 'mxl' });
+
+    expect(result.score).toBeUndefined();
+    expect(result.diagnostics.some((d) => d.code === 'MXL_SCORE_FILE_READ_FAILED')).toBe(true);
+  });
+
+  it('reports invalid archive when MXL central directory is truncated', async () => {
+    const valid = createStoredZip([{ name: 'score.musicxml', data: MINIMAL_PARTWISE }]);
+    const truncated = valid.subarray(0, valid.length - 8);
+
+    const result = await parseMusicXMLAsync({ data: truncated, format: 'mxl' });
+
+    expect(result.score).toBeUndefined();
+    expect(result.diagnostics.some((d) => d.code === 'MXL_INVALID_ARCHIVE')).toBe(true);
+  });
+
   it('parses XML bytes via async parser path', async () => {
     const encoder = new TextEncoder();
     const result = await parseMusicXMLAsync({
@@ -167,6 +228,7 @@ describe('public API parser', () => {
 interface ZipFixtureEntry {
   name: string;
   data: string | Uint8Array;
+  compressionMethod?: number;
 }
 
 /** Build a minimal ZIP archive with stored (uncompressed) entries for test fixtures. */
@@ -179,13 +241,14 @@ function createStoredZip(entries: ZipFixtureEntry[]): Uint8Array {
   for (const entry of entries) {
     const nameBytes = encoder.encode(entry.name);
     const dataBytes = typeof entry.data === 'string' ? encoder.encode(entry.data) : entry.data;
+    const compressionMethod = entry.compressionMethod ?? 0;
     const localOffset = localBytes.length;
 
     // Local file header.
     pushU32(localBytes, 0x04034b50);
     pushU16(localBytes, 20); // version needed
     pushU16(localBytes, 0); // flags
-    pushU16(localBytes, 0); // method: stored
+    pushU16(localBytes, compressionMethod);
     pushU16(localBytes, 0); // mod time
     pushU16(localBytes, 0); // mod date
     pushU32(localBytes, 0); // crc32 (unused by parser)
@@ -201,7 +264,7 @@ function createStoredZip(entries: ZipFixtureEntry[]): Uint8Array {
     pushU16(centralRecord, 20); // version made by
     pushU16(centralRecord, 20); // version needed
     pushU16(centralRecord, 0); // flags
-    pushU16(centralRecord, 0); // method: stored
+    pushU16(centralRecord, compressionMethod);
     pushU16(centralRecord, 0); // mod time
     pushU16(centralRecord, 0); // mod date
     pushU32(centralRecord, 0); // crc32

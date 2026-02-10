@@ -1,0 +1,13 @@
+id: notation-invalid-pitch-step-lenient
+source: local-fixture
+category: notation
+expected: pass
+status: active
+parse_mode: lenient
+notes: Invalid pitch step should emit warning diagnostics but remain parseable/renderable in lenient mode.
+linked_todo: R-003
+waivers:
+  - Lenient fallback keeps note event parseable while preserving diagnostics
+collision_audit:
+  selector: .vf-notehead path
+  max_overlaps: 0

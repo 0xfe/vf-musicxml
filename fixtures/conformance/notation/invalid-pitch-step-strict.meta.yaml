@@ -1,0 +1,10 @@
+id: notation-invalid-pitch-step-strict
+source: local-fixture
+category: notation
+expected: fail
+status: active
+parse_mode: strict
+notes: Same invalid pitch step fixture as lenient variant, but strict mode escalates warnings to errors and should fail conformance.
+linked_todo: R-003
+waivers:
+  - Strict-mode expected-fail fixture for unsupported notation diagnostics
