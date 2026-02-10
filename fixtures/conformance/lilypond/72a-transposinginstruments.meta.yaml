@@ -1,0 +1,7 @@
+id: lilypond-72a-transposinginstruments
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-44743386.xml
+category: lilypond-72
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (72a-TransposingInstruments.xml).

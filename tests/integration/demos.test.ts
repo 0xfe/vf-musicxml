@@ -17,7 +17,7 @@ async function loadDemoScoreFiles(): Promise<string[]> {
 describe('demo scores', () => {
   it('parse and render without error diagnostics', async () => {
     const scoreFiles = await loadDemoScoreFiles();
-    expect(scoreFiles.length).toBeGreaterThanOrEqual(2);
+    expect(scoreFiles.length).toBeGreaterThanOrEqual(8);
 
     for (const scoreFile of scoreFiles) {
       const scorePath = path.join(DEMO_SCORES_DIR, scoreFile);

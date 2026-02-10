@@ -1,0 +1,8 @@
+id: realworld-openscore-lieder-just-for-today
+source: https://raw.githubusercontent.com/OpenScore/Lieder/main/scores/Abbott,_Jane_Bingham/_/Just_for_Today/lc6583477.mxl
+category: realworld-vocal-song
+expected: pass
+status: active
+parse_mode: lenient
+notes: "Representative public-domain song score with vocal + accompaniment texture. Source repo: https://github.com/OpenScore/Lieder (license: CC0-1.0)."
+waivers: ["license:CC0-1.0"]

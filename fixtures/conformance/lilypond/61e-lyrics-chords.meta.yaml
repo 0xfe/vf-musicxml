@@ -1,0 +1,7 @@
+id: lilypond-61e-lyrics-chords
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/e4/lily-f5d8e7b9.xml
+category: lilypond-61
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

@@ -2,7 +2,7 @@
 
 TypeScript-first MusicXML parsing and rendering library for VexFlow.
 
-Current milestone: `M6` completed (advanced notation baseline: grace/cue/ornaments/tuplets/repeats/endings).
+Current milestone: `M7` in progress (comprehensiveness + quality + evaluation + VexFlow upstream hardening). `M6` advanced notation baseline is completed.
 
 ## Project goals
 - Parser + canonical score model that is independent from rendering backend.
@@ -32,9 +32,17 @@ npm run test
 
 ## Demos
 Demo sources live in:
+- `demos/scores/lilypond-01a-pitches-pitches.musicxml`
 - `demos/scores/lilypond-01c-pitches-no-voice.musicxml`
+- `demos/scores/lilypond-02a-rests-durations.musicxml`
+- `demos/scores/lilypond-03a-rhythm-durations.musicxml`
+- `demos/scores/lilypond-11a-time-signatures.musicxml`
+- `demos/scores/lilypond-13a-key-signatures.musicxml`
+- `demos/scores/lilypond-61a-lyrics.musicxml`
 - `demos/scores/lilypond-71g-multiple-chordnames.musicxml`
 - `demos/lilypond/manifest.json` (suite coverage roadmap)
+- `fixtures/corpus/lilypond-collated-v2.25.json` (canonical collated-suite index)
+- `fixtures/corpus/real-world-samples.json` (representative non-LilyPond sample set + provenance)
 
 Build static demo pages:
 ```bash
@@ -84,6 +92,10 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run test:conformance:report`: run conformance execution and emit JSON/Markdown artifacts (diagnostic histograms + category rollups) into `artifacts/conformance/`.
 - `npm run test:visual`: run Playwright browser visual smoke tests.
 - `npm run test:visual:update`: update Playwright visual snapshot baselines.
+- `npm run corpus:lilypond:sync`: refresh canonical LilyPond corpus manifest (`fixtures/corpus/lilypond-collated-v2.25.json`).
+- `npm run corpus:lilypond:import -- --cases 12a,14a`: import selected LilyPond cases into `fixtures/conformance/lilypond/`.
+- `npm run conformance:lilypond:promote`: bulk-import remaining LilyPond fixtures and auto-classify expected pass/fail from current parse/render behavior.
+- `npm run conformance:realworld:import`: import representative real-world `.mxl` samples into `fixtures/conformance/realworld/`.
 - `npm run demos:build`: build static demo HTML pages from `demos/scores/*.musicxml`.
 - `npm run demos:serve`: build demos and serve them locally at `http://localhost:4173/`.
 
@@ -127,6 +139,8 @@ Current staged conformance fixtures:
 - `fixtures/conformance/layout/m5-multipart-baseline.musicxml` (`expected: pass`, M5 multi-part/multi-staff baseline)
 - `fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml` (`expected: pass`, M5 lyric/harmony text baseline)
 - `fixtures/conformance/advanced/m6-advanced-notation-baseline.musicxml` (`expected: pass`, M6 advanced notation baseline)
+- `fixtures/conformance/lilypond/*.musicxml|*.mxl` (M7A active LilyPond tranches across categories `01/02/03/11/12/13/14/21/22/23/24/31/32/33/41/42/43/45/46/51/52/61/71/72/73/74/75/90/99`)
+- `fixtures/conformance/realworld/*.mxl` (M7A representative real-world samples: solo lead-sheet, vocal song, SATB chorale, chamber quartet incl. long-form stress sample, piano solo/sonata, orchestral excerpt)
 
 Visual sentinel coverage:
 - `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, `rhythm`, M4 `notation`, and M5 `layout` + `text`.
@@ -157,10 +171,29 @@ Visual sentinel coverage:
 - `docs/timing-model.md`
 - `docs/notation-support-matrix.md`
 - `docs/advanced-notation-policy.md`
+- `docs/planning/status.md`
+- `docs/planning/logs.md`
+- `docs/planning/todo.md`
+- `docs/planning/todo.completed.md`
+- `docs/planning/milestone-0.completed.md`
+- `docs/planning/milestone-1.completed.md`
+- `docs/planning/milestone-2.completed.md`
+- `docs/planning/milestone-3.completed.md`
+- `docs/planning/milestone-4.completed.md`
+- `docs/planning/milestone-5.completed.md`
+- `docs/planning/milestone-6.completed.md`
+- `docs/planning/milestone-7.md`
+- `docs/planning/milestone-7A.completed.md`
+- `docs/planning/milestone-7B.md`
+- `docs/planning/milestone-7C.md`
+- `docs/planning/milestone-7D.md`
+- `docs/planning/feedback.md`
 - `docs/layout-heuristics.md`
 - `docs/modularization-decision.md`
 - `docs/musicxml-tips.md`
 - `docs/vexflow-tips.md`
 - `docs/playwright-tips.md`
 - `docs/lilypond-suite-tips.md`
+- `docs/evaluation-tips.md`
+- `docs/realworld-corpus-tips.md`
 - `ai-state.md` (dense agent handoff/context file)

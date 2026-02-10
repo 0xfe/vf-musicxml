@@ -1,0 +1,7 @@
+id: lilypond-11f-timesignatures-symbolmeaning
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-fb44975a.xml
+category: lilypond-11
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

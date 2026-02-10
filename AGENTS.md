@@ -4,8 +4,11 @@ This repository tracks a staged buildout of a MusicXML parser + VexFlow renderer
 
 ## Scope discipline
 - Execute milestone scope only. Do not pull advanced notation work into early milestones.
-- Keep `plan.md` status and progress log current while milestones execute.
-- Track bugs, risks, and waivers in `todo.md` with priority and status.
+- Keep `/Users/mo/git/musicxml/docs/planning/status.md` current while milestones execute.
+- Append execution updates to `/Users/mo/git/musicxml/docs/planning/logs.md` when work is completed.
+- Track bugs, risks, and waivers in `/Users/mo/git/musicxml/docs/planning/todo.md` with priority and status.
+- Move closed risk/bug items from `/Users/mo/git/musicxml/docs/planning/todo.md` to `/Users/mo/git/musicxml/docs/planning/todo.completed.md`.
+- When a milestone is completed, rename its planning doc to `milestone-<id>.completed.md` and update all references (including `status.md`, planning index docs, and `ai-state.md`) in the same change.
 - Keep `/Users/mo/git/musicxml/ai-state.md` current so future AI agents can resume quickly without deep rediscovery.
 - For complex dependencies/tooling, maintain focused tips docs under `/Users/mo/git/musicxml/docs/` (for example VexFlow, MusicXML, Playwright/tooling).
 - Keep demo coverage current: as milestones add capabilities, add or update MusicXML demos under `/Users/mo/git/musicxml/demos/scores/` and keep demo build/view instructions current.
@@ -55,6 +58,10 @@ Every function, constant, enum, class, or major relevant identifier should be cl
 - `npm run test:conformance:report`
 - `npm run test:visual`
 - `npm run test:visual:update`
+- `npm run corpus:lilypond:sync`
+- `npm run corpus:lilypond:import -- --cases <comma-separated-case-ids>`
+- `npm run conformance:lilypond:promote`
+- `npm run conformance:realworld:import`
 - `npm run demos:build`
 - `npm run demos:serve`
 

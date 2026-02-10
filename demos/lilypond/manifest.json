@@ -1,204 +1,226 @@
 {
   "suiteSource": "https://lilypond.org/doc/v2.25/input/regression/musicxml/collated-files.html",
+  "corpusManifestPath": "fixtures/corpus/lilypond-collated-v2.25.json",
   "endGoal": "Render every LilyPond MusicXML test fixture with zero unexpected parse or render failures, then keep visual baselines stable in CI.",
   "seedDemos": [
     {
+      "id": "lilypond-01a-pitches-pitches",
+      "title": "LilyPond 01a: Pitches",
+      "description": "All diatonic and accidental pitch spellings in a compact baseline fixture.",
+      "sourceName": "01a-Pitches-Pitches.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-7663f27d.xml",
+      "localScore": "demos/scores/lilypond-01a-pitches-pitches.musicxml",
+      "categoryId": "01"
+    },
+    {
       "id": "lilypond-01c-pitches-no-voice",
-      "title": "01c-Pitches-NoVoiceElement",
+      "title": "LilyPond 01c: No Voice Element",
+      "description": "Single-note fixture that verifies optional <voice> parsing plus lyric rendering.",
       "sourceName": "01c-Pitches-NoVoiceElement.xml",
       "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/4a/lily-17c6267f.xml",
       "localScore": "demos/scores/lilypond-01c-pitches-no-voice.musicxml",
       "categoryId": "01"
     },
     {
+      "id": "lilypond-02a-rests-durations",
+      "title": "LilyPond 02a: Rests Durations",
+      "description": "Duration ladder for rests used to validate rest glyph mapping and spacing.",
+      "sourceName": "02a-Rests-Durations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fe/lily-2f7d056f.xml",
+      "localScore": "demos/scores/lilypond-02a-rests-durations.musicxml",
+      "categoryId": "02"
+    },
+    {
+      "id": "lilypond-03a-rhythm-durations",
+      "title": "LilyPond 03a: Rhythm Durations",
+      "description": "Rhythmic duration matrix used as an early readability sanity check.",
+      "sourceName": "03a-Rhythm-Durations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b7/lily-9b45d584.xml",
+      "localScore": "demos/scores/lilypond-03a-rhythm-durations.musicxml",
+      "categoryId": "03"
+    },
+    {
+      "id": "lilypond-11a-time-signatures",
+      "title": "LilyPond 11a: Time Signatures",
+      "description": "Representative meter changes and signatures for staff-attribute verification.",
+      "sourceName": "11a-TimeSignatures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b2/lily-bf3bc260.xml",
+      "localScore": "demos/scores/lilypond-11a-time-signatures.musicxml",
+      "categoryId": "11"
+    },
+    {
+      "id": "lilypond-13a-key-signatures",
+      "title": "LilyPond 13a: Key Signatures",
+      "description": "Major/minor signature transitions for accidental state and rendering checks.",
+      "sourceName": "13a-KeySignatures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/05/lily-49426352.xml",
+      "localScore": "demos/scores/lilypond-13a-key-signatures.musicxml",
+      "categoryId": "13"
+    },
+    {
+      "id": "lilypond-61a-lyrics",
+      "title": "LilyPond 61a: Lyrics",
+      "description": "Baseline lyric syllable alignment and text placement fixture.",
+      "sourceName": "61a-Lyrics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5c/lily-51194c12.xml",
+      "localScore": "demos/scores/lilypond-61a-lyrics.musicxml",
+      "categoryId": "61"
+    },
+    {
       "id": "lilypond-71g-multiple-chordnames",
-      "title": "71g-MultipleChordnames",
+      "title": "LilyPond 71g: Multiple Chord Names",
+      "description": "Harmony-heavy fixture with multiple chord changes over sustained notes.",
       "sourceName": "71g-MultipleChordnames.xml",
       "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6f/lily-05629908.xml",
       "localScore": "demos/scores/lilypond-71g-multiple-chordnames.musicxml",
       "categoryId": "71"
     }
   ],
-  "categories": [
+  "categoryStatus": [
     {
       "id": "01",
-      "title": "Pitches",
       "status": "seeded",
-      "notes": "Seed demo 01c imported."
+      "notes": "Category seeded with 01a and 01c demos."
     },
     {
       "id": "02",
-      "title": "Rests",
-      "status": "not-started",
-      "notes": "Import representative rest fixtures once M7 category promotion starts."
+      "status": "seeded",
+      "notes": "Category seeded with 02a rest-duration baseline demo."
     },
     {
       "id": "03",
-      "title": "Rhythm",
-      "status": "in-progress",
-      "notes": "Baseline rhythm conformance fixture is active."
+      "status": "seeded",
+      "notes": "Category seeded with 03a rhythm-duration baseline demo."
     },
     {
       "id": "11",
-      "title": "Time signatures",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "seeded",
+      "notes": "Category seeded with 11a time-signatures baseline demo."
     },
     {
       "id": "12",
-      "title": "Clefs",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 12a clefs baseline fixture."
     },
     {
       "id": "13",
-      "title": "Key signatures",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "seeded",
+      "notes": "Category seeded with 13a key-signatures baseline demo."
     },
     {
       "id": "14",
-      "title": "Staff attributes",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 14a staff-details baseline fixture."
     },
     {
       "id": "21",
-      "title": "Chorded notes",
       "status": "in-progress",
-      "notes": "Harmony/chord text baseline exists; expand chorded note fixtures in M7."
+      "notes": "Conformance tranche-2 activated with 21a chord baseline fixture."
     },
     {
       "id": "22",
-      "title": "Note settings, heads, etc.",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 22a noteheads baseline fixture."
     },
     {
       "id": "23",
-      "title": "Triplets and tuplets",
       "status": "in-progress",
-      "notes": "Tuplet baseline landed in M6; add LilyPond-native fixtures next."
+      "notes": "Conformance tranche-2 activated with 23a tuplets baseline fixture."
     },
     {
       "id": "24",
-      "title": "Grace notes",
       "status": "in-progress",
-      "notes": "Grace baseline landed in M6; add LilyPond-native fixtures next."
+      "notes": "Conformance coverage now includes 24a grace notes with graceful unbeamed fallback diagnostics."
     },
     {
       "id": "31",
-      "title": "Dynamics and single symbols",
       "status": "in-progress",
-      "notes": "Direction dynamics baseline exists; broader fixture coverage pending."
+      "notes": "Conformance tranche-2 activated with 31a directions baseline fixture."
     },
     {
       "id": "32",
-      "title": "Notations and articulations",
       "status": "in-progress",
-      "notes": "M4 baseline implemented; expand to collated suite breadth."
+      "notes": "Conformance tranche-2 activated with 32a notations baseline fixture."
     },
     {
       "id": "33",
-      "title": "Spanners",
       "status": "in-progress",
-      "notes": "Tie/slur/wedge baseline implemented; category-wide conformance still pending."
-    },
-    {
-      "id": "34",
-      "title": "Attribute issues",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "notes": "Conformance tranche-2 activated with 33a spanners baseline fixture."
     },
     {
       "id": "41",
-      "title": "Multiple parts (staves)",
       "status": "in-progress",
-      "notes": "M5 layout baseline implemented; broaden fixture import."
+      "notes": "Multi-part layout baseline exists from M5."
     },
     {
       "id": "42",
-      "title": "Multiple voices per staff",
       "status": "in-progress",
-      "notes": "Partial support through rhythm fixtures; broaden coverage."
+      "notes": "Voice-routing baseline exists; broader conformance imports pending."
     },
     {
       "id": "43",
-      "title": "One part on multiple staves",
       "status": "in-progress",
-      "notes": "M5 multi-staff baseline implemented; broaden fixture import."
+      "notes": "Multi-staff one-part baseline exists; broader imports pending."
     },
     {
       "id": "45",
-      "title": "Repeats",
       "status": "in-progress",
-      "notes": "Repeat baseline landed in M6; import LilyPond repeat fixtures."
+      "notes": "Repeat handling baseline exists from M6."
     },
     {
       "id": "46",
-      "title": "Bar lines and measures",
       "status": "in-progress",
-      "notes": "Baseline barline handling exists; expand suite coverage."
+      "notes": "Conformance tranche-2 activated with 46a barlines baseline fixture."
     },
     {
       "id": "51",
-      "title": "Header information",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 51a header-credits baseline fixture."
     },
     {
       "id": "52",
-      "title": "Page layout",
-      "status": "not-started",
-      "notes": "Pagination hardening is planned for M7."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 52a page-layout baseline fixture."
     },
     {
       "id": "61",
-      "title": "Lyrics",
-      "status": "in-progress",
-      "notes": "Lyric baseline landed in M5; broaden fixture import."
+      "status": "seeded",
+      "notes": "Category seeded with 61a lyrics baseline demo."
     },
     {
       "id": "71",
-      "title": "Guitar notation",
       "status": "seeded",
-      "notes": "Seed demo 71g imported."
+      "notes": "Category seeded with 71g multiple chord names demo."
     },
     {
       "id": "72",
-      "title": "Transposing instruments",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 72a transposing-instruments baseline fixture."
     },
     {
       "id": "73",
-      "title": "Percussion",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 73a percussion baseline fixture."
     },
     {
       "id": "74",
-      "title": "Figured bass",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 74a figured-bass baseline fixture."
     },
     {
       "id": "75",
-      "title": "Other instrumental notation",
-      "status": "not-started",
-      "notes": "Pending targeted fixture import."
+      "status": "in-progress",
+      "notes": "Conformance tranche-2 activated with 75a accordion-registration baseline fixture."
     },
     {
       "id": "90",
-      "title": "Compressed MusicXML files",
       "status": "in-progress",
-      "notes": "M3 .mxl baseline exists; broaden compressed-suite conformance."
+      "notes": "Conformance tranche-2 activated with 90a compressed MusicXML baseline fixture."
     },
     {
       "id": "99",
-      "title": "Broken MusicXML compatibility",
       "status": "in-progress",
-      "notes": "Baseline expected-fail fixtures exist; broaden compatibility coverage."
+      "notes": "Broken MusicXML expected-fail baseline already active in conformance."
     }
   ]
 }

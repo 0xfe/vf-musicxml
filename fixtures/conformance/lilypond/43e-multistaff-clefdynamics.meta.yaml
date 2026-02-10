@@ -1,0 +1,7 @@
+id: lilypond-43e-multistaff-clefdynamics
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/ad/lily-662719c0.xml
+category: lilypond-43
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

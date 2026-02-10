@@ -1,0 +1,7 @@
+id: lilypond-01b-pitches-intervals
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/ff/lily-abbed967.xml
+category: lilypond-01
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

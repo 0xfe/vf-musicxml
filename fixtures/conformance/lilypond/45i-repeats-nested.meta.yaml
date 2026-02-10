@@ -1,0 +1,7 @@
+id: lilypond-45i-repeats-nested
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/cd/lily-749ca9c6.xml
+category: lilypond-45
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

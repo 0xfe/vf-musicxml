@@ -41,6 +41,32 @@ describe('conformance fixture loader', () => {
     const advancedFixture = fixtures.find((fixture) => fixture.meta.id === 'advanced-m6-notation-baseline');
     expect(advancedFixture?.meta.expected).toBe('pass');
     expect(advancedFixture?.meta.category).toBe('advanced');
+
+    const lilyPondFixture = fixtures.find((fixture) => fixture.meta.id === 'lilypond-12a-clefs');
+    expect(lilyPondFixture?.meta.expected).toBe('pass');
+    expect(lilyPondFixture?.meta.category).toBe('lilypond-12');
+
+    const lilyPondGraceFixture = fixtures.find((fixture) => fixture.meta.id === 'lilypond-24a-gracenotes');
+    expect(lilyPondGraceFixture?.meta.status).toBe('active');
+    expect(lilyPondGraceFixture?.meta.expected).toBe('pass');
+
+    const realWorldFixture = fixtures.find((fixture) => fixture.meta.id === 'realworld-music21-bach-bwv1-6');
+    expect(realWorldFixture?.meta.category).toBe('realworld-chorale-satb');
+    expect(realWorldFixture?.meta.expected).toBe('pass');
+
+    const leadSheetFixture = fixtures.find(
+      (fixture) => fixture.meta.id === 'realworld-music21-berlin-alexanders-ragtime'
+    );
+    expect(leadSheetFixture?.meta.category).toBe('realworld-solo-lead-sheet');
+    expect(leadSheetFixture?.meta.expected).toBe('pass');
+
+    const orchestralFixture = fixtures.find((fixture) => fixture.meta.id === 'realworld-music21-bach-bwv248-42-4');
+    expect(orchestralFixture?.meta.category).toBe('realworld-orchestral-excerpt');
+    expect(orchestralFixture?.meta.expected).toBe('pass');
+
+    const longFormFixture = fixtures.find((fixture) => fixture.meta.id === 'realworld-music21-beethoven-op133-longform');
+    expect(longFormFixture?.meta.category).toBe('realworld-chamber-quartet');
+    expect(longFormFixture?.meta.expected).toBe('pass');
   });
 
   it('fails on invalid metadata shape', async () => {

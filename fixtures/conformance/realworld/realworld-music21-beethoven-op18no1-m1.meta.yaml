@@ -1,0 +1,8 @@
+id: realworld-music21-beethoven-op18no1-m1
+source: https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/beethoven/opus18no1/movement1.mxl
+category: realworld-chamber-quartet
+expected: pass
+status: active
+parse_mode: lenient
+notes: "String quartet movement for dense chamber-ensemble part alignment. Source repo: https://github.com/cuthbertLab/music21 (license: BSD-3-Clause)."
+waivers: ["license:BSD-3-Clause"]

@@ -1,0 +1,8 @@
+id: realworld-music21-berlin-alexanders-ragtime
+source: https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/leadSheet/berlinAlexandersRagtime.mxl
+category: realworld-solo-lead-sheet
+expected: pass
+status: active
+parse_mode: lenient
+notes: "Single-staff lead-sheet source with chord symbols and compact melody rhythm complexity. Source repo: https://github.com/cuthbertLab/music21 (license: BSD-3-Clause)."
+waivers: ["license:BSD-3-Clause"]

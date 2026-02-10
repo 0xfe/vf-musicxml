@@ -1,13 +1,30 @@
 # AI State (Dense)
 
 ## Repo intent
-- Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`plan.md`).
-- M6 completed: advanced notation baseline (grace/cue/ornaments/tuplets/repeats/endings) is implemented and test-gated.
+- Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`docs/planning/status.md` + `docs/planning/logs.md`).
+- M6 completed; M7 has started with a split execution model (M7A-M7D) for comprehensiveness, quality rubric, layered evaluation, and VexFlow upstream hardening.
+- M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
 
 ## High-signal files
 - Plan/risk:
-  - `/Users/mo/git/musicxml/plan.md`
-  - `/Users/mo/git/musicxml/todo.md`
+  - `/Users/mo/git/musicxml/docs/planning/status.md`
+  - `/Users/mo/git/musicxml/docs/planning/logs.md`
+  - `/Users/mo/git/musicxml/docs/planning/todo.md`
+  - `/Users/mo/git/musicxml/docs/planning/todo.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7A.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7B.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7C.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7D.md`
+- Corpus/demo M7A:
+  - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
+  - `/Users/mo/git/musicxml/fixtures/corpus/real-world-samples.json`
+  - `/Users/mo/git/musicxml/demos/lilypond/manifest.json`
+  - `/Users/mo/git/musicxml/scripts/sync-lilypond-corpus.mjs`
+  - `/Users/mo/git/musicxml/scripts/import-lilypond-fixtures.mjs`
+  - `/Users/mo/git/musicxml/scripts/promote-lilypond-conformance.mjs`
+  - `/Users/mo/git/musicxml/scripts/import-realworld-samples.mjs`
+  - `/Users/mo/git/musicxml/scripts/build-demos.mjs`
 - Public API:
   - `/Users/mo/git/musicxml/src/public/api.ts`
 - Parser core:
@@ -31,6 +48,8 @@
   - `/Users/mo/git/musicxml/scripts/serve-demos.mjs`
 - Suite tips:
   - `/Users/mo/git/musicxml/docs/lilypond-suite-tips.md`
+  - `/Users/mo/git/musicxml/docs/evaluation-tips.md`
+  - `/Users/mo/git/musicxml/docs/realworld-corpus-tips.md`
 
 ## Current conformance model
 - Metadata schema: `/Users/mo/git/musicxml/fixtures/conformance/schema/conformance-fixture-meta.schema.json`
@@ -38,6 +57,17 @@
 - `expected` is authoritative (`pass`/`fail`), `status` gates execution (`active`/`skip`).
 - `parse_mode` can override parser mode per fixture (`lenient` default, `strict` when needed).
 - Optional `collision_audit` block drives overlap checks.
+
+## M7 execution model (active)
+- `M7A` corpus comprehensiveness:
+  - completed: collated-suite index sync/import parity, real-world breadth + long-form coverage gates, and malformed-source expected-fail policy are test-backed.
+- `M7B` quality rubric + deterministic gates:
+  - formal `Q1..Q7` quality scoring dimensions.
+  - deterministic proxies (collision severity, spacing floors, overflow checks, spanner geometry checks).
+- `M7C` layered evaluation framework:
+  - deterministic SVG checks -> visual/perceptual metrics -> cross-renderer comparisons -> model-assisted sampled audits.
+- `M7D` VexFlow upstream loop:
+  - gap registry, patch-package traceability, upstream issue/PR lifecycle, de-patch strategy.
 
 ## Conformance execution semantics
 - Implemented in `executeConformanceFixture`:
@@ -67,6 +97,30 @@
 - `layout-m5-multipart-baseline` (`expected: pass`) multi-part/multi-staff M5 layout baseline fixture.
 - `text-m5-lyrics-harmony-baseline` (`expected: pass`) lyric/harmony M5 text baseline fixture.
 - `advanced-m6-notation-baseline` (`expected: pass`) M6 advanced notation fixture (grace/cue/ornament/tuplet/repeat+ending).
+- M7A seeded LilyPond tranche (`expected: pass`):
+  - `lilypond-01a-pitches-pitches`
+  - `lilypond-01c-pitches-no-voice`
+  - `lilypond-02a-rests-durations`
+  - `lilypond-03a-rhythm-durations`
+  - `lilypond-11a-time-signatures`
+  - `lilypond-13a-key-signatures`
+  - `lilypond-61a-lyrics`
+  - `lilypond-71g-multiple-chordnames`
+- M7A tranche-2 active LilyPond categories now include:
+  - `lilypond-12`, `lilypond-14`, `lilypond-21`, `lilypond-22`, `lilypond-23`
+  - `lilypond-31`, `lilypond-32`, `lilypond-33`
+  - `lilypond-41`, `lilypond-42`, `lilypond-43`
+  - `lilypond-45`, `lilypond-46`
+  - `lilypond-51`, `lilypond-52`
+  - `lilypond-72`, `lilypond-73`, `lilypond-74`, `lilypond-75`
+  - `lilypond-90`, `lilypond-99`
+- M7A current coverage summary:
+  - `lilypond` conformance fixtures: 156 active (`155 expected: pass`, `1 expected: fail`).
+  - `realworld` conformance fixtures: 8 active (`8 expected: pass`).
+  - total active conformance fixtures: 176 (`171 expected: pass`, `5 expected: fail`).
+  - expected-fail LilyPond fixture: `lilypond-23c-tuplet-display-nonstandard` (explicit malformed-source waiver for undefined entity + `XML_NOT_WELL_FORMED` parse failure).
+- Recently resolved M7A blocker:
+  - `lilypond-24a-gracenotes` moved to `status: active`, `expected: pass` after graceful fallback handling for VexFlow grace beaming failures (`GRACE_NOTES_BEAMING_FAILED` warning path).
 
 ## Diagnostics to know
 - XML/root: `XML_NOT_WELL_FORMED`, `UNSUPPORTED_ROOT`
@@ -89,6 +143,10 @@
   - `npm run test`
   - `npm run test:visual -- --workers=4`
 - Demos:
+  - `npm run corpus:lilypond:sync`
+  - `npm run corpus:lilypond:import -- --cases 12a,14a`
+  - `npm run conformance:lilypond:promote`
+  - `npm run conformance:realworld:import`
   - `npm run demos:build`
   - `npm run demos:serve` (open `http://localhost:4173/` and `http://localhost:4173/lilypond-roadmap.html`)
 
@@ -103,10 +161,9 @@
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts-snapshots`
   - `/Users/mo/git/musicxml/tests/visual/render-visual.spec.ts-snapshots`
 - Latest run status: `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:integration`, `npm run test:svg`, `npm run test:conformance`, and `npm run test` pass.
-- Visual status: Playwright launch is currently blocked in this local runtime by MachPort/session errors; keep visual updates environment-gated until browser launch context is stable.
+- Visual status: local Playwright visual runs are currently passing with repo-local browser binaries (`PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`).
 
 ## Next likely work (M7 start)
-- Push broader LilyPond conformance fixture import/promotion with explicit expected-fail rationales.
-- Expand seeded LilyPond demos category-by-category and keep `demos/lilypond/manifest.json` status aligned.
-- Add parse/render performance baselines and profiling artifacts.
-- Stabilize visual baseline regeneration in canonical CI/browser environment.
+- Execute M7B next: wire rubric dimensions/proxy metrics into conformance report outputs and set initial gating thresholds.
+- Execute M7C after M7B thresholds are stable: add perceptual and model-assisted audit layers.
+- Start M7D in parallel: maintain VexFlow gap registry with fixture reproducer links and upstream status.

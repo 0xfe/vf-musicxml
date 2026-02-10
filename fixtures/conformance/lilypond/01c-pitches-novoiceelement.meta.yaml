@@ -1,0 +1,7 @@
+id: lilypond-01c-pitches-novoiceelement
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/4a/lily-17c6267f.xml
+category: lilypond-01
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

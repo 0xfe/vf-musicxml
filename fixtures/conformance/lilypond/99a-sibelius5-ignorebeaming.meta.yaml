@@ -1,0 +1,7 @@
+id: lilypond-99a-sibelius5-ignorebeaming
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/3e/lily-22193084.xml
+category: lilypond-99
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (99a-Sibelius5-IgnoreBeaming.xml).

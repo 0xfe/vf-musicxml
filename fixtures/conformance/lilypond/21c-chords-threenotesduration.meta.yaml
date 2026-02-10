@@ -1,0 +1,7 @@
+id: lilypond-21c-chords-threenotesduration
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/dd/lily-63624789.xml
+category: lilypond-21
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

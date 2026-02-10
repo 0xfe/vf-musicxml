@@ -1,0 +1,7 @@
+id: lilypond-42a-multivoice-twovoicesonstaff-lyrics
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/37/lily-85a1816e.xml
+category: lilypond-42
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (42a-MultiVoice-TwoVoicesOnStaff-Lyrics.xml).

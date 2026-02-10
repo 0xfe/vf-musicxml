@@ -1,0 +1,7 @@
+id: lilypond-45a-simplerepeat
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/b8/lily-d296c83a.xml
+category: lilypond-45
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (45a-SimpleRepeat.xml).

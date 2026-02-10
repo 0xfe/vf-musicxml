@@ -1,0 +1,7 @@
+id: lilypond-33a-spanners
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/9d/lily-ac4a1ae0.xml
+category: lilypond-33
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (33a-Spanners.xml).

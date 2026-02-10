@@ -1,0 +1,8 @@
+id: realworld-music21-bach-bwv248-42-4
+source: https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/bach/bwv248.42-4.mxl
+category: realworld-orchestral-excerpt
+expected: pass
+status: active
+parse_mode: lenient
+notes: "Large multi-part excerpt (winds, strings, choir, continuo) used as an orchestral/choral stress fixture. Source repo: https://github.com/cuthbertLab/music21 (license: BSD-3-Clause)."
+waivers: ["license:BSD-3-Clause"]

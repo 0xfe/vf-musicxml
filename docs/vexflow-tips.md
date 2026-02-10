@@ -35,5 +35,5 @@
 ## If VexFlow patches are needed
 - Keep app changes isolated with small compatibility wrappers first.
 - For temporary local fixes, prefer small patch-based approach.
-- Track intended upstream PR scope in `todo.md` with fixture-backed repro.
+- Track intended upstream PR scope in `/Users/mo/git/musicxml/docs/planning/todo.md` with fixture-backed repro.
 - Use dedicated branch for VexFlow patch prep when needed (`codex/vexflow-<scope>`).

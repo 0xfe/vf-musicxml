@@ -296,7 +296,18 @@ function attachGraceGroup(
   }
 
   const graceGroup = new GraceNoteGroup(graceNotes, false);
-  graceGroup.beamNotes();
+  // VexFlow can throw for unsupported grace-beam combinations (for example
+  // when a source encodes grace durations that cannot be auto-beamed). We keep
+  // rendering by attaching unbeamed grace notes and emit a diagnostic for triage.
+  try {
+    graceGroup.beamNotes();
+  } catch (error) {
+    diagnostics.push({
+      code: 'GRACE_NOTES_BEAMING_FAILED',
+      severity: 'warning',
+      message: `Grace-note beaming failed in VexFlow; rendering without beams (${String(error)}).`
+    });
+  }
   anchor.addModifier(graceGroup, 0);
 }
 

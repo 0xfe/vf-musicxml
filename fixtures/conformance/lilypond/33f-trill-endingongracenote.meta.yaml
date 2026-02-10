@@ -1,0 +1,7 @@
+id: lilypond-33f-trill-endingongracenote
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/d9/lily-52548e50.xml
+category: lilypond-33
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

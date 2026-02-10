@@ -1,0 +1,8 @@
+id: realworld-music21-beethoven-op133-longform
+source: https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/beethoven/opus133.mxl
+category: realworld-chamber-quartet
+expected: pass
+status: active
+parse_mode: lenient
+notes: "Long-form quartet source for sustained-density stress testing, long slur/tie spans, and repeated structural sections. Source repo: https://github.com/cuthbertLab/music21 (license: BSD-3-Clause)."
+waivers: ["license:BSD-3-Clause"]

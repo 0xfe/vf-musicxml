@@ -9,8 +9,6 @@ import { loadConformanceFixtures } from '../dist/testkit/index.js';
 
 /** Absolute repository root path resolved from this script location. */
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-/** Demo source score directory tracked in git. */
-const SCORES_DIR = path.join(ROOT_DIR, 'demos', 'scores');
 /** Generated static demo site output directory. */
 const SITE_DIR = path.join(ROOT_DIR, 'demos', 'site');
 /** LilyPond demo roadmap manifest tracked in git. */
@@ -18,30 +16,11 @@ const LILYPOND_MANIFEST_PATH = path.join(ROOT_DIR, 'demos', 'lilypond', 'manifes
 /** Conformance fixture root used for roadmap alignment reporting. */
 const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
 
-/** Declarative demo catalog used to build the index page and per-demo pages. */
-const DEMO_DEFINITIONS = [
-  {
-    id: 'lilypond-01c-pitches-no-voice',
-    title: 'LilyPond 01c: No Voice Element',
-    description: 'Single-note fixture that verifies optional <voice> parsing plus lyric rendering.',
-    sourceName: '01c-Pitches-NoVoiceElement.xml',
-    sourceUrl: 'https://lilypond.org/doc/v2.25/input/regression/musicxml/4a/lily-17c6267f.xml',
-    scorePath: path.join(SCORES_DIR, 'lilypond-01c-pitches-no-voice.musicxml')
-  },
-  {
-    id: 'lilypond-71g-multiple-chordnames',
-    title: 'LilyPond 71g: Multiple Chord Names',
-    description: 'Harmony-heavy fixture with multiple chord changes over sustained notes.',
-    sourceName: '71g-MultipleChordnames.xml',
-    sourceUrl: 'https://lilypond.org/doc/v2.25/input/regression/musicxml/6f/lily-05629908.xml',
-    scorePath: path.join(SCORES_DIR, 'lilypond-71g-multiple-chordnames.musicxml')
-  }
-];
-
 /**
  * @typedef {{
  *   id: string;
  *   title: string;
+ *   description: string;
  *   sourceName: string;
  *   sourceUrl: string;
  *   localScore: string;
@@ -52,19 +31,53 @@ const DEMO_DEFINITIONS = [
 /**
  * @typedef {{
  *   id: string;
- *   title: string;
  *   status: 'seeded' | 'in-progress' | 'not-started';
  *   notes: string;
- * }} LilyPondCategory
+ * }} LilyPondCategoryStatus
  */
 
 /**
  * @typedef {{
  *   suiteSource: string;
+ *   corpusManifestPath: string;
  *   endGoal: string;
  *   seedDemos: LilyPondSeedDemo[];
- *   categories: LilyPondCategory[];
+ *   categoryStatus: LilyPondCategoryStatus[];
  * }} LilyPondManifest
+ */
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   title: string;
+ *   fixtureCount: number;
+ * }} LilyPondCorpusCategory
+ */
+
+/**
+ * @typedef {{
+ *   sourceName: string;
+ *   sourceUrl: string;
+ *   categoryId: string;
+ * }} LilyPondCorpusFixture
+ */
+
+/**
+ * @typedef {{
+ *   categories: LilyPondCorpusCategory[];
+ *   fixtures: LilyPondCorpusFixture[];
+ * }} LilyPondCorpusManifest
+ */
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   title: string;
+ *   description: string;
+ *   sourceName: string;
+ *   sourceUrl: string;
+ *   scorePath: string;
+ * }} DemoDefinition
  */
 
 /**
@@ -276,8 +289,102 @@ function buildIndexPageHtml(demos, lilypondManifest, conformanceSummary) {
 `;
 }
 
+/**
+ * Merge corpus categories with local M7 planning status so every suite category
+ * appears in the roadmap even if no explicit status override exists yet.
+ */
+function buildCategoryPlanRows(manifest, corpusManifest, activeConformanceByCategoryId) {
+  const statusByCategoryId = new Map(manifest.categoryStatus.map((entry) => [entry.id, entry]));
+
+  return corpusManifest.categories.map((category) => {
+    const statusEntry = statusByCategoryId.get(category.id);
+    const activeConformanceCount = activeConformanceByCategoryId.get(category.id) ?? 0;
+    let status = statusEntry?.status;
+    let notes = statusEntry?.notes;
+
+    if (!status) {
+      if (activeConformanceCount > 0) {
+        status = 'in-progress';
+        notes = 'Conformance fixtures are active; seeded demo page pending.';
+      } else {
+        status = 'not-started';
+        notes = 'Planned for M7 activation.';
+      }
+    }
+
+    return {
+      id: category.id,
+      title: category.title,
+      fixtureCount: category.fixtureCount,
+      activeConformanceCount,
+      status,
+      notes
+    };
+  });
+}
+
+/**
+ * Build one demo definition record from one seeded manifest entry.
+ * The output is normalized to absolute local score paths for renderer execution.
+ */
+function toDemoDefinition(seedDemo) {
+  return {
+    id: seedDemo.id,
+    title: seedDemo.title,
+    description: seedDemo.description,
+    sourceName: seedDemo.sourceName,
+    sourceUrl: seedDemo.sourceUrl,
+    scorePath: path.join(ROOT_DIR, seedDemo.localScore)
+  };
+}
+
+/**
+ * Convert all seeded demos from the manifest into renderable build definitions.
+ * The ordering is preserved because it controls index and roadmap presentation.
+ */
+function buildDemoDefinitions(manifest) {
+  return manifest.seedDemos.map((seedDemo) => toDemoDefinition(seedDemo));
+}
+
+/**
+ * Validate seeded demo records against the corpus manifest so roadmap/demo state
+ * never drifts from the canonical suite mapping.
+ */
+function assertSeedDemoCorpusAlignment(manifest, corpusManifest) {
+  const fixturesByName = new Map(corpusManifest.fixtures.map((fixture) => [fixture.sourceName, fixture]));
+
+  for (const seed of manifest.seedDemos) {
+    const fixture = fixturesByName.get(seed.sourceName);
+    if (!fixture) {
+      throw new Error(`seed demo '${seed.id}' references unknown source '${seed.sourceName}'`);
+    }
+    if (fixture.categoryId !== seed.categoryId) {
+      throw new Error(
+        `seed demo '${seed.id}' category mismatch: manifest=${seed.categoryId} corpus=${fixture.categoryId}`
+      );
+    }
+    if (fixture.sourceUrl !== seed.sourceUrl) {
+      throw new Error(
+        `seed demo '${seed.id}' source URL mismatch: manifest='${seed.sourceUrl}' corpus='${fixture.sourceUrl}'`
+      );
+    }
+  }
+}
+
 /** Build the LilyPond roadmap page with category status and conformance alignment. */
-function buildLilyPondRoadmapPageHtml(manifest, conformanceFixtures) {
+function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtures) {
+  const activeConformanceByCategoryId = new Map();
+  for (const fixture of conformanceFixtures) {
+    if (fixture.meta.status !== 'active') {
+      continue;
+    }
+    if (!fixture.meta.category.startsWith('lilypond-')) {
+      continue;
+    }
+    const categoryId = fixture.meta.category.slice('lilypond-'.length);
+    activeConformanceByCategoryId.set(categoryId, (activeConformanceByCategoryId.get(categoryId) ?? 0) + 1);
+  }
+
   const seedRows = manifest.seedDemos
     .map((seed) => {
       const localPath = escapeHtml(seed.localScore);
@@ -294,11 +401,13 @@ function buildLilyPondRoadmapPageHtml(manifest, conformanceFixtures) {
     })
     .join('\n');
 
-  const categoryRows = manifest.categories
+  const categoryRows = buildCategoryPlanRows(manifest, corpusManifest, activeConformanceByCategoryId)
     .map((category) => {
       return `<tr>
   <td>${escapeHtml(category.id)}</td>
   <td>${escapeHtml(category.title)}</td>
+  <td>${category.fixtureCount}</td>
+  <td>${category.activeConformanceCount}</td>
   <td>${escapeHtml(category.status)}</td>
   <td>${escapeHtml(category.notes)}</td>
 </tr>`;
@@ -375,6 +484,7 @@ function buildLilyPondRoadmapPageHtml(manifest, conformanceFixtures) {
         manifest.suiteSource
       )}</a></p>
       <p><strong>End goal:</strong> ${escapeHtml(manifest.endGoal)}</p>
+      <p><strong>Corpus fixtures indexed:</strong> ${corpusManifest.fixtures.length}</p>
 
       <section class="panel">
         <h2>Seeded LilyPond Demo Pages</h2>
@@ -401,6 +511,8 @@ function buildLilyPondRoadmapPageHtml(manifest, conformanceFixtures) {
             <tr>
               <th>Category</th>
               <th>Title</th>
+              <th>Fixture Count</th>
+              <th>Active Conformance</th>
               <th>Status</th>
               <th>Notes</th>
             </tr>
@@ -442,12 +554,24 @@ async function loadLilyPondManifest() {
   return /** @type {LilyPondManifest} */ (JSON.parse(raw));
 }
 
+/** Read and parse the generated LilyPond corpus manifest referenced by roadmap config. */
+async function loadLilyPondCorpusManifest(manifest) {
+  const absolutePath = path.join(ROOT_DIR, manifest.corpusManifestPath);
+  const raw = await readFile(absolutePath, 'utf8');
+  return /** @type {LilyPondCorpusManifest} */ (JSON.parse(raw));
+}
+
 /** Build static demo pages from tracked MusicXML demo scores. */
 async function buildDemos() {
+  const lilypondManifest = await loadLilyPondManifest();
+  const lilypondCorpusManifest = await loadLilyPondCorpusManifest(lilypondManifest);
+  assertSeedDemoCorpusAlignment(lilypondManifest, lilypondCorpusManifest);
+  const demoDefinitions = buildDemoDefinitions(lilypondManifest);
+
   await rm(SITE_DIR, { recursive: true, force: true });
   await mkdir(SITE_DIR, { recursive: true });
 
-  for (const demo of DEMO_DEFINITIONS) {
+  for (const demo of demoDefinitions) {
     const xml = await readFile(demo.scorePath, 'utf8');
     const parsed = parseMusicXML(xml, { sourceName: demo.scorePath, mode: 'lenient' });
     const parseErrors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
@@ -470,7 +594,6 @@ async function buildDemos() {
     await writeFile(path.join(SITE_DIR, `${demo.id}.html`), pageHtml, 'utf8');
   }
 
-  const lilypondManifest = await loadLilyPondManifest();
   const conformanceFixtures = await loadConformanceFixtures(CONFORMANCE_FIXTURES_DIR);
   const activeFixtures = conformanceFixtures.filter((fixture) => fixture.meta.status === 'active');
   const conformanceSummary = {
@@ -481,17 +604,17 @@ async function buildDemos() {
 
   await writeFile(
     path.join(SITE_DIR, 'lilypond-roadmap.html'),
-    buildLilyPondRoadmapPageHtml(lilypondManifest, conformanceFixtures),
+    buildLilyPondRoadmapPageHtml(lilypondManifest, lilypondCorpusManifest, conformanceFixtures),
     'utf8'
   );
   await writeFile(
     path.join(SITE_DIR, 'index.html'),
-    buildIndexPageHtml(DEMO_DEFINITIONS, lilypondManifest, conformanceSummary),
+    buildIndexPageHtml(demoDefinitions, lilypondManifest, conformanceSummary),
     'utf8'
   );
   // Console output is intentionally short because this script is used in npm pipelines.
   console.log(
-    `Built ${DEMO_DEFINITIONS.length} demos + LilyPond roadmap (${conformanceSummary.active} active fixtures) into ${SITE_DIR}`
+    `Built ${demoDefinitions.length} demos + LilyPond roadmap (${conformanceSummary.active} active fixtures) into ${SITE_DIR}`
   );
 }
 

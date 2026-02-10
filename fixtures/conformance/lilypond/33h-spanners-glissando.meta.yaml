@@ -1,0 +1,7 @@
+id: lilypond-33h-spanners-glissando
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/5b/lily-820e73d6.xml
+category: lilypond-33
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

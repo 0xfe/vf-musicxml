@@ -1,0 +1,7 @@
+id: lilypond-14a-staffdetails-linechanges
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/fd/lily-5c014eb4.xml
+category: lilypond-14
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (14a-StaffDetails-LineChanges.xml).

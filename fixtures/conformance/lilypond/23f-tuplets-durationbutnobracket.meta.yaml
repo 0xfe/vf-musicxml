@@ -1,0 +1,7 @@
+id: lilypond-23f-tuplets-durationbutnobracket
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-0a0215c1.xml
+category: lilypond-23
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

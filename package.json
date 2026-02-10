@@ -31,6 +31,10 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "test:watch": "vitest",
+    "corpus:lilypond:sync": "node scripts/sync-lilypond-corpus.mjs",
+    "corpus:lilypond:import": "node scripts/import-lilypond-fixtures.mjs",
+    "conformance:lilypond:promote": "npm run build && node scripts/promote-lilypond-conformance.mjs",
+    "conformance:realworld:import": "npm run build && node scripts/import-realworld-samples.mjs",
     "demos:build": "npm run build && node scripts/build-demos.mjs",
     "demos:serve": "npm run demos:build && node scripts/serve-demos.mjs"
   },

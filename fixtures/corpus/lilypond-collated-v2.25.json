@@ -1,0 +1,1255 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-02-10T22:31:42.393Z",
+  "suite": {
+    "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/collated-files.html",
+    "version": "2.25",
+    "license": "MIT"
+  },
+  "categories": [
+    {
+      "id": "01",
+      "title": "Pitches",
+      "fixtureCount": 6
+    },
+    {
+      "id": "02",
+      "title": "Rests",
+      "fixtureCount": 5
+    },
+    {
+      "id": "03",
+      "title": "Rhythm",
+      "fixtureCount": 6
+    },
+    {
+      "id": "11",
+      "title": "Time signatures",
+      "fixtureCount": 8
+    },
+    {
+      "id": "12",
+      "title": "Clefs",
+      "fixtureCount": 2
+    },
+    {
+      "id": "13",
+      "title": "Key signatures",
+      "fixtureCount": 6
+    },
+    {
+      "id": "14",
+      "title": "Staff attributes",
+      "fixtureCount": 1
+    },
+    {
+      "id": "21",
+      "title": "Chorded notes",
+      "fixtureCount": 8
+    },
+    {
+      "id": "22",
+      "title": "Note settings, heads, etc.",
+      "fixtureCount": 4
+    },
+    {
+      "id": "23",
+      "title": "Triplets, Tuplets",
+      "fixtureCount": 6
+    },
+    {
+      "id": "24",
+      "title": "Grace notes",
+      "fixtureCount": 8
+    },
+    {
+      "id": "31",
+      "title": "Dynamics and other single symbols",
+      "fixtureCount": 5
+    },
+    {
+      "id": "32",
+      "title": "Notations and Articulations",
+      "fixtureCount": 5
+    },
+    {
+      "id": "33",
+      "title": "Spanners",
+      "fixtureCount": 11
+    },
+    {
+      "id": "34",
+      "title": "Attribute issues",
+      "fixtureCount": 3
+    },
+    {
+      "id": "41",
+      "title": "Multiple parts (staves)",
+      "fixtureCount": 12
+    },
+    {
+      "id": "42",
+      "title": "Multiple voices per staff",
+      "fixtureCount": 2
+    },
+    {
+      "id": "43",
+      "title": "One part on multiple staves",
+      "fixtureCount": 7
+    },
+    {
+      "id": "45",
+      "title": "Repeats",
+      "fixtureCount": 11
+    },
+    {
+      "id": "46",
+      "title": "Bar lines, measures",
+      "fixtureCount": 8
+    },
+    {
+      "id": "51",
+      "title": "Header information",
+      "fixtureCount": 4
+    },
+    {
+      "id": "52",
+      "title": "Page layout",
+      "fixtureCount": 2
+    },
+    {
+      "id": "61",
+      "title": "Lyrics",
+      "fixtureCount": 11
+    },
+    {
+      "id": "71",
+      "title": "Guitar notation",
+      "fixtureCount": 6
+    },
+    {
+      "id": "72",
+      "title": "Transposing instruments",
+      "fixtureCount": 3
+    },
+    {
+      "id": "73",
+      "title": "Percussion",
+      "fixtureCount": 1
+    },
+    {
+      "id": "74",
+      "title": "Figured bass",
+      "fixtureCount": 1
+    },
+    {
+      "id": "75",
+      "title": "Other instrumental notation",
+      "fixtureCount": 1
+    },
+    {
+      "id": "90",
+      "title": "Compressed MusicXML files",
+      "fixtureCount": 1
+    },
+    {
+      "id": "99",
+      "title": "Compatibility with broken MusicXML",
+      "fixtureCount": 2
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "01a-pitches-pitches",
+      "caseId": "01a",
+      "sourceName": "01a-Pitches-Pitches.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-7663f27d.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "01b-pitches-intervals",
+      "caseId": "01b",
+      "sourceName": "01b-Pitches-Intervals.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ff/lily-abbed967.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "01c-pitches-novoiceelement",
+      "caseId": "01c",
+      "sourceName": "01c-Pitches-NoVoiceElement.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/4a/lily-17c6267f.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "01d-pitches-microtones",
+      "caseId": "01d",
+      "sourceName": "01d-Pitches-Microtones.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6b/lily-e44a6cf4.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "01e-pitches-parenthesizedaccidentals",
+      "caseId": "01e",
+      "sourceName": "01e-Pitches-ParenthesizedAccidentals.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/e5/lily-f3ab63ea.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "01f-pitches-parenthesizedmicrotoneaccidentals",
+      "caseId": "01f",
+      "sourceName": "01f-Pitches-ParenthesizedMicrotoneAccidentals.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f8/lily-54c53a0a.xml",
+      "categoryId": "01"
+    },
+    {
+      "id": "02a-rests-durations",
+      "caseId": "02a",
+      "sourceName": "02a-Rests-Durations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fe/lily-2f7d056f.xml",
+      "categoryId": "02"
+    },
+    {
+      "id": "02b-rests-pitchedrests",
+      "caseId": "02b",
+      "sourceName": "02b-Rests-PitchedRests.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c8/lily-5ed942b9.xml",
+      "categoryId": "02"
+    },
+    {
+      "id": "02c-rests-multimeasurerests",
+      "caseId": "02c",
+      "sourceName": "02c-Rests-MultiMeasureRests.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1e/lily-10aa45f1.xml",
+      "categoryId": "02"
+    },
+    {
+      "id": "02d-rests-multimeasure-timesignatures",
+      "caseId": "02d",
+      "sourceName": "02d-Rests-Multimeasure-TimeSignatures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/21/lily-a9365211.xml",
+      "categoryId": "02"
+    },
+    {
+      "id": "02e-rests-notype",
+      "caseId": "02e",
+      "sourceName": "02e-Rests-NoType.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/62/lily-a7e75c6a.xml",
+      "categoryId": "02"
+    },
+    {
+      "id": "03a-rhythm-durations",
+      "caseId": "03a",
+      "sourceName": "03a-Rhythm-Durations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b7/lily-9b45d584.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "03b-rhythm-backup",
+      "caseId": "03b",
+      "sourceName": "03b-Rhythm-Backup.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fe/lily-6436c76e.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "03c-rhythm-divisionchange",
+      "caseId": "03c",
+      "sourceName": "03c-Rhythm-DivisionChange.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/e5/lily-133f9224.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "03d-rhythm-dotteddurations-factors",
+      "caseId": "03d",
+      "sourceName": "03d-Rhythm-DottedDurations-Factors.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/01/lily-e84cb2d0.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "03e-rhythm-no-divisions",
+      "caseId": "03e",
+      "sourceName": "03e-Rhythm-No-Divisions.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ca/lily-b519cf36.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "03f-rhythm-forward",
+      "caseId": "03f",
+      "sourceName": "03f-Rhythm-Forward.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/9e/lily-a28d5334.xml",
+      "categoryId": "03"
+    },
+    {
+      "id": "11a-timesignatures",
+      "caseId": "11a",
+      "sourceName": "11a-TimeSignatures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b2/lily-bf3bc260.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11b-timesignatures-notime",
+      "caseId": "11b",
+      "sourceName": "11b-TimeSignatures-NoTime.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/a3/lily-e27488c8.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11c-timesignatures-complex",
+      "caseId": "11c",
+      "sourceName": "11c-TimeSignatures-Complex.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f7/lily-858f8325.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11d-timesignatures-complexmultiple",
+      "caseId": "11d",
+      "sourceName": "11d-TimeSignatures-ComplexMultiple.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cf/lily-d39a7fe0.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11e-timesignatures-complexmixed",
+      "caseId": "11e",
+      "sourceName": "11e-TimeSignatures-ComplexMixed.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/14/lily-a7bd38c1.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11f-timesignatures-symbolmeaning",
+      "caseId": "11f",
+      "sourceName": "11f-TimeSignatures-SymbolMeaning.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-fb44975a.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11g-timesignatures-singlenumber",
+      "caseId": "11g",
+      "sourceName": "11g-TimeSignatures-SingleNumber.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b9/lily-09622d3c.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "11h-timesignatures-senzamisura",
+      "caseId": "11h",
+      "sourceName": "11h-TimeSignatures-SenzaMisura.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6d/lily-00de9a1c.xml",
+      "categoryId": "11"
+    },
+    {
+      "id": "12a-clefs",
+      "caseId": "12a",
+      "sourceName": "12a-Clefs.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cb/lily-5ae4bd0d.xml",
+      "categoryId": "12"
+    },
+    {
+      "id": "12b-clefs-nokeyorclef",
+      "caseId": "12b",
+      "sourceName": "12b-Clefs-NoKeyOrClef.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-1060a91e.xml",
+      "categoryId": "12"
+    },
+    {
+      "id": "13a-keysignatures",
+      "caseId": "13a",
+      "sourceName": "13a-KeySignatures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/05/lily-49426352.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "13b-keysignatures-churchmodes",
+      "caseId": "13b",
+      "sourceName": "13b-KeySignatures-ChurchModes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/d4/lily-fecab1d8.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "13c-keysignatures-nontraditional",
+      "caseId": "13c",
+      "sourceName": "13c-KeySignatures-NonTraditional.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ef/lily-506d0499.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "13d-keysignatures-microtones",
+      "caseId": "13d",
+      "sourceName": "13d-KeySignatures-Microtones.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/38/lily-2134e886.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "13e-keysignatures-cancel",
+      "caseId": "13e",
+      "sourceName": "13e-KeySignatures-Cancel.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/61/lily-45792c5e.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "13f-keysignatures-visible",
+      "caseId": "13f",
+      "sourceName": "13f-KeySignatures-Visible.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1a/lily-85edd29a.xml",
+      "categoryId": "13"
+    },
+    {
+      "id": "14a-staffdetails-linechanges",
+      "caseId": "14a",
+      "sourceName": "14a-StaffDetails-LineChanges.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fd/lily-5c014eb4.xml",
+      "categoryId": "14"
+    },
+    {
+      "id": "21a-chord-basic",
+      "caseId": "21a",
+      "sourceName": "21a-Chord-Basic.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/61/lily-ce0270b6.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21b-chords-twonotes",
+      "caseId": "21b",
+      "sourceName": "21b-Chords-TwoNotes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fd/lily-e42b930d.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21c-chords-threenotesduration",
+      "caseId": "21c",
+      "sourceName": "21c-Chords-ThreeNotesDuration.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/dd/lily-63624789.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21d-chords-schubertstabatmater",
+      "caseId": "21d",
+      "sourceName": "21d-Chords-SchubertStabatMater.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f3/lily-d6b6a0ea.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21e-chords-pickupmeasures",
+      "caseId": "21e",
+      "sourceName": "21e-Chords-PickupMeasures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/15/lily-bba87bb2.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21f-chord-elementinbetween",
+      "caseId": "21f",
+      "sourceName": "21f-Chord-ElementInBetween.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/aa/lily-d863b78c.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21g-chords-tremolos",
+      "caseId": "21g",
+      "sourceName": "21g-Chords-Tremolos.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/8b/lily-7fb99759.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "21h-chord-accidentals",
+      "caseId": "21h",
+      "sourceName": "21h-Chord-Accidentals.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/aa/lily-ba9ad019.xml",
+      "categoryId": "21"
+    },
+    {
+      "id": "22a-noteheads",
+      "caseId": "22a",
+      "sourceName": "22a-Noteheads.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3c/lily-ef69db4d.xml",
+      "categoryId": "22"
+    },
+    {
+      "id": "22b-staff-notestyles",
+      "caseId": "22b",
+      "sourceName": "22b-Staff-Notestyles.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/67/lily-00bbaf01.xml",
+      "categoryId": "22"
+    },
+    {
+      "id": "22c-noteheads-chords",
+      "caseId": "22c",
+      "sourceName": "22c-Noteheads-Chords.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/55/lily-edaf8a60.xml",
+      "categoryId": "22"
+    },
+    {
+      "id": "22d-parenthesized-noteheads",
+      "caseId": "22d",
+      "sourceName": "22d-Parenthesized-Noteheads.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ce/lily-c5fb0590.xml",
+      "categoryId": "22"
+    },
+    {
+      "id": "23a-tuplets",
+      "caseId": "23a",
+      "sourceName": "23a-Tuplets.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/7c/lily-f0793c4c.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "23b-tuplets-styles",
+      "caseId": "23b",
+      "sourceName": "23b-Tuplets-Styles.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f9/lily-8a125f78.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "23c-tuplet-display-nonstandard",
+      "caseId": "23c",
+      "sourceName": "23c-Tuplet-Display-NonStandard.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cb/lily-b9777fc3.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "23d-tuplets-nested",
+      "caseId": "23d",
+      "sourceName": "23d-Tuplets-Nested.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f9/lily-fef733e5.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "23e-tuplets-tremolo",
+      "caseId": "23e",
+      "sourceName": "23e-Tuplets-Tremolo.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/0f/lily-92d7c422.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "23f-tuplets-durationbutnobracket",
+      "caseId": "23f",
+      "sourceName": "23f-Tuplets-DurationButNoBracket.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-0a0215c1.xml",
+      "categoryId": "23"
+    },
+    {
+      "id": "24a-gracenotes",
+      "caseId": "24a",
+      "sourceName": "24a-GraceNotes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/43/lily-191cbef8.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24b-chordasgracenote",
+      "caseId": "24b",
+      "sourceName": "24b-ChordAsGraceNote.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1e/lily-7ee17daf.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24c-gracenote-measureend",
+      "caseId": "24c",
+      "sourceName": "24c-GraceNote-MeasureEnd.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/87/lily-5c0c55ec.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24d-aftergrace",
+      "caseId": "24d",
+      "sourceName": "24d-AfterGrace.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/81/lily-177ee2b9.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24e-gracenote-staffchange",
+      "caseId": "24e",
+      "sourceName": "24e-GraceNote-StaffChange.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/18/lily-bc660258.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24f-gracenote-slur",
+      "caseId": "24f",
+      "sourceName": "24f-GraceNote-Slur.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/25/lily-635a42b5.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24g-gracenote-dynamics",
+      "caseId": "24g",
+      "sourceName": "24g-GraceNote-Dynamics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-c7584072.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "24h-gracenote-simultaneous",
+      "caseId": "24h",
+      "sourceName": "24h-GraceNote-Simultaneous.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/26/lily-85fed439.xml",
+      "categoryId": "24"
+    },
+    {
+      "id": "31a-directions",
+      "caseId": "31a",
+      "sourceName": "31a-Directions.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/eb/lily-2a828f27.xml",
+      "categoryId": "31"
+    },
+    {
+      "id": "31b-directions-order",
+      "caseId": "31b",
+      "sourceName": "31b-Directions-Order.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/4c/lily-61aa04bd.xml",
+      "categoryId": "31"
+    },
+    {
+      "id": "31c-metronomemarks",
+      "caseId": "31c",
+      "sourceName": "31c-MetronomeMarks.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3d/lily-00b7d6b7.xml",
+      "categoryId": "31"
+    },
+    {
+      "id": "31d-directions-compounds",
+      "caseId": "31d",
+      "sourceName": "31d-Directions-Compounds.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/37/lily-c42e0ec2.xml",
+      "categoryId": "31"
+    },
+    {
+      "id": "31f-direction-multiline-compounds",
+      "caseId": "31f",
+      "sourceName": "31f-Direction-Multiline-Compounds.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b2/lily-476b7d20.xml",
+      "categoryId": "31"
+    },
+    {
+      "id": "32a-notations",
+      "caseId": "32a",
+      "sourceName": "32a-Notations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/4c/lily-71a0edd4.xml",
+      "categoryId": "32"
+    },
+    {
+      "id": "32b-articulations-texts",
+      "caseId": "32b",
+      "sourceName": "32b-Articulations-Texts.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-89b7a1c6.xml",
+      "categoryId": "32"
+    },
+    {
+      "id": "32c-multiplenotationchildren",
+      "caseId": "32c",
+      "sourceName": "32c-MultipleNotationChildren.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-debbaadd.xml",
+      "categoryId": "32"
+    },
+    {
+      "id": "32d-arpeggio",
+      "caseId": "32d",
+      "sourceName": "32d-Arpeggio.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/dc/lily-0b61ac7a.xml",
+      "categoryId": "32"
+    },
+    {
+      "id": "32e-arpeggios-cross",
+      "caseId": "32e",
+      "sourceName": "32e-Arpeggios-Cross.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1b/lily-855dff44.xml",
+      "categoryId": "32"
+    },
+    {
+      "id": "33a-spanners",
+      "caseId": "33a",
+      "sourceName": "33a-Spanners.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/9d/lily-ac4a1ae0.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33b-spanners-tie",
+      "caseId": "33b",
+      "sourceName": "33b-Spanners-Tie.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/34/lily-c32892d7.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33c-spanners-slurs",
+      "caseId": "33c",
+      "sourceName": "33c-Spanners-Slurs.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/07/lily-ca91e583.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33da-spanners-octaveshifts-before",
+      "caseId": "33d",
+      "sourceName": "33da-Spanners-OctaveShifts-before.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/18/lily-ee25f29f.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33db-spanners-octaveshifts-after",
+      "caseId": "33d",
+      "sourceName": "33db-Spanners-OctaveShifts-after.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5b/lily-940e7859.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33e-spanners-octaveshifts-invalidsize",
+      "caseId": "33e",
+      "sourceName": "33e-Spanners-OctaveShifts-InvalidSize.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/da/lily-d4c6ee78.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33f-trill-endingongracenote",
+      "caseId": "33f",
+      "sourceName": "33f-Trill-EndingOnGraceNote.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/d9/lily-52548e50.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33g-slur-chordednotes",
+      "caseId": "33g",
+      "sourceName": "33g-Slur-ChordedNotes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b4/lily-1f142369.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33h-spanners-glissando",
+      "caseId": "33h",
+      "sourceName": "33h-Spanners-Glissando.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5b/lily-820e73d6.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33i-ties-notended",
+      "caseId": "33i",
+      "sourceName": "33i-Ties-NotEnded.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1e/lily-9f2219e2.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "33j-beams-tremolos",
+      "caseId": "33j",
+      "sourceName": "33j-Beams-Tremolos.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ea/lily-cea42a23.xml",
+      "categoryId": "33"
+    },
+    {
+      "id": "34a-print-object-spanners",
+      "caseId": "34a",
+      "sourceName": "34a-Print-Object-Spanners.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/99/lily-debc2660.xml",
+      "categoryId": "34"
+    },
+    {
+      "id": "34b-colors",
+      "caseId": "34b",
+      "sourceName": "34b-Colors.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5d/lily-f8d89cfa.xml",
+      "categoryId": "34"
+    },
+    {
+      "id": "34c-font-size",
+      "caseId": "34c",
+      "sourceName": "34c-Font-Size.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3a/lily-ffd77c33.xml",
+      "categoryId": "34"
+    },
+    {
+      "id": "41a-multiparts-partorder",
+      "caseId": "41a",
+      "sourceName": "41a-MultiParts-Partorder.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/56/lily-5ab6df17.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41b-multiparts-morethan10",
+      "caseId": "41b",
+      "sourceName": "41b-MultiParts-MoreThan10.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/bf/lily-10ef0be0.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41c-staffgroups",
+      "caseId": "41c",
+      "sourceName": "41c-StaffGroups.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1c/lily-8c656f2c.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41d-staffgroups-nested",
+      "caseId": "41d",
+      "sourceName": "41d-StaffGroups-Nested.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/a0/lily-6e3d22a0.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41e-staffgroups-instrumentnames-linebroken",
+      "caseId": "41e",
+      "sourceName": "41e-StaffGroups-InstrumentNames-Linebroken.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/0b/lily-7e9173c0.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41f-staffgroups-overlapping",
+      "caseId": "41f",
+      "sourceName": "41f-StaffGroups-Overlapping.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/88/lily-8c49485e.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41g-staffgroups-nestingorder",
+      "caseId": "41g",
+      "sourceName": "41g-StaffGroups-NestingOrder.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3a/lily-67cb50f7.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41h-toomanyparts",
+      "caseId": "41h",
+      "sourceName": "41h-TooManyParts.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3a/lily-45a1ae01.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41i-partnamedisplay-override",
+      "caseId": "41i",
+      "sourceName": "41i-PartNameDisplay-Override.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3e/lily-bb8fe87d.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41j-partnamedisplay-multiple-displaytext-children",
+      "caseId": "41j",
+      "sourceName": "41j-PartNameDisplay-Multiple-DisplayText-Children.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/55/lily-175e6315.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41k-partname-print",
+      "caseId": "41k",
+      "sourceName": "41k-PartName-Print.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/a7/lily-0f102f3c.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "41l-groupnamedisplay-override",
+      "caseId": "41l",
+      "sourceName": "41l-GroupNameDisplay-Override.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ad/lily-6091f21f.xml",
+      "categoryId": "41"
+    },
+    {
+      "id": "42a-multivoice-twovoicesonstaff-lyrics",
+      "caseId": "42a",
+      "sourceName": "42a-MultiVoice-TwoVoicesOnStaff-Lyrics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/37/lily-85a1816e.xml",
+      "categoryId": "42"
+    },
+    {
+      "id": "42b-multivoice-midmeasureclefchange",
+      "caseId": "42b",
+      "sourceName": "42b-MultiVoice-MidMeasureClefChange.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c2/lily-9cb60b4d.xml",
+      "categoryId": "42"
+    },
+    {
+      "id": "43a-pianostaff",
+      "caseId": "43a",
+      "sourceName": "43a-PianoStaff.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3b/lily-5f708983.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43b-multistaff-differentkeys",
+      "caseId": "43b",
+      "sourceName": "43b-MultiStaff-DifferentKeys.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c2/lily-319db554.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43c-multistaff-differentkeysafterbackup",
+      "caseId": "43c",
+      "sourceName": "43c-MultiStaff-DifferentKeysAfterBackup.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5d/lily-a6817076.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43d-multistaff-staffchange",
+      "caseId": "43d",
+      "sourceName": "43d-MultiStaff-StaffChange.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/e8/lily-69e2c655.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43e-multistaff-clefdynamics",
+      "caseId": "43e",
+      "sourceName": "43e-Multistaff-ClefDynamics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ad/lily-662719c0.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43f-multistaff-lyrics",
+      "caseId": "43f",
+      "sourceName": "43f-MultiStaff-Lyrics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/e7/lily-9f13187c.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "43g-multistaff-partsymbol",
+      "caseId": "43g",
+      "sourceName": "43g-MultiStaff-PartSymbol.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/de/lily-52bba13f.xml",
+      "categoryId": "43"
+    },
+    {
+      "id": "45a-simplerepeat",
+      "caseId": "45a",
+      "sourceName": "45a-SimpleRepeat.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b8/lily-d296c83a.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45b-repeatwithalternatives",
+      "caseId": "45b",
+      "sourceName": "45b-RepeatWithAlternatives.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/f8/lily-1093ac69.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45c-simplerepeat-nested",
+      "caseId": "45c",
+      "sourceName": "45c-SimpleRepeat-Nested.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/db/lily-e3bb3f31.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45d-repeats-multipleendings",
+      "caseId": "45d",
+      "sourceName": "45d-Repeats-MultipleEndings.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/0c/lily-ef572ff1.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45e-repeats-combination",
+      "caseId": "45e",
+      "sourceName": "45e-Repeats-Combination.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/12/lily-4449add9.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45f-repeats-invalidendings",
+      "caseId": "45f",
+      "sourceName": "45f-Repeats-InvalidEndings.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fb/lily-9cee3ac0.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45g-repeats-notended",
+      "caseId": "45g",
+      "sourceName": "45g-Repeats-NotEnded.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ed/lily-73e34d69.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45h-repeats-partial",
+      "caseId": "45h",
+      "sourceName": "45h-Repeats-Partial.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3f/lily-24d0f251.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45i-repeats-nested",
+      "caseId": "45i",
+      "sourceName": "45i-Repeats-Nested.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cd/lily-749ca9c6.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45j-simplerepeat-start",
+      "caseId": "45j",
+      "sourceName": "45j-SimpleRepeat-Start.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ec/lily-6295574f.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "45k-repeats-chords-figuredbass",
+      "caseId": "45k",
+      "sourceName": "45k-Repeats-Chords-FiguredBass.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6c/lily-e9f50e15.xml",
+      "categoryId": "45"
+    },
+    {
+      "id": "46a-barlines",
+      "caseId": "46a",
+      "sourceName": "46a-Barlines.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/01/lily-74ec1c6b.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46b-midmeasurebarline",
+      "caseId": "46b",
+      "sourceName": "46b-MidmeasureBarline.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/1d/lily-ec5f327b.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46c-midmeasure-clef",
+      "caseId": "46c",
+      "sourceName": "46c-Midmeasure-Clef.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/df/lily-fde45b0c.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46d-pickupmeasure-implicitmeasures",
+      "caseId": "46d",
+      "sourceName": "46d-PickupMeasure-ImplicitMeasures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cd/lily-ae0f7065.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46e-pickupmeasure-secondvoicestartslater",
+      "caseId": "46e",
+      "sourceName": "46e-PickupMeasure-SecondVoiceStartsLater.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/fb/lily-ccc1c5bd.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46f-incompletemeasures",
+      "caseId": "46f",
+      "sourceName": "46f-IncompleteMeasures.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/86/lily-227c5f4e.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46g-pickupmeasure-chordnames-figuredbass",
+      "caseId": "46g",
+      "sourceName": "46g-PickupMeasure-Chordnames-FiguredBass.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6a/lily-6c863e37.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "46h-barline-fermata",
+      "caseId": "46h",
+      "sourceName": "46h-Barline-Fermata.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cc/lily-05dda699.xml",
+      "categoryId": "46"
+    },
+    {
+      "id": "51a-header-credits",
+      "caseId": "51a",
+      "sourceName": "51a-Header-Credits.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ef/lily-0b92dd15.xml",
+      "categoryId": "51"
+    },
+    {
+      "id": "51b-header-quotes",
+      "caseId": "51b",
+      "sourceName": "51b-Header-Quotes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b1/lily-b4a25ceb.xml",
+      "categoryId": "51"
+    },
+    {
+      "id": "51c-multiplemetadata",
+      "caseId": "51c",
+      "sourceName": "51c-MultipleMetadata.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/60/lily-eead6ee3.xml",
+      "categoryId": "51"
+    },
+    {
+      "id": "51d-emptytitle",
+      "caseId": "51d",
+      "sourceName": "51d-EmptyTitle.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/ce/lily-a1700bb9.xml",
+      "categoryId": "51"
+    },
+    {
+      "id": "52a-pagelayout",
+      "caseId": "52a",
+      "sourceName": "52a-PageLayout.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/a3/lily-7edc92e7.xml",
+      "categoryId": "52"
+    },
+    {
+      "id": "52b-breaks",
+      "caseId": "52b",
+      "sourceName": "52b-Breaks.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/23/lily-e2e3089c.xml",
+      "categoryId": "52"
+    },
+    {
+      "id": "61a-lyrics",
+      "caseId": "61a",
+      "sourceName": "61a-Lyrics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/5c/lily-51194c12.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61b-multiplelyrics",
+      "caseId": "61b",
+      "sourceName": "61b-MultipleLyrics.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/cc/lily-cab0df2b.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61c-lyrics-pianostaff",
+      "caseId": "61c",
+      "sourceName": "61c-Lyrics-Pianostaff.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/34/lily-076db946.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61d-lyrics-melisma",
+      "caseId": "61d",
+      "sourceName": "61d-Lyrics-Melisma.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/8b/lily-9c4768b3.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61e-lyrics-chords",
+      "caseId": "61e",
+      "sourceName": "61e-Lyrics-Chords.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/e4/lily-f5d8e7b9.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61f-lyrics-gracednotes",
+      "caseId": "61f",
+      "sourceName": "61f-Lyrics-GracedNotes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/64/lily-416c0a19.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61g-lyrics-namenumber",
+      "caseId": "61g",
+      "sourceName": "61g-Lyrics-NameNumber.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/18/lily-a5fcbc31.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61h-lyrics-beamsmelismata",
+      "caseId": "61h",
+      "sourceName": "61h-Lyrics-BeamsMelismata.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/21/lily-f86f6183.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61i-lyrics-chords",
+      "caseId": "61i",
+      "sourceName": "61i-Lyrics-Chords.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c6/lily-a0520f90.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61j-lyrics-elisions",
+      "caseId": "61j",
+      "sourceName": "61j-Lyrics-Elisions.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c6/lily-59c81a8f.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "61k-lyrics-spannersextenders",
+      "caseId": "61k",
+      "sourceName": "61k-Lyrics-SpannersExtenders.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/72/lily-7c06eaf9.xml",
+      "categoryId": "61"
+    },
+    {
+      "id": "71a-chordnames",
+      "caseId": "71a",
+      "sourceName": "71a-Chordnames.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/30/lily-0a123236.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "71c-chordsfrets",
+      "caseId": "71c",
+      "sourceName": "71c-ChordsFrets.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b0/lily-171b3091.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "71d-chordsfrets-multistaff",
+      "caseId": "71d",
+      "sourceName": "71d-ChordsFrets-Multistaff.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/62/lily-952f06f9.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "71e-tabstaves",
+      "caseId": "71e",
+      "sourceName": "71e-TabStaves.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/be/lily-430ac4e8.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "71f-allchordtypes",
+      "caseId": "71f",
+      "sourceName": "71f-AllChordTypes.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/2f/lily-ffdb8bc7.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "71g-multiplechordnames",
+      "caseId": "71g",
+      "sourceName": "71g-MultipleChordnames.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6f/lily-05629908.xml",
+      "categoryId": "71"
+    },
+    {
+      "id": "72a-transposinginstruments",
+      "caseId": "72a",
+      "sourceName": "72a-TransposingInstruments.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/b3/lily-44743386.xml",
+      "categoryId": "72"
+    },
+    {
+      "id": "72b-transposinginstruments-full",
+      "caseId": "72b",
+      "sourceName": "72b-TransposingInstruments-Full.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6e/lily-6eabe0a5.xml",
+      "categoryId": "72"
+    },
+    {
+      "id": "72c-transposinginstruments-change",
+      "caseId": "72c",
+      "sourceName": "72c-TransposingInstruments-Change.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-41b0d0e8.xml",
+      "categoryId": "72"
+    },
+    {
+      "id": "73a-percussion",
+      "caseId": "73a",
+      "sourceName": "73a-Percussion.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/55/lily-5525d060.xml",
+      "categoryId": "73"
+    },
+    {
+      "id": "74a-figuredbass",
+      "caseId": "74a",
+      "sourceName": "74a-FiguredBass.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/0d/lily-ab1888af.xml",
+      "categoryId": "74"
+    },
+    {
+      "id": "75a-accordionregistrations",
+      "caseId": "75a",
+      "sourceName": "75a-AccordionRegistrations.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/6e/lily-ab52f2f7.xml",
+      "categoryId": "75"
+    },
+    {
+      "id": "90a-compressed-musicxml",
+      "caseId": "90a",
+      "sourceName": "90a-Compressed-MusicXML.mxl",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/2b/lily-91f4a3db.mxl",
+      "categoryId": "90"
+    },
+    {
+      "id": "99a-sibelius5-ignorebeaming",
+      "caseId": "99a",
+      "sourceName": "99a-Sibelius5-IgnoreBeaming.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/3e/lily-22193084.xml",
+      "categoryId": "99"
+    },
+    {
+      "id": "99b-lyrics-beamsmelismata-ignorebeams",
+      "caseId": "99b",
+      "sourceName": "99b-Lyrics-BeamsMelismata-IgnoreBeams.xml",
+      "sourceUrl": "https://lilypond.org/doc/v2.25/input/regression/musicxml/d1/lily-d3bf26c3.xml",
+      "categoryId": "99"
+    }
+  ]
+}

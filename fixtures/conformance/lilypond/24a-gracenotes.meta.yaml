@@ -1,0 +1,7 @@
+id: lilypond-24a-gracenotes
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/43/lily-191cbef8.xml
+category: lilypond-24
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A tranche-2 grace-note baseline activated after graceful fallback for VexFlow grace-beaming errors."

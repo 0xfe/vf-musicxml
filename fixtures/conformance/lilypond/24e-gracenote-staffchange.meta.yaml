@@ -1,0 +1,7 @@
+id: lilypond-24e-gracenote-staffchange
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/18/lily-bc660258.xml
+category: lilypond-24
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

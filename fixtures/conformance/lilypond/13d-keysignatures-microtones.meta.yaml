@@ -1,0 +1,7 @@
+id: lilypond-13d-keysignatures-microtones
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/38/lily-2134e886.xml
+category: lilypond-13
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

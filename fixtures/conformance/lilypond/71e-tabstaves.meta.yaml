@@ -1,0 +1,7 @@
+id: lilypond-71e-tabstaves
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/be/lily-430ac4e8.xml
+category: lilypond-71
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

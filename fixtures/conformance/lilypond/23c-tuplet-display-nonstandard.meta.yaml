@@ -1,0 +1,9 @@
+id: lilypond-23c-tuplet-display-nonstandard
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/cb/lily-b9777fc3.xml
+category: lilypond-23
+expected: fail
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified fail: parse returned no score; parse errors: XML_NOT_WELL_FORMED"
+linked_todo: R-002
+waivers: ["source-malformed-xml:undefined-entity-normal-type-entity-typo"]

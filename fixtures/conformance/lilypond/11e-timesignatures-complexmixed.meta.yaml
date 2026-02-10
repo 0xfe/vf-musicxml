@@ -1,0 +1,7 @@
+id: lilypond-11e-timesignatures-complexmixed
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/14/lily-a7bd38c1.xml
+category: lilypond-11
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

@@ -1,0 +1,7 @@
+id: lilypond-73a-percussion
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/55/lily-5525d060.xml
+category: lilypond-73
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (73a-Percussion.xml).

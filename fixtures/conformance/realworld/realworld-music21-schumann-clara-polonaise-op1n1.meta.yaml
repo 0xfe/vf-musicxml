@@ -1,0 +1,8 @@
+id: realworld-music21-schumann-clara-polonaise-op1n1
+source: https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/schumann_clara/polonaise_op1n1.mxl
+category: realworld-piano-solo
+expected: pass
+status: active
+parse_mode: lenient
+notes: "Single-instrument dense keyboard writing with multiple voices and ornaments. Source repo: https://github.com/cuthbertLab/music21 (license: BSD-3-Clause)."
+waivers: ["license:BSD-3-Clause"]

@@ -1,0 +1,7 @@
+id: lilypond-01a-pitches-pitches
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/c5/lily-7663f27d.xml
+category: lilypond-01
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A seeded LilyPond fixture for category 01 (pitches) baseline activation.

@@ -1,0 +1,7 @@
+id: lilypond-46a-barlines
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/01/lily-74ec1c6b.xml
+category: lilypond-46
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (46a-Barlines.xml).

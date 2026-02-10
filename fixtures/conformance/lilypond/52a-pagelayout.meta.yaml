@@ -1,0 +1,7 @@
+id: lilypond-52a-pagelayout
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/a3/lily-7edc92e7.xml
+category: lilypond-52
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (52a-PageLayout.xml).

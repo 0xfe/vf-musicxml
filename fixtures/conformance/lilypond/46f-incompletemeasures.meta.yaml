@@ -1,0 +1,7 @@
+id: lilypond-46f-incompletemeasures
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/86/lily-227c5f4e.xml
+category: lilypond-46
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

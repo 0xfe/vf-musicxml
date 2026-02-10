@@ -4,6 +4,7 @@ This directory tracks demo coverage against the LilyPond MusicXML collated suite
 
 - Suite index: `https://lilypond.org/doc/v2.25/input/regression/musicxml/collated-files.html`
 - Manifest: `/Users/mo/git/musicxml/demos/lilypond/manifest.json`
+- Canonical corpus index: `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
 
 The manifest is the planning bridge between:
 - user-facing demo pages under `/Users/mo/git/musicxml/demos/site/`
@@ -11,8 +12,11 @@ The manifest is the planning bridge between:
 - full-suite M7 end goal in `/Users/mo/git/musicxml/plan.md`
 
 ## Update flow
-1. Download/refresh canonical suite fixture(s) into `/Users/mo/git/musicxml/demos/scores/`.
-2. Add seeded demo entries in `manifest.json`.
-3. Update category status/notes in `manifest.json`.
-4. Run `npm run demos:build` and verify `demos/site/lilypond-roadmap.html`.
-5. If behavior changed, add or update conformance fixture metadata and tests.
+1. Refresh corpus index:
+   - `npm run corpus:lilypond:sync`
+2. Download/refresh canonical suite fixture(s) into `/Users/mo/git/musicxml/demos/scores/`.
+   - Or import conformance fixtures directly: `npm run corpus:lilypond:import -- --cases 12a,14a`
+3. Add seeded demo entries in `manifest.json`.
+4. Update `categoryStatus` notes in `manifest.json`.
+5. Run `npm run demos:build` and verify `demos/site/lilypond-roadmap.html`.
+6. If behavior changed, add or update conformance fixture metadata and tests.

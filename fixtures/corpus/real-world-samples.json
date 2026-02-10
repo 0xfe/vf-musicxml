@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-02-10T00:00:00.000Z",
+  "samples": [
+    {
+      "id": "realworld-music21-berlin-alexanders-ragtime",
+      "title": "music21 corpus: Alexander's Ragtime Band (Lead Sheet)",
+      "bucket": "solo-lead-sheet",
+      "complexity_level": "small",
+      "part_count_hint": 1,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/leadSheet/berlinAlexandersRagtime.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Single-staff lead-sheet source with chord symbols and compact melody rhythm complexity."
+    },
+    {
+      "id": "realworld-openscore-lieder-just-for-today",
+      "title": "OpenScore Lieder: Just for Today",
+      "bucket": "vocal-song",
+      "complexity_level": "small",
+      "part_count_hint": 2,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/OpenScore/Lieder/main/scores/Abbott,_Jane_Bingham/_/Just_for_Today/lc6583477.mxl",
+      "sourceRepo": "https://github.com/OpenScore/Lieder",
+      "license": "CC0-1.0",
+      "notes": "Representative public-domain song score with vocal + accompaniment texture."
+    },
+    {
+      "id": "realworld-music21-bach-bwv1-6",
+      "title": "music21 corpus: Bach BWV 1.6",
+      "bucket": "chorale-satb",
+      "complexity_level": "medium",
+      "part_count_hint": 4,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/bach/bwv1.6.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "SATB chorale-style corpus sample for multi-part voice-leading layout checks."
+    },
+    {
+      "id": "realworld-music21-beethoven-op18no1-m1",
+      "title": "music21 corpus: Beethoven Op.18 No.1 Mvt.1",
+      "bucket": "chamber-quartet",
+      "complexity_level": "medium",
+      "part_count_hint": 4,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/beethoven/opus18no1/movement1.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "String quartet movement for dense chamber-ensemble part alignment."
+    },
+    {
+      "id": "realworld-music21-beethoven-op133-longform",
+      "title": "music21 corpus: Beethoven Op.133 (Long-form Quartet)",
+      "bucket": "chamber-quartet",
+      "complexity_level": "large",
+      "part_count_hint": 4,
+      "long_form": true,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/beethoven/opus133.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Long-form quartet source for sustained-density stress testing, long slur/tie spans, and repeated structural sections."
+    },
+    {
+      "id": "realworld-music21-schumann-clara-polonaise-op1n1",
+      "title": "music21 corpus: Clara Schumann Polonaise Op.1 No.1",
+      "bucket": "piano-solo",
+      "complexity_level": "medium",
+      "part_count_hint": 1,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/schumann_clara/polonaise_op1n1.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Single-instrument dense keyboard writing with multiple voices and ornaments."
+    },
+    {
+      "id": "realworld-music21-mozart-k545-exposition",
+      "title": "music21 corpus: Mozart K545 Exposition",
+      "bucket": "piano-sonata",
+      "complexity_level": "medium",
+      "part_count_hint": 1,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/mozart/k545/movement1_exposition.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Classical keyboard sonata excerpt for phrase/beam/articulation baseline checks."
+    },
+    {
+      "id": "realworld-music21-bach-bwv248-42-4",
+      "title": "music21 corpus: Bach BWV 248.42-4",
+      "bucket": "orchestral-excerpt",
+      "complexity_level": "large",
+      "part_count_hint": 12,
+      "long_form": true,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/bach/bwv248.42-4.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Large multi-part excerpt (winds, strings, choir, continuo) used as an orchestral/choral stress fixture."
+    }
+  ]
+}

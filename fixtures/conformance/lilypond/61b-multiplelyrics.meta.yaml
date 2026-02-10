@@ -1,0 +1,7 @@
+id: lilypond-61b-multiplelyrics
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/cc/lily-cab0df2b.xml
+category: lilypond-61
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

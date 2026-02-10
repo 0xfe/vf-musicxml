@@ -1,0 +1,7 @@
+id: lilypond-61k-lyrics-spannersextenders
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/72/lily-7c06eaf9.xml
+category: lilypond-61
+expected: pass
+status: active
+parse_mode: lenient
+notes: "M7A bulk-import auto-classified as pass (lenient parse/render succeeded)."

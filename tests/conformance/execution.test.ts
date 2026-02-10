@@ -28,6 +28,45 @@ describe('conformance execution baseline', () => {
     expect(report.categoryRollups.layout?.fixtureCount).toBeGreaterThanOrEqual(1);
     expect(report.categoryRollups.text?.fixtureCount).toBeGreaterThanOrEqual(1);
     expect(report.categoryRollups.advanced?.fixtureCount).toBeGreaterThanOrEqual(1);
+    expect(report.categoryRollups.lilypond?.fixtureCount).toBeGreaterThanOrEqual(20);
+    expect(report.categoryRollups.realworld?.fixtureCount).toBeGreaterThanOrEqual(8);
+
+    // M7A execution gates:
+    // - expected-pass parse/render success >= 97%
+    // - unexpected failure rate <= 1%
+    // - every active LilyPond category has >= 90% expected-pass success
+    const expectedPassResults = report.results.filter((result) => result.expected === 'pass');
+    const expectedPassSuccesses = expectedPassResults.filter((result) => result.observed === 'pass');
+    const expectedPassRate = expectedPassSuccesses.length / Math.max(1, expectedPassResults.length);
+    expect(expectedPassRate).toBeGreaterThanOrEqual(0.97);
+
+    const unexpectedFailures = report.results.filter((result) => !result.success);
+    const unexpectedFailureRate = unexpectedFailures.length / Math.max(1, report.results.length);
+    expect(unexpectedFailureRate).toBeLessThanOrEqual(0.01);
+
+    const lilyPondCategoryResults = new Map<string, typeof report.results>();
+    for (const result of report.results) {
+      const fixtureCategoryMatch = /^lilypond-(\d{2})/i.exec(result.fixtureId);
+      if (!fixtureCategoryMatch) {
+        continue;
+      }
+      const fixtureCategory = `lilypond-${fixtureCategoryMatch[1]}`;
+
+      const rows = lilyPondCategoryResults.get(fixtureCategory) ?? [];
+      rows.push(result);
+      lilyPondCategoryResults.set(fixtureCategory, rows);
+    }
+
+    for (const [category, rows] of lilyPondCategoryResults.entries()) {
+      const categoryExpectedPass = rows.filter((row) => row.expected === 'pass');
+      if (categoryExpectedPass.length === 0) {
+        continue;
+      }
+
+      const categoryExpectedPassObservedPass = categoryExpectedPass.filter((row) => row.observed === 'pass');
+      const categoryPassRate = categoryExpectedPassObservedPass.length / categoryExpectedPass.length;
+      expect(categoryPassRate, `${category} should satisfy M7A category floor`).toBeGreaterThanOrEqual(0.9);
+    }
 
     const expectedFailFixture = report.results.find((result) => result.fixtureId === 'parser-malformed-xml');
     expect(expectedFailFixture).toBeDefined();
@@ -121,5 +160,5 @@ describe('conformance execution baseline', () => {
       expect(paths.jsonPath.endsWith('conformance-report.json')).toBe(true);
       expect(paths.markdownPath.endsWith('conformance-report.md')).toBe(true);
     }
-  });
+  }, 15000);
 });

@@ -1,0 +1,7 @@
+id: lilypond-90a-compressed-musicxml
+source: https://lilypond.org/doc/v2.25/input/regression/musicxml/2b/lily-91f4a3db.mxl
+category: lilypond-90
+expected: pass
+status: active
+parse_mode: lenient
+notes: M7A tranche-2 LilyPond fixture activation (90a-Compressed-MusicXML.mxl).
