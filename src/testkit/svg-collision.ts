@@ -128,12 +128,34 @@ function computeElementBounds(element: Element): SvgBounds | undefined {
       return boundsFromPoints(element.getAttribute('points'));
     case 'path':
       return boundsFromPathData(element.getAttribute('d'));
+    case 'text':
+      return boundsFromText(element);
     case 'g':
     case 'svg':
       return boundsFromChildren(element);
     default:
       return undefined;
   }
+}
+
+/** Compute approximate bounds for `<text>` using font-size and text length. */
+function boundsFromText(element: Element): SvgBounds | undefined {
+  const text = element.textContent?.trim() ?? '';
+  if (text.length === 0) {
+    return undefined;
+  }
+
+  const x = readNumber(element.getAttribute('x')) ?? 0;
+  const y = readNumber(element.getAttribute('y')) ?? 0;
+  const fontSize = readNumber(element.getAttribute('font-size')) ?? 10;
+  const width = text.length * fontSize * 0.6;
+
+  return {
+    x,
+    y: y - fontSize,
+    width,
+    height: fontSize
+  };
 }
 
 /** Compute group bounds by unioning child element bounds recursively. */

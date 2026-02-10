@@ -1,4 +1,4 @@
-import { Accidental, Dot, StaveNote, type StaveNoteStruct } from 'vexflow';
+import { Accidental, Articulation, Dot, StaveNote, type StaveNoteStruct } from 'vexflow';
 
 import type { Diagnostic } from '../core/diagnostics.js';
 import type {
@@ -11,33 +11,78 @@ import type {
   TimedEvent
 } from '../core/score.js';
 
-/** Build renderable notes for the first measure voice (M2 baseline behavior). */
+/** Rendered note list plus event-to-note mapping used by tie/slur/hairpin passes. */
+export interface BuildMeasureNotesResult {
+  notes: StaveNote[];
+  noteByEventKey: Map<string, StaveNote>;
+}
+
+/** Build renderable notes for one target staff (single-voice-per-staff baseline retained in M5). */
 export function buildMeasureNotes(
   measure: Measure,
   ticksPerQuarter: number,
   clef: string,
-  diagnostics: Diagnostic[]
-): StaveNote[] {
+  diagnostics: Diagnostic[],
+  staffNumber = 1
+): BuildMeasureNotesResult {
   if (measure.voices.length === 0) {
-    return [];
+    return {
+      notes: [],
+      noteByEventKey: new Map()
+    };
   }
 
-  if (measure.voices.length > 1) {
+  const voicesForStaff = measure.voices.filter((voice) => voice.events.some((event) => belongsToStaff(event, staffNumber)));
+  if (voicesForStaff.length > 1) {
     diagnostics.push({
       code: 'MULTI_VOICE_NOT_SUPPORTED_IN_M2',
       severity: 'warning',
-      message: `Measure ${measure.index + 1} has multiple voices. Rendering only voice ${measure.voices[0]?.id ?? '1'}.`
+      message: `Measure ${measure.index + 1}, staff ${staffNumber} has multiple voices. Rendering only voice ${voicesForStaff[0]?.id ?? '1'}.`
     });
   }
 
-  const voice = measure.voices[0];
+  const voice = voicesForStaff[0];
   if (!voice) {
-    return [];
+    return {
+      notes: [],
+      noteByEventKey: new Map()
+    };
   }
 
-  return voice.events
-    .map((event) => toStaveNote(event, ticksPerQuarter, clef, diagnostics))
-    .filter((note): note is StaveNote => note !== undefined);
+  const notes: StaveNote[] = [];
+  const noteByEventKey = new Map<string, StaveNote>();
+
+  for (let eventIndex = 0; eventIndex < voice.events.length; eventIndex += 1) {
+    const event = voice.events[eventIndex];
+    if (!event) {
+      continue;
+    }
+    if (!belongsToStaff(event, staffNumber)) {
+      continue;
+    }
+
+    const note = toStaveNote(event, ticksPerQuarter, clef, diagnostics);
+    if (!note) {
+      continue;
+    }
+
+    notes.push(note);
+    noteByEventKey.set(buildVoiceEventKey(voice.id, eventIndex), note);
+  }
+
+  return {
+    notes,
+    noteByEventKey
+  };
+}
+
+/** Route timed events to a target staff; events without explicit staff default to staff 1. */
+function belongsToStaff(event: TimedEvent, staffNumber: number): boolean {
+  if (event.kind === 'note' || event.kind === 'rest') {
+    return (event.staff ?? 1) === staffNumber;
+  }
+
+  return staffNumber === 1;
 }
 
 /** Map one timed event into a VexFlow `StaveNote` when supported. */
@@ -122,6 +167,11 @@ function createPitchNote(
     if (accidental) {
       note.addModifier(new Accidental(accidental), index);
     }
+
+    const articulationCode = mapArticulation(noteData, diagnostics);
+    if (articulationCode) {
+      note.addModifier(new Articulation(articulationCode), index);
+    }
   });
 
   for (let index = 0; index < dots; index += 1) {
@@ -129,6 +179,11 @@ function createPitchNote(
   }
 
   return note;
+}
+
+/** Build stable map keys for one rendered voice event. */
+export function buildVoiceEventKey(voiceId: string, eventIndex: number): string {
+  return `${voiceId}:${eventIndex}`;
 }
 
 /** Convert a note payload to a VexFlow key string (`c/4`, `f#/5`, etc). */
@@ -171,6 +226,34 @@ function mapAccidental(noteData: NoteData): string | undefined {
   };
 
   return map[value] ?? undefined;
+}
+
+/** Map normalized articulation tokens into VexFlow articulation glyph IDs. */
+function mapArticulation(noteData: NoteData, diagnostics: Diagnostic[]): string | undefined {
+  const first = noteData.articulations?.[0]?.type;
+  if (!first) {
+    return undefined;
+  }
+
+  const map: Record<string, string> = {
+    staccato: 'a.',
+    tenuto: 'a-',
+    accent: 'a>',
+    staccatissimo: 'av',
+    marcato: 'a^'
+  };
+
+  const code = map[first];
+  if (code) {
+    return code;
+  }
+
+  diagnostics.push({
+    code: 'UNSUPPORTED_ARTICULATION',
+    severity: 'warning',
+    message: `Unsupported articulation '${first}' is not rendered.`
+  });
+  return undefined;
 }
 
 /**

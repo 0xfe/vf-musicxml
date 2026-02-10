@@ -13,7 +13,7 @@ describe('conformance fixture loader', () => {
   it('loads repository conformance fixtures', async () => {
     const fixtures = await loadConformanceFixtures(path.resolve('fixtures/conformance'));
 
-    expect(fixtures.length).toBeGreaterThanOrEqual(8);
+    expect(fixtures.length).toBeGreaterThanOrEqual(9);
 
     const smokeFixture = fixtures.find((fixture) => fixture.meta.id === 'smoke-minimal-partwise');
     expect(smokeFixture).toBeDefined();
@@ -25,6 +25,18 @@ describe('conformance fixture loader', () => {
       (fixture) => fixture.meta.id === 'notation-invalid-pitch-step-strict'
     );
     expect(strictNotationFixture?.meta.parse_mode).toBe('strict');
+
+    const m4NotationFixture = fixtures.find((fixture) => fixture.meta.id === 'notation-m4-baseline');
+    expect(m4NotationFixture?.meta.expected).toBe('pass');
+    expect(m4NotationFixture?.meta.parse_mode).toBe('lenient');
+
+    const m5LayoutFixture = fixtures.find((fixture) => fixture.meta.id === 'layout-m5-multipart-baseline');
+    expect(m5LayoutFixture?.meta.expected).toBe('pass');
+    expect(m5LayoutFixture?.meta.category).toBe('layout');
+
+    const textFixture = fixtures.find((fixture) => fixture.meta.id === 'text-m5-lyrics-harmony-baseline');
+    expect(textFixture?.meta.expected).toBe('pass');
+    expect(textFixture?.meta.category).toBe('text');
   });
 
   it('fails on invalid metadata shape', async () => {

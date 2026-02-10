@@ -4,6 +4,7 @@ import type {
   BarlineInfo,
   DirectionEvent,
   EffectiveAttributes,
+  HarmonyEvent,
   Measure,
   NoteEvent,
   Part,
@@ -20,6 +21,7 @@ import {
   parseBarline,
   parseDirection,
   parseDurationTicks,
+  parseHarmony,
   parseNote
 } from './parse-note.js';
 import {
@@ -32,6 +34,7 @@ import {
   truncateEventsToMeasure
 } from './parse-timing.js';
 import { normalizeTimewiseToPartwise } from './parse-timewise.js';
+import { buildSpanners } from './parse-spanners.js';
 import { parseXmlToAst, XmlParseError, type XmlNode } from './xml-ast.js';
 import { attribute, childrenOf, firstChild } from './xml-utils.js';
 
@@ -64,6 +67,7 @@ export function parseScorePartwise(xmlText: string, options: ParserOptions = {})
 
   const partNodes = childrenOf(rootResult, 'part');
   const parts = partNodes.map((partNode, index) => parsePart(partNode, partDefsById, ctx, index));
+  const spanners = buildSpanners(parts, ctx);
 
   if (partNodes.length === 0) {
     addDiagnostic(ctx, 'MISSING_PARTS', 'error', 'score-partwise contains no <part> elements.', rootResult);
@@ -82,7 +86,7 @@ export function parseScorePartwise(xmlText: string, options: ParserOptions = {})
     ticksPerQuarter: TICKS_PER_QUARTER,
     partList,
     parts,
-    spanners: [],
+    spanners,
     defaults: parseDefaults(rootResult),
     metadata: parseMetadata(rootResult)
   };
@@ -181,6 +185,7 @@ function parseMeasure(
 ): Measure {
   const attributeChanges: AttributeEvent[] = [];
   const directions: DirectionEvent[] = [];
+  const harmonies: HarmonyEvent[] = [];
   const voices = new Map<string, TimedEvent[]>();
   const lastNoteByVoice = new Map<string, NoteEvent>();
 
@@ -293,6 +298,10 @@ function parseMeasure(
         barline = parseBarline(child);
         break;
       }
+      case 'harmony': {
+        harmonies.push(parseHarmony(child, streamCursorTicks));
+        break;
+      }
       default:
         break;
     }
@@ -338,6 +347,7 @@ function parseMeasure(
     attributeChanges,
     voices: voiceTimelines,
     directions,
+    harmonies,
     barline
   };
 }

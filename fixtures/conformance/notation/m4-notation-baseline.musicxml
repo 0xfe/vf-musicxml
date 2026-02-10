@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name>M4 Notation</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction>
+        <direction-type>
+          <words>Allegro</words>
+          <dynamics><mf/></dynamics>
+          <wedge type="crescendo" number="1" />
+        </direction-type>
+        <sound tempo="120" />
+      </direction>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <tie type="start" />
+        <notations>
+          <slur type="start" number="1" placement="above" />
+          <articulations><staccato/></articulations>
+        </notations>
+      </note>
+      <direction>
+        <direction-type><wedge type="stop" number="1" /></direction-type>
+      </direction>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <tie type="stop" />
+        <notations>
+          <slur type="stop" number="1" />
+          <articulations><accent/></articulations>
+        </notations>
+      </note>
+    </measure>
+  </part>
+</score-partwise>

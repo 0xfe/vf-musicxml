@@ -85,7 +85,7 @@ export async function parseMusicXMLAsync(
   return parseMusicXML(xmlText, options);
 }
 
-/** Render the score to SVG page markup (single-page baseline in M2). */
+/** Render the score to SVG page markup (M4 notation + M5 multi-part/multi-staff baseline). */
 export function renderToSVGPages(score: Score, options: RenderOptions = {}): RenderPagesResult {
   return renderScoreToSVGPages(score, options);
 }

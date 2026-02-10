@@ -1,4 +1,4 @@
-# Diagnostics Taxonomy (M3 Baseline)
+# Diagnostics Taxonomy (M5 Baseline)
 
 Severity levels:
 - `error`: parse cannot proceed or strict-mode validation failure.
@@ -18,6 +18,16 @@ Core XML/parser codes:
 - `TIME_SIGNATURE_INVALID`
 - `NOTE_WITHOUT_PITCH`
 - `SCORE_TIMEWISE_NORMALIZED`
+- `PART_GROUP_STOP_WITHOUT_START`
+
+Notation/spanner parse codes:
+- `UNMATCHED_TIE_STOP`
+- `UNCLOSED_TIE_START`
+- `UNMATCHED_SLUR_STOP`
+- `UNCLOSED_SLUR_START`
+- `WEDGE_ANCHOR_NOT_FOUND`
+- `UNMATCHED_WEDGE_STOP`
+- `UNCLOSED_WEDGE_START`
 
 Container (`.mxl`) codes:
 - `MXL_INVALID_ARCHIVE`
@@ -26,6 +36,27 @@ Container (`.mxl`) codes:
 - `MXL_CONTAINER_READ_FAILED`
 - `MXL_SCORE_FILE_NOT_FOUND`
 - `MXL_SCORE_FILE_READ_FAILED`
+
+Renderer mapping/layout codes:
+- `MULTI_VOICE_NOT_SUPPORTED_IN_M2`
+- `UNSUPPORTED_DURATION`
+- `UNSUPPORTED_CLEF`
+- `UNSUPPORTED_TIMED_EVENT`
+- `UNSUPPORTED_ARTICULATION`
+- `UNPITCHED_NOTE_UNSUPPORTED`
+- `EMPTY_SCORE`
+- `EMPTY_PART`
+
+Renderer notation/direction codes:
+- `WEDGE_DIRECTION_TEXT_FALLBACK`
+- `DIRECTION_CONTEXT_UNAVAILABLE`
+- `HARMONY_TEXT_STACK_HIGH`
+- `LYRIC_TEXT_RENDERED`
+- `SPANNER_END_MISSING`
+- `SPANNER_ANCHOR_NOT_RENDERED`
+- `TIE_RENDER_FAILED`
+- `SLUR_RENDER_FAILED`
+- `WEDGE_RENDER_FAILED`
 
 Each diagnostic may include:
 - source location (`line`, `column`, optional source name)

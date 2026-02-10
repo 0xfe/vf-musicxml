@@ -4,10 +4,13 @@ import type {
   ClefInfo,
   DirectionEvent,
   EffectiveAttributes,
+  HarmonyEvent,
+  LyricInfo,
   NoteData,
   NoteEvent,
   Pitch,
   RestEvent,
+  SlurEndpoint,
   TimedEvent,
   TieEndpoint,
   Unpitched
@@ -107,16 +110,28 @@ export function parseNote(
 
 /** Parse a direction node into words/tempo metadata anchored at an offset. */
 export function parseDirection(directionNode: XmlNode, offsetTicks: number): DirectionEvent {
-  const words = textOf(firstChild(firstChild(directionNode, 'direction-type'), 'words'));
+  const directionTypeNode = firstChild(directionNode, 'direction-type');
+  const words = textOf(firstChild(directionTypeNode, 'words'));
   const soundNode = firstChild(directionNode, 'sound');
   const tempoRaw = soundNode ? attribute(soundNode, 'tempo') : undefined;
   const tempo = tempoRaw ? Number(tempoRaw) : undefined;
+  const dynamics = parseDirectionDynamics(directionTypeNode);
+  const wedge = parseDirectionWedge(directionTypeNode);
 
-  return {
+  const direction: DirectionEvent = {
     offsetTicks,
     words,
     tempo: Number.isFinite(tempo) ? tempo : undefined
   };
+
+  if (dynamics.length > 0) {
+    direction.dynamics = dynamics;
+  }
+  if (wedge) {
+    direction.wedge = wedge;
+  }
+
+  return direction;
 }
 
 /** Parse barline metadata while preserving only supported location tokens. */
@@ -172,7 +187,9 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
   const accidental = textOf(firstChild(noteNode, 'accidental'));
   const notehead = textOf(firstChild(noteNode, 'notehead'));
   const ties = parseTies(noteNode);
+  const slurs = parseSlurs(noteNode);
   const articulations = parseArticulations(noteNode);
+  const lyrics = parseLyrics(noteNode);
 
   return {
     pitch,
@@ -180,7 +197,9 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
     accidental: accidental ? { value: accidental } : undefined,
     notehead: notehead ? { value: notehead } : undefined,
     ties,
-    articulations
+    slurs,
+    articulations,
+    lyrics
   };
 }
 
@@ -244,6 +263,118 @@ export function parseArticulations(noteNode: XmlNode): ArticulationInfo[] | unde
 
   const articulations = articulationsNode.children.map((node) => ({ type: node.name }));
   return articulations.length > 0 ? articulations : undefined;
+}
+
+/** Parse slur endpoints nested under `<notations><slur>`. */
+export function parseSlurs(noteNode: XmlNode): SlurEndpoint[] | undefined {
+  const notationsNode = firstChild(noteNode, 'notations');
+  if (!notationsNode) {
+    return undefined;
+  }
+
+  const slurs: SlurEndpoint[] = [];
+  for (const slurNode of childrenOf(notationsNode, 'slur')) {
+    const type = attribute(slurNode, 'type');
+    if (type !== 'start' && type !== 'stop') {
+      continue;
+    }
+
+    const slur: SlurEndpoint = {
+      type
+    };
+
+    const number = attribute(slurNode, 'number');
+    if (number) {
+      slur.number = number;
+    }
+
+    const placement = attribute(slurNode, 'placement');
+    if (placement) {
+      slur.placement = placement;
+    }
+
+    const lineType = attribute(slurNode, 'line-type');
+    if (lineType) {
+      slur.lineType = lineType;
+    }
+
+    slurs.push(slur);
+  }
+
+  return slurs.length > 0 ? slurs : undefined;
+}
+
+/** Parse lyric payloads nested under `<note><lyric>`. */
+export function parseLyrics(noteNode: XmlNode): LyricInfo[] | undefined {
+  const lyrics: LyricInfo[] = [];
+  for (const lyricNode of childrenOf(noteNode, 'lyric')) {
+    const lyric: LyricInfo = {
+      number: attribute(lyricNode, 'number') ?? undefined,
+      syllabic: textOf(firstChild(lyricNode, 'syllabic')) ?? undefined,
+      text: textOf(firstChild(lyricNode, 'text')) ?? undefined,
+      extend: !!firstChild(lyricNode, 'extend')
+    };
+
+    if (!lyric.text && !lyric.extend) {
+      continue;
+    }
+
+    lyrics.push(lyric);
+  }
+
+  return lyrics.length > 0 ? lyrics : undefined;
+}
+
+/** Parse `<direction-type><dynamics>` tokens into ordered dynamic markers. */
+function parseDirectionDynamics(directionTypeNode: XmlNode | undefined): string[] {
+  const dynamicsNode = firstChild(directionTypeNode, 'dynamics');
+  if (!dynamicsNode) {
+    return [];
+  }
+
+  return dynamicsNode.children.map((node) => node.name);
+}
+
+/** Parse `<direction-type><wedge>` attributes into a normalized wedge event token. */
+function parseDirectionWedge(directionTypeNode: XmlNode | undefined): DirectionEvent['wedge'] {
+  const wedgeNode = firstChild(directionTypeNode, 'wedge');
+  if (!wedgeNode) {
+    return undefined;
+  }
+
+  const type = attribute(wedgeNode, 'type');
+  if (type !== 'crescendo' && type !== 'diminuendo' && type !== 'stop') {
+    return undefined;
+  }
+
+  const spreadText = attribute(wedgeNode, 'spread');
+  const spread = spreadText ? Number.parseFloat(spreadText) : undefined;
+
+  return {
+    type,
+    number: attribute(wedgeNode, 'number') ?? undefined,
+    spread: Number.isFinite(spread) ? spread : undefined
+  };
+}
+
+/** Parse one `<harmony>` node into an anchored harmony token. */
+export function parseHarmony(harmonyNode: XmlNode, offsetTicks: number): HarmonyEvent {
+  const rootNode = firstChild(harmonyNode, 'root');
+  const rootStep = textOf(firstChild(rootNode, 'root-step')) ?? undefined;
+  const rootAlterText = textOf(firstChild(rootNode, 'root-alter'));
+  const rootAlter = rootAlterText ? Number.parseFloat(rootAlterText) : undefined;
+  const kindNode = firstChild(harmonyNode, 'kind');
+  const kind = textOf(kindNode) ?? undefined;
+  const staff = parseOptionalInt(textOf(firstChild(harmonyNode, 'staff')));
+
+  return {
+    offsetTicks,
+    rootStep,
+    rootAlter: Number.isFinite(rootAlter) ? rootAlter : undefined,
+    kind,
+    text: kindNode ? attribute(kindNode, 'text') ?? undefined : undefined,
+    staff
+  };
 }
 
 /** Parse an `<attributes>` block into an incremental update record. */

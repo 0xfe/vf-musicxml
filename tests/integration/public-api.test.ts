@@ -355,4 +355,104 @@ describe('public API renderer placeholder', () => {
     expect(result.pages[0]).toContain('<svg');
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
+
+  it('renders multi-part and multi-staff scores without multi-part fallback warnings', () => {
+    const score: Score = {
+      id: 'multipart-stub',
+      ticksPerQuarter: 480,
+      partList: [
+        { id: 'P1', name: 'Piano' },
+        { id: 'P2', name: 'Violin' }
+      ],
+      parts: [
+        {
+          id: 'P1',
+          measures: [
+            {
+              index: 0,
+              effectiveAttributes: {
+                staves: 2,
+                clefs: [
+                  { staff: 1, sign: 'G', line: 2 },
+                  { staff: 2, sign: 'F', line: 4 }
+                ],
+                timeSignature: { beats: 4, beatType: 4 },
+                keySignature: { fifths: 0 },
+                divisions: 1
+              },
+              attributeChanges: [],
+              directions: [],
+              voices: [
+                {
+                  id: '1',
+                  events: [
+                    {
+                      kind: 'note',
+                      voice: '1',
+                      staff: 1,
+                      offsetTicks: 0,
+                      durationTicks: 480,
+                      notes: [{ pitch: { step: 'C', octave: 5 } }]
+                    }
+                  ]
+                },
+                {
+                  id: '2',
+                  events: [
+                    {
+                      kind: 'note',
+                      voice: '2',
+                      staff: 2,
+                      offsetTicks: 0,
+                      durationTicks: 480,
+                      notes: [{ pitch: { step: 'C', octave: 3 } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          id: 'P2',
+          measures: [
+            {
+              index: 0,
+              effectiveAttributes: {
+                staves: 1,
+                clefs: [{ staff: 1, sign: 'G', line: 2 }],
+                timeSignature: { beats: 4, beatType: 4 },
+                keySignature: { fifths: 0 },
+                divisions: 1
+              },
+              attributeChanges: [],
+              directions: [],
+              voices: [
+                {
+                  id: '1',
+                  events: [
+                    {
+                      kind: 'note',
+                      voice: '1',
+                      staff: 1,
+                      offsetTicks: 0,
+                      durationTicks: 480,
+                      notes: [{ pitch: { step: 'G', octave: 4 } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score);
+    expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('width="3"');
+    expect(result.diagnostics.some((d) => d.code === 'MULTI_PART_NOT_SUPPORTED_IN_M2')).toBe(false);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
 });

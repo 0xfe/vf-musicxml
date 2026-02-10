@@ -34,7 +34,7 @@ Every function, constant, enum, class, or major relevant identifier should be cl
 - Use the Playwright MCP server for tests that require the browser.
 - Local Playwright CLI setup (for `npm run test:visual`) must use repo-local browser binaries:
   - Install: `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright install chromium`
-  - Run tests: `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual`
+  - Run tests: `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`
   - Do not assume default Playwright cache under `~/Library/Caches/ms-playwright` is available.
   - If browser architecture path mismatches (e.g. expected `mac-x64` but only `mac-arm64` exists), reinstall from this repo runtime with `--force`.
 

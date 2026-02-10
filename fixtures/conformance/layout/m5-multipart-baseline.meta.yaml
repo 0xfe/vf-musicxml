@@ -1,0 +1,13 @@
+id: layout-m5-multipart-baseline
+source: local-fixture
+category: layout
+expected: pass
+status: active
+parse_mode: lenient
+notes: M5 baseline fixture for multi-part and multi-staff rendering with connectors and staff-routed notes.
+linked_todo: R-003
+waivers:
+  - Baseline still renders a single voice per staff in M5
+collision_audit:
+  selector: .vf-notehead path
+  max_overlaps: 0

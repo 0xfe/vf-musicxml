@@ -14,7 +14,7 @@ describe('conformance execution baseline', () => {
     const fixtures = await loadConformanceFixtures(path.resolve('fixtures/conformance'));
     const report = await executeConformanceFixtures(fixtures);
 
-    expect(report.fixtureCount).toBeGreaterThanOrEqual(8);
+    expect(report.fixtureCount).toBeGreaterThanOrEqual(9);
     expect(report.failCount).toBe(0);
     expect(report.results.every((result) => result.success)).toBe(true);
     expect((report.parseDiagnosticCodeHistogram.XML_NOT_WELL_FORMED ?? 0) > 0).toBe(true);
@@ -24,7 +24,9 @@ describe('conformance execution baseline', () => {
     expect(report.categoryRollups.rhythm?.fixtureCount).toBeGreaterThanOrEqual(1);
     expect(report.categoryRollups.parser?.fixtureCount).toBeGreaterThanOrEqual(2);
     expect(report.categoryRollups.mxl?.fixtureCount).toBeGreaterThanOrEqual(1);
-    expect(report.categoryRollups.notation?.fixtureCount).toBeGreaterThanOrEqual(2);
+    expect(report.categoryRollups.notation?.fixtureCount).toBeGreaterThanOrEqual(3);
+    expect(report.categoryRollups.layout?.fixtureCount).toBeGreaterThanOrEqual(1);
+    expect(report.categoryRollups.text?.fixtureCount).toBeGreaterThanOrEqual(1);
 
     const expectedFailFixture = report.results.find((result) => result.fixtureId === 'parser-malformed-xml');
     expect(expectedFailFixture).toBeDefined();
@@ -68,6 +70,27 @@ describe('conformance execution baseline', () => {
     expect(lenientNotationFixture?.observed).toBe('pass');
     expect(lenientNotationFixture?.success).toBe(true);
 
+    const m4NotationFixture = report.results.find((result) => result.fixtureId === 'notation-m4-baseline');
+    expect(m4NotationFixture).toBeDefined();
+    expect(m4NotationFixture?.parseMode).toBe('lenient');
+    expect(m4NotationFixture?.expected).toBe('pass');
+    expect(m4NotationFixture?.observed).toBe('pass');
+    expect(m4NotationFixture?.success).toBe(true);
+
+    const m5LayoutFixture = report.results.find((result) => result.fixtureId === 'layout-m5-multipart-baseline');
+    expect(m5LayoutFixture).toBeDefined();
+    expect(m5LayoutFixture?.parseMode).toBe('lenient');
+    expect(m5LayoutFixture?.expected).toBe('pass');
+    expect(m5LayoutFixture?.observed).toBe('pass');
+    expect(m5LayoutFixture?.success).toBe(true);
+
+    const m5TextFixture = report.results.find((result) => result.fixtureId === 'text-m5-lyrics-harmony-baseline');
+    expect(m5TextFixture).toBeDefined();
+    expect(m5TextFixture?.parseMode).toBe('lenient');
+    expect(m5TextFixture?.expected).toBe('pass');
+    expect(m5TextFixture?.observed).toBe('pass');
+    expect(m5TextFixture?.success).toBe(true);
+
     const markdownSummary = formatConformanceReportMarkdown(report);
     expect(markdownSummary).toContain('# Conformance Execution Report');
     expect(markdownSummary).toContain('smoke-minimal-partwise');
@@ -76,6 +99,9 @@ describe('conformance execution baseline', () => {
     expect(markdownSummary).toContain('mxl-invalid-container');
     expect(markdownSummary).toContain('notation-invalid-pitch-step-strict');
     expect(markdownSummary).toContain('notation-invalid-pitch-step-lenient');
+    expect(markdownSummary).toContain('notation-m4-baseline');
+    expect(markdownSummary).toContain('layout-m5-multipart-baseline');
+    expect(markdownSummary).toContain('text-m5-lyrics-harmony-baseline');
     expect(markdownSummary).toContain('## Diagnostic Histograms');
     expect(markdownSummary).toContain('### Parse Diagnostic Codes');
     expect(markdownSummary).toContain('## Category Rollups');

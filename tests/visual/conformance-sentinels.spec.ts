@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 
 import { parseMusicXML, renderToSVGPages } from '../../src/public/index.js';
 
-/** High-signal conformance fixtures kept as browser visual sentinels in M3. */
+/** High-signal conformance fixtures kept as browser visual sentinels in M3-M5. */
 const VISUAL_SENTINELS = [
   {
     id: 'smoke-minimal-partwise',
@@ -18,6 +18,18 @@ const VISUAL_SENTINELS = [
   {
     id: 'rhythm-backup-forward-two-voices',
     fixturePath: 'fixtures/conformance/rhythm/backup-forward-two-voices.musicxml'
+  },
+  {
+    id: 'notation-m4-baseline',
+    fixturePath: 'fixtures/conformance/notation/m4-notation-baseline.musicxml'
+  },
+  {
+    id: 'layout-m5-multipart-baseline',
+    fixturePath: 'fixtures/conformance/layout/m5-multipart-baseline.musicxml'
+  },
+  {
+    id: 'text-m5-lyrics-harmony-baseline',
+    fixturePath: 'fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml'
   }
 ] as const;
 

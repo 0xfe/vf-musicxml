@@ -2,7 +2,7 @@
 
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`plan.md`).
-- M3 completed: timing normalization, `.mxl` parsing, collision audits, conformance execution/reporting, expected-fail gating, category rollups, and visual sentinel snapshots.
+- M5 completed: multi-part/multi-staff baseline, lyric/harmony text attachment baseline, and modularization decision are implemented and test-gated.
 
 ## High-signal files
 - Plan/risk:
@@ -12,11 +12,14 @@
   - `/Users/mo/git/musicxml/src/public/api.ts`
 - Parser core:
   - `/Users/mo/git/musicxml/src/parser/parse.ts`
+  - `/Users/mo/git/musicxml/src/parser/parse-header.ts`
+  - `/Users/mo/git/musicxml/src/parser/parse-note.ts`
   - `/Users/mo/git/musicxml/src/parser/parse-timewise.ts`
   - `/Users/mo/git/musicxml/src/parser/mxl.ts`
 - Rendering core:
   - `/Users/mo/git/musicxml/src/vexflow/render.ts`
   - `/Users/mo/git/musicxml/src/vexflow/render-note-mapper.ts`
+  - `/Users/mo/git/musicxml/src/vexflow/render-notations.ts`
 - Conformance/testkit:
   - `/Users/mo/git/musicxml/src/testkit/conformance.ts`
   - `/Users/mo/git/musicxml/src/testkit/conformance-execution.ts`
@@ -53,12 +56,19 @@
 - `mxl-invalid-container` (`expected: fail`) malformed `.mxl` container fixture.
 - `notation-invalid-pitch-step-lenient` (`expected: pass`) warning-tolerant notation fixture.
 - `notation-invalid-pitch-step-strict` (`expected: fail`) strict-mode notation fixture.
+- `notation-m4-baseline` (`expected: pass`) end-to-end M4 notation/direction baseline fixture.
+- `layout-m5-multipart-baseline` (`expected: pass`) multi-part/multi-staff M5 layout baseline fixture.
+- `text-m5-lyrics-harmony-baseline` (`expected: pass`) lyric/harmony M5 text baseline fixture.
 
 ## Diagnostics to know
 - XML/root: `XML_NOT_WELL_FORMED`, `UNSUPPORTED_ROOT`
 - Timing: `BACKUP_BEFORE_MEASURE_START`, `MEASURE_CURSOR_OVERFLOW`
 - Timewise: `SCORE_TIMEWISE_NORMALIZED`
 - MXL: `MXL_INVALID_ARCHIVE`, `MXL_CONTAINER_*`, `MXL_SCORE_FILE_*`
+- Part grouping: `PART_GROUP_STOP_WITHOUT_START`
+- Notation parse/link: `UNMATCHED_*`, `UNCLOSED_*`, `WEDGE_ANCHOR_NOT_FOUND`
+- Notation/text render: `SPANNER_*`, `*_RENDER_FAILED`, `WEDGE_DIRECTION_TEXT_FALLBACK`, `LYRIC_TEXT_RENDERED`, `HARMONY_TEXT_STACK_HIGH`
+- Layout render baseline: `MULTI_VOICE_NOT_SUPPORTED_IN_M2` still applies per staff when more than one voice targets the same staff.
 
 ## Test commands
 - Fast confidence loop:
@@ -68,20 +78,21 @@
   - `npm run test:conformance`
 - Full:
   - `npm run test`
+  - `npm run test:visual -- --workers=4`
 
 ## Playwright notes
 - Browser-required tests: prefer MCP Playwright browser tool.
 - Local CLI visual tests require repo-local browser path:
   - `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright install chromium`
-  - `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual`
-- Visual sentinel spec now covers active pass fixtures across categories:
+  - `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`
+- Visual sentinel spec now covers active pass fixtures across categories including M4 notation and M5 layout/text:
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts`
 - Snapshot baselines live at:
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts-snapshots`
   - `/Users/mo/git/musicxml/tests/visual/render-visual.spec.ts-snapshots`
-- Latest run status: `npm run test:visual` passes under elevated permissions.
+- Latest run status: `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:visual -- --workers=4` pass.
 
-## Next likely work (M4 start)
-- Begin notation/direction implementation scope (ties/slurs/articulations/dynamics/tempo/wedges).
-- Promote selected expected-fail notation fixtures to expected-pass as behavior lands.
-- Expand collision-focused fixtures once multi-voice rendering is richer.
+## Next likely work (M6 start)
+- Add first advanced-notation slice (grace notes or repeats/endings) with explicit fallback diagnostics.
+- Promote additional LilyPond fixtures from expected-fail to expected-pass incrementally.
+- Keep sentinel visual tests selective while expanding headless conformance and collision gates.

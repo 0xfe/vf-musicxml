@@ -69,4 +69,18 @@ describe('SVG collision audit helpers', () => {
     expect(withPadding.length).toBeGreaterThan(0);
     expect(withMinArea).toHaveLength(0);
   });
+
+  it('estimates text element bounds for lyric/harmony collision checks', () => {
+    const svg = `
+<svg viewBox="0 0 200 80">
+  <text x="20" y="20" font-size="12">C maj7</text>
+  <text x="25" y="24" font-size="12">Hello</text>
+</svg>`;
+
+    const bounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(bounds, { minOverlapArea: 10 });
+
+    expect(bounds).toHaveLength(2);
+    expect(overlaps.length).toBeGreaterThan(0);
+  });
 });

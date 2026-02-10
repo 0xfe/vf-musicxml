@@ -2,7 +2,7 @@
 
 TypeScript-first MusicXML parsing and rendering library for VexFlow.
 
-Current milestone: `M3` completed (rhythm/timewise normalization, `.mxl` support, collision audits, conformance execution/reporting, expected-fail gating, and visual sentinel snapshots).
+Current milestone: `M5` completed (multi-part/multi-staff layout baseline, lyric/harmony attachment baseline, and modularization decision record).
 
 ## Project goals
 - Parser + canonical score model that is independent from rendering backend.
@@ -13,7 +13,7 @@ Current milestone: `M3` completed (rhythm/timewise normalization, `.mxl` support
 ## Architecture (M0 layout)
 - `src/core/`: shared types and diagnostics.
 - `src/parser/`: parser pipeline (`saxes` AST + AST-to-CSM transform).
-- `src/vexflow/`: rendering adapter (M2 baseline implemented).
+- `src/vexflow/`: rendering adapter (M5 baseline in progress).
 - `src/public/`: exported API surface.
 - `src/testkit/`: conformance fixture and metadata tooling.
 - `tests/`: unit, integration, conformance, headless SVG, and browser visual suites.
@@ -35,7 +35,7 @@ Install and run visual tests with a repo-local browser cache:
 
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright install chromium
-PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual
+PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4
 ```
 
 Why this is required:
@@ -101,9 +101,12 @@ Current staged conformance fixtures:
 - `fixtures/conformance/mxl/invalid-container.mxl` (`expected: fail` malformed-container fixture)
 - `fixtures/conformance/notation/invalid-pitch-step-lenient.musicxml` (`expected: pass`, `parse_mode: lenient`)
 - `fixtures/conformance/notation/invalid-pitch-step-strict.musicxml` (`expected: fail`, `parse_mode: strict`)
+- `fixtures/conformance/notation/m4-notation-baseline.musicxml` (`expected: pass`, M4 notation/direction baseline)
+- `fixtures/conformance/layout/m5-multipart-baseline.musicxml` (`expected: pass`, M5 multi-part/multi-staff baseline)
+- `fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml` (`expected: pass`, M5 lyric/harmony text baseline)
 
 Visual sentinel coverage:
-- `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, and `rhythm`.
+- `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, `rhythm`, M4 `notation`, and M5 `layout` + `text`.
 - Snapshot baselines are stored in:
   - `tests/visual/conformance-sentinels.spec.ts-snapshots/`
   - `tests/visual/render-visual.spec.ts-snapshots/`
@@ -116,8 +119,11 @@ Visual sentinel coverage:
 ## Current API state
 - `parseMusicXML`: supports `score-partwise` parsing and `score-timewise` normalization to partwise.
 - `parseMusicXMLAsync`: supports XML and `.mxl` (ZIP) container decode with `META-INF/container.xml` rootfile resolution and diagnostics.
-- `renderToSVGPages`: implemented for M2 single-part/single-voice rendering baseline.
+- `renderToSVGPages`: includes M4 notation/direction rendering, M5 multi-part/multi-staff layout/connectors, and baseline lyric/harmony text attachment (single-voice-per-staff fallback).
 - `renderToElement`: implemented with DOM lifecycle (`dispose`) for browser integration.
+
+## Notation Support Matrix
+- See `/Users/mo/git/musicxml/docs/notation-support-matrix.md` for supported M4 notation features, degradation diagnostics, and known gaps.
 
 ## Core docs
 - `docs/adr/0001-xml-parser-stack.md`
@@ -126,6 +132,9 @@ Visual sentinel coverage:
 - `docs/csm-overview.md`
 - `docs/rendering-pipeline.md`
 - `docs/timing-model.md`
+- `docs/notation-support-matrix.md`
+- `docs/layout-heuristics.md`
+- `docs/modularization-decision.md`
 - `docs/musicxml-tips.md`
 - `docs/vexflow-tips.md`
 - `docs/playwright-tips.md`

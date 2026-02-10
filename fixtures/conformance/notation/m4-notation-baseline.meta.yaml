@@ -1,0 +1,13 @@
+id: notation-m4-baseline
+source: local-fixture
+category: notation
+expected: pass
+status: active
+parse_mode: lenient
+notes: M4 baseline notation fixture covering ties, slurs, articulations, words/tempo/dynamics, and wedge spanners.
+linked_todo: R-003
+waivers:
+  - Baseline single-voice rendering scope for M4
+collision_audit:
+  selector: .vf-notehead path
+  max_overlaps: 0

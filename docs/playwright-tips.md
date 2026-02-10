@@ -7,7 +7,7 @@
 ## Local CLI setup required in this repo
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright install chromium
-PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual
+PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4
 ```
 
 ## Why repo-local browser path is mandatory

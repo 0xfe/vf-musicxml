@@ -52,6 +52,7 @@ export interface Measure {
   attributeChanges: AttributeEvent[];
   voices: VoiceTimeline[];
   directions: DirectionEvent[];
+  harmonies?: HarmonyEvent[];
   barline?: BarlineInfo;
 }
 
@@ -94,6 +95,25 @@ export interface DirectionEvent {
   offsetTicks: number;
   words?: string;
   tempo?: number;
+  dynamics?: string[];
+  wedge?: WedgeEvent;
+}
+
+/** Direction-level wedge token parsed from `<direction-type><wedge>`. */
+export interface WedgeEvent {
+  type: 'crescendo' | 'diminuendo' | 'stop';
+  number?: string;
+  spread?: number;
+}
+
+/** Measure-level harmony symbol anchored at a measure-relative tick offset. */
+export interface HarmonyEvent {
+  offsetTicks: number;
+  rootStep?: string;
+  rootAlter?: number;
+  kind?: string;
+  text?: string;
+  staff?: number;
 }
 
 /** Barline metadata captured from `<barline>`. */
@@ -132,7 +152,9 @@ export interface NoteData {
   accidental?: AccidentalInfo;
   notehead?: NoteheadInfo;
   ties?: TieEndpoint[];
+  slurs?: SlurEndpoint[];
   articulations?: ArticulationInfo[];
+  lyrics?: LyricInfo[];
   notationRefs?: string[];
 }
 
@@ -167,6 +189,22 @@ export interface TieEndpoint {
 /** Articulation token attached to a note entry. */
 export interface ArticulationInfo {
   type: string;
+}
+
+/** Slur endpoint relation attached to a note entry. */
+export interface SlurEndpoint {
+  type: 'start' | 'stop';
+  number?: string;
+  placement?: string;
+  lineType?: string;
+}
+
+/** Lyric token attached to a note entry. */
+export interface LyricInfo {
+  number?: string;
+  syllabic?: string;
+  text?: string;
+  extend?: boolean;
 }
 
 /** Rest event with optional display positioning metadata. */

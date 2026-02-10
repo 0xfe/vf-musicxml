@@ -1,0 +1,14 @@
+id: text-m5-lyrics-harmony-baseline
+source: local-fixture
+category: text
+expected: pass
+status: active
+parse_mode: lenient
+notes: M5 baseline fixture for lyric and harmony text attachment with simple non-overlapping placement.
+linked_todo: R-005
+waivers:
+  - Text metrics remain approximate between Node and browser
+collision_audit:
+  selector: text
+  min_overlap_area: 20
+  max_overlaps: 0
