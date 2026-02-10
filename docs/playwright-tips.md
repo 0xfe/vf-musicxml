@@ -30,6 +30,7 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 ## Environment caveat (restricted sandboxes)
 - Some restricted macOS sandboxes can fail Chromium headless launch with:
   - `bootstrap_check_in ... MachPortRendezvousServer ... Permission denied (1100)`
+- MCP Chrome launches can also fail when the profile is already attached to an existing browser session (`Opening in existing browser session`).
 - In this repository, visual tests do pass when runtime permissions allow launch.
 - If that permission error appears again:
   - Keep non-visual gates as merge blockers.

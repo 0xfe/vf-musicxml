@@ -2,7 +2,7 @@
 
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`plan.md`).
-- M5 completed: multi-part/multi-staff baseline, lyric/harmony text attachment baseline, and modularization decision are implemented and test-gated.
+- M6 completed: advanced notation baseline (grace/cue/ornaments/tuplets/repeats/endings) is implemented and test-gated.
 
 ## High-signal files
 - Plan/risk:
@@ -24,6 +24,10 @@
   - `/Users/mo/git/musicxml/src/testkit/conformance.ts`
   - `/Users/mo/git/musicxml/src/testkit/conformance-execution.ts`
   - `/Users/mo/git/musicxml/src/testkit/svg-collision.ts`
+- Demo pipeline:
+  - `/Users/mo/git/musicxml/demos/scores/*.musicxml`
+  - `/Users/mo/git/musicxml/scripts/build-demos.mjs`
+  - `/Users/mo/git/musicxml/scripts/serve-demos.mjs`
 
 ## Current conformance model
 - Metadata schema: `/Users/mo/git/musicxml/fixtures/conformance/schema/conformance-fixture-meta.schema.json`
@@ -59,6 +63,7 @@
 - `notation-m4-baseline` (`expected: pass`) end-to-end M4 notation/direction baseline fixture.
 - `layout-m5-multipart-baseline` (`expected: pass`) multi-part/multi-staff M5 layout baseline fixture.
 - `text-m5-lyrics-harmony-baseline` (`expected: pass`) lyric/harmony M5 text baseline fixture.
+- `advanced-m6-notation-baseline` (`expected: pass`) M6 advanced notation fixture (grace/cue/ornament/tuplet/repeat+ending).
 
 ## Diagnostics to know
 - XML/root: `XML_NOT_WELL_FORMED`, `UNSUPPORTED_ROOT`
@@ -68,6 +73,7 @@
 - Part grouping: `PART_GROUP_STOP_WITHOUT_START`
 - Notation parse/link: `UNMATCHED_*`, `UNCLOSED_*`, `WEDGE_ANCHOR_NOT_FOUND`
 - Notation/text render: `SPANNER_*`, `*_RENDER_FAILED`, `WEDGE_DIRECTION_TEXT_FALLBACK`, `LYRIC_TEXT_RENDERED`, `HARMONY_TEXT_STACK_HIGH`
+- Advanced notation render: `UNSUPPORTED_ORNAMENT`, `GRACE_NOTES_WITHOUT_ANCHOR`, `UNMATCHED_TUPLET_STOP`, `UNCLOSED_TUPLET_START`, `OVERLAPPING_TUPLET_START`, `TUPLET_*`, `CUE_NOTE_RENDERED`
 - Layout render baseline: `MULTI_VOICE_NOT_SUPPORTED_IN_M2` still applies per staff when more than one voice targets the same staff.
 
 ## Test commands
@@ -79,6 +85,9 @@
 - Full:
   - `npm run test`
   - `npm run test:visual -- --workers=4`
+- Demos:
+  - `npm run demos:build`
+  - `npm run demos:serve` (open `http://localhost:4173/`)
 
 ## Playwright notes
 - Browser-required tests: prefer MCP Playwright browser tool.
@@ -90,9 +99,10 @@
 - Snapshot baselines live at:
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts-snapshots`
   - `/Users/mo/git/musicxml/tests/visual/render-visual.spec.ts-snapshots`
-- Latest run status: `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run test:visual -- --workers=4` pass.
+- Latest run status: `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:integration`, `npm run test:svg`, `npm run test:conformance`, and `npm run test` pass.
+- Visual status: Playwright launch is currently blocked in this local runtime by MachPort/session errors; keep visual updates environment-gated until browser launch context is stable.
 
-## Next likely work (M6 start)
-- Add first advanced-notation slice (grace notes or repeats/endings) with explicit fallback diagnostics.
-- Promote additional LilyPond fixtures from expected-fail to expected-pass incrementally.
-- Keep sentinel visual tests selective while expanding headless conformance and collision gates.
+## Next likely work (M7 start)
+- Push broader LilyPond conformance fixture import/promotion with explicit expected-fail rationales.
+- Add parse/render performance baselines and profiling artifacts.
+- Stabilize visual baseline regeneration in canonical CI/browser environment.

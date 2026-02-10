@@ -13,7 +13,7 @@ describe('conformance fixture loader', () => {
   it('loads repository conformance fixtures', async () => {
     const fixtures = await loadConformanceFixtures(path.resolve('fixtures/conformance'));
 
-    expect(fixtures.length).toBeGreaterThanOrEqual(9);
+    expect(fixtures.length).toBeGreaterThanOrEqual(10);
 
     const smokeFixture = fixtures.find((fixture) => fixture.meta.id === 'smoke-minimal-partwise');
     expect(smokeFixture).toBeDefined();
@@ -37,6 +37,10 @@ describe('conformance fixture loader', () => {
     const textFixture = fixtures.find((fixture) => fixture.meta.id === 'text-m5-lyrics-harmony-baseline');
     expect(textFixture?.meta.expected).toBe('pass');
     expect(textFixture?.meta.category).toBe('text');
+
+    const advancedFixture = fixtures.find((fixture) => fixture.meta.id === 'advanced-m6-notation-baseline');
+    expect(advancedFixture?.meta.expected).toBe('pass');
+    expect(advancedFixture?.meta.category).toBe('advanced');
   });
 
   it('fails on invalid metadata shape', async () => {

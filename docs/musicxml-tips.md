@@ -10,8 +10,20 @@
 - Canonical timing uses integer ticks (`ticksPerQuarter = 480`).
 - `<backup>` rewinds cursor, `<forward>` advances cursor.
 - `<chord/>` notes share onset and do not independently advance the cursor.
+- Grace notes (`<grace>`) are non-advancing events in measure cursor math.
 - Timing invariants and diagnostics are documented in:
   - `/Users/mo/git/musicxml/docs/timing-model.md`
+
+## Advanced notation parsing notes (M6)
+- Tuplets:
+  - Parse `<notations><tuplet type="start|stop"...>` endpoints.
+  - Parse `<time-modification>` (`actual-notes`, `normal-notes`) for ratio hints.
+- Ornaments:
+  - Parse children under `<notations><ornaments>` as explicit tokens; renderer maps a supported subset.
+- Cue notes:
+  - Parse `<cue/>` as note-level rendering hint (does not alter timing).
+- Repeats/endings:
+  - Parse `<barline><repeat direction="...">` and `<barline><ending ...>` by location (`left`/`right`/`middle`).
 
 ## Container (`.mxl`) rules
 - `.mxl` decode reads ZIP central directory and resolves score via:

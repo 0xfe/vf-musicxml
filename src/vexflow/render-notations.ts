@@ -1,8 +1,8 @@
-import { Curve, StaveHairpin, StaveTie, type Stave, type StaveNote } from 'vexflow';
+import { Curve, StaveHairpin, StaveTie, Tuplet, type Stave, type StaveNote } from 'vexflow';
 
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { EventRef, HarmonyEvent, Measure, NoteEvent, Score, SpannerRelation } from '../core/score.js';
-import { buildVoiceEventKey, type BuildMeasureNotesResult } from './render-note-mapper.js';
+import { buildVoiceEventKey, type BuildMeasureNotesResult, type RenderedTupletSpec } from './render-note-mapper.js';
 
 /** Non-null render context alias used by notation drawing helpers. */
 type VexRenderContext = NonNullable<ReturnType<Stave['getContext']>>;
@@ -203,6 +203,42 @@ export function drawMeasureLyrics(
       severity: 'info',
       message: `Rendered ${renderedCount} lyric token(s) in measure ${measure.index + 1} on staff ${staffNumber}.`
     });
+  }
+}
+
+/** Draw parsed tuplet groups for the current measure/staff after note formatting. */
+export function drawMeasureTuplets(
+  tuplets: RenderedTupletSpec[],
+  diagnostics: Diagnostic[],
+  context: VexRenderContext
+): void {
+  for (const tuplet of tuplets) {
+    if (tuplet.notes.length < 2) {
+      diagnostics.push({
+        code: 'TUPLET_NOT_ENOUGH_NOTES',
+        severity: 'warning',
+        message: 'Skipping tuplet draw because fewer than two notes were captured.'
+      });
+      continue;
+    }
+
+    try {
+      new Tuplet(tuplet.notes, {
+        num_notes: tuplet.numNotes,
+        notes_occupied: tuplet.notesOccupied,
+        bracketed: tuplet.bracketed,
+        ratioed: tuplet.ratioed,
+        location: tuplet.location
+      })
+        .setContext(context)
+        .draw();
+    } catch (error) {
+      diagnostics.push({
+        code: 'TUPLET_RENDER_FAILED',
+        severity: 'warning',
+        message: error instanceof Error ? error.message : 'Tuplet render failed.'
+      });
+    }
   }
 }
 

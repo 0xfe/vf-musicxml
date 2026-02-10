@@ -1,4 +1,14 @@
-import { Accidental, Articulation, Dot, StaveNote, type StaveNoteStruct } from 'vexflow';
+import {
+  Accidental,
+  Articulation,
+  Dot,
+  GraceNote,
+  GraceNoteGroup,
+  Ornament,
+  StaveNote,
+  Tuplet,
+  type StaveNoteStruct
+} from 'vexflow';
 
 import type { Diagnostic } from '../core/diagnostics.js';
 import type {
@@ -7,14 +17,36 @@ import type {
   Measure,
   NoteData,
   NoteEvent,
+  TupletTimeModification,
   TimeSignatureInfo,
   TimedEvent
 } from '../core/score.js';
+
+/** Tuplet draw payload emitted by the note-mapper and consumed by render orchestration. */
+export interface RenderedTupletSpec {
+  notes: StaveNote[];
+  numNotes: number;
+  notesOccupied: number;
+  bracketed?: boolean;
+  ratioed?: boolean;
+  location: number;
+}
+
+/** Active tuplet state while scanning one voice's events in score order. */
+interface ActiveTupletState {
+  notes: StaveNote[];
+  numNotes: number;
+  notesOccupied: number;
+  bracketed?: boolean;
+  ratioed?: boolean;
+  location: number;
+}
 
 /** Rendered note list plus event-to-note mapping used by tie/slur/hairpin passes. */
 export interface BuildMeasureNotesResult {
   notes: StaveNote[];
   noteByEventKey: Map<string, StaveNote>;
+  tuplets: RenderedTupletSpec[];
 }
 
 /** Build renderable notes for one target staff (single-voice-per-staff baseline retained in M5). */
@@ -28,7 +60,8 @@ export function buildMeasureNotes(
   if (measure.voices.length === 0) {
     return {
       notes: [],
-      noteByEventKey: new Map()
+      noteByEventKey: new Map(),
+      tuplets: []
     };
   }
 
@@ -45,12 +78,16 @@ export function buildMeasureNotes(
   if (!voice) {
     return {
       notes: [],
-      noteByEventKey: new Map()
+      noteByEventKey: new Map(),
+      tuplets: []
     };
   }
 
   const notes: StaveNote[] = [];
   const noteByEventKey = new Map<string, StaveNote>();
+  const tuplets: RenderedTupletSpec[] = [];
+  const pendingGraceEvents: NoteEvent[] = [];
+  const activeTuplets = new Map<string, ActiveTupletState>();
 
   for (let eventIndex = 0; eventIndex < voice.events.length; eventIndex += 1) {
     const event = voice.events[eventIndex];
@@ -61,18 +98,62 @@ export function buildMeasureNotes(
       continue;
     }
 
+    if (event.kind === 'note' && event.grace) {
+      pendingGraceEvents.push(event);
+      continue;
+    }
+
     const note = toStaveNote(event, ticksPerQuarter, clef, diagnostics);
     if (!note) {
       continue;
     }
 
+    if (event.kind === 'rest' && pendingGraceEvents.length > 0) {
+      diagnostics.push({
+        code: 'GRACE_NOTES_WITHOUT_ANCHOR',
+        severity: 'warning',
+        message: `Measure ${measure.index + 1}, staff ${staffNumber} had grace notes before a rest; dropping unattached grace notes.`
+      });
+      pendingGraceEvents.length = 0;
+    }
+
+    if (event.kind === 'note' && pendingGraceEvents.length > 0) {
+      attachGraceGroup(note, pendingGraceEvents, clef, diagnostics);
+      pendingGraceEvents.length = 0;
+    }
+
     notes.push(note);
     noteByEventKey.set(buildVoiceEventKey(voice.id, eventIndex), note);
+
+    if (event.kind === 'note') {
+      // Existing tuplets consume this note before start/stop markers are processed.
+      for (const activeTuplet of activeTuplets.values()) {
+        activeTuplet.notes.push(note);
+      }
+      processTupletBoundaries(event, note, activeTuplets, tuplets, diagnostics);
+    }
+  }
+
+  if (pendingGraceEvents.length > 0) {
+    diagnostics.push({
+      code: 'GRACE_NOTES_WITHOUT_ANCHOR',
+      severity: 'warning',
+      message: `Measure ${measure.index + 1}, staff ${staffNumber} ended with unattached grace notes.`
+    });
+  }
+
+  if (activeTuplets.size > 0) {
+    diagnostics.push({
+      code: 'UNCLOSED_TUPLET_START',
+      severity: 'warning',
+      message: `Measure ${measure.index + 1}, staff ${staffNumber} contains unclosed tuplet start markers.`
+    });
   }
 
   return {
     notes,
-    noteByEventKey
+    noteByEventKey,
+    tuplets
   };
 }
 
@@ -92,7 +173,7 @@ function toStaveNote(
   clef: string,
   diagnostics: Diagnostic[]
 ): StaveNote | undefined {
-  const duration = mapDuration(event.durationTicks, ticksPerQuarter, diagnostics);
+  const duration = mapDuration(event, ticksPerQuarter, diagnostics);
   if (!duration) {
     return undefined;
   }
@@ -157,7 +238,8 @@ function createPitchNote(
   const staveNoteData: StaveNoteStruct = {
     clef,
     keys,
-    duration
+    duration,
+    glyph_font_scale: event.cue ? 30 : undefined
   };
 
   const note = new StaveNote(staveNoteData);
@@ -172,10 +254,22 @@ function createPitchNote(
     if (articulationCode) {
       note.addModifier(new Articulation(articulationCode), index);
     }
+
+    for (const ornamentCode of mapOrnaments(noteData, diagnostics)) {
+      note.addModifier(new Ornament(ornamentCode), index);
+    }
   });
 
   for (let index = 0; index < dots; index += 1) {
     Dot.buildAndAttach([note], { all: true });
+  }
+
+  if (event.cue) {
+    diagnostics.push({
+      code: 'CUE_NOTE_RENDERED',
+      severity: 'info',
+      message: 'Rendered cue-sized notehead/stem in M6 baseline.'
+    });
   }
 
   return note;
@@ -184,6 +278,138 @@ function createPitchNote(
 /** Build stable map keys for one rendered voice event. */
 export function buildVoiceEventKey(voiceId: string, eventIndex: number): string {
   return `${voiceId}:${eventIndex}`;
+}
+
+/** Convert pending grace events into a GraceNoteGroup attached to the anchor note. */
+function attachGraceGroup(
+  anchor: StaveNote,
+  graceEvents: NoteEvent[],
+  clef: string,
+  diagnostics: Diagnostic[]
+): void {
+  const graceNotes = graceEvents
+    .map((event) => createGraceNote(event, clef, diagnostics))
+    .filter((note): note is GraceNote => !!note);
+
+  if (graceNotes.length === 0) {
+    return;
+  }
+
+  const graceGroup = new GraceNoteGroup(graceNotes, false);
+  graceGroup.beamNotes();
+  anchor.addModifier(graceGroup, 0);
+}
+
+/** Build one VexFlow `GraceNote` from a parsed grace event. */
+function createGraceNote(event: NoteEvent, clef: string, diagnostics: Diagnostic[]): GraceNote | undefined {
+  const keys: string[] = [];
+  for (const noteData of event.notes) {
+    const key = noteDataToKey(noteData, diagnostics);
+    if (key) {
+      keys.push(key);
+    }
+  }
+
+  if (keys.length === 0) {
+    return undefined;
+  }
+
+  const grace = new GraceNote({
+    clef,
+    keys,
+    duration: mapDurationFromType(event.noteType, event.dotCount)?.duration ?? '8',
+    slash: event.graceSlash ?? false
+  });
+
+  event.notes.forEach((noteData, index) => {
+    const accidental = mapAccidental(noteData);
+    if (accidental) {
+      grace.addModifier(new Accidental(accidental), index);
+    }
+  });
+
+  return grace;
+}
+
+/** Update active tuplet state for this note and emit completed tuplets. */
+function processTupletBoundaries(
+  event: NoteEvent,
+  renderedNote: StaveNote,
+  activeTuplets: Map<string, ActiveTupletState>,
+  tuplets: RenderedTupletSpec[],
+  diagnostics: Diagnostic[]
+): void {
+  if (!event.tuplets || event.tuplets.length === 0) {
+    return;
+  }
+
+  for (const endpoint of event.tuplets) {
+    const number = endpoint.number ?? '1';
+    if (endpoint.type === 'start') {
+      if (activeTuplets.has(number)) {
+        diagnostics.push({
+          code: 'OVERLAPPING_TUPLET_START',
+          severity: 'warning',
+          message: `Tuplet number '${number}' started before prior tuplets with same number closed.`
+        });
+      }
+
+      activeTuplets.set(number, createTupletState(renderedNote, endpoint.bracket, endpoint.showNumber, endpoint.placement, event.timeModification));
+      continue;
+    }
+
+    const active = activeTuplets.get(number);
+    if (!active) {
+      diagnostics.push({
+        code: 'UNMATCHED_TUPLET_STOP',
+        severity: 'warning',
+        message: `Tuplet stop for number '${number}' had no matching start.`
+      });
+      continue;
+    }
+
+    if (endpoint.showNumber) {
+      active.ratioed = endpoint.showNumber === 'both';
+    }
+    if (endpoint.bracket !== undefined) {
+      active.bracketed = endpoint.bracket;
+    }
+    if (endpoint.placement === 'above' || endpoint.placement === 'below') {
+      active.location = endpoint.placement === 'below' ? Tuplet.LOCATION_BOTTOM : Tuplet.LOCATION_TOP;
+    }
+
+    tuplets.push({
+      notes: [...active.notes],
+      numNotes: active.numNotes,
+      notesOccupied: active.notesOccupied,
+      bracketed: active.bracketed,
+      ratioed: active.ratioed,
+      location: active.location
+    });
+    activeTuplets.delete(number);
+  }
+}
+
+/** Create active tuplet state from start metadata and optional time-modification ratio. */
+function createTupletState(
+  renderedNote: StaveNote,
+  bracketed: boolean | undefined,
+  showNumber: string | undefined,
+  placement: string | undefined,
+  ratio: TupletTimeModification | undefined
+): ActiveTupletState {
+  const numNotes = ratio?.actualNotes ?? 3;
+  const notesOccupied = ratio?.normalNotes ?? 2;
+  const ratioed = showNumber ? showNumber === 'both' : Math.abs(numNotes - notesOccupied) > 1;
+
+  return {
+    notes: [renderedNote],
+    numNotes,
+    notesOccupied,
+    bracketed,
+    ratioed,
+    location: placement === 'below' ? Tuplet.LOCATION_BOTTOM : Tuplet.LOCATION_TOP
+  };
 }
 
 /** Convert a note payload to a VexFlow key string (`c/4`, `f#/5`, etc). */
@@ -256,15 +482,61 @@ function mapArticulation(noteData: NoteData, diagnostics: Diagnostic[]): string 
   return undefined;
 }
 
+/** Map normalized ornament tokens into VexFlow ornament IDs. */
+function mapOrnaments(noteData: NoteData, diagnostics: Diagnostic[]): string[] {
+  if (!noteData.ornaments || noteData.ornaments.length === 0) {
+    return [];
+  }
+
+  const map: Record<string, string> = {
+    'trill-mark': 'tr',
+    turn: 'turn',
+    'inverted-turn': 'turn_inverted',
+    mordent: 'mordent',
+    'inverted-mordent': 'mordent_inverted',
+    schleifer: 'upprall'
+  };
+
+  const ornamentCodes: string[] = [];
+  for (const ornament of noteData.ornaments) {
+    const code = map[ornament.type];
+    if (code) {
+      ornamentCodes.push(code);
+      continue;
+    }
+
+    diagnostics.push({
+      code: 'UNSUPPORTED_ORNAMENT',
+      severity: 'warning',
+      message: `Unsupported ornament '${ornament.type}' is not rendered.`
+    });
+  }
+
+  return ornamentCodes;
+}
+
 /**
  * Convert canonical tick durations into the small M2 duration vocabulary.
  * Unknown values degrade to quarter notes with a warning diagnostic.
  */
 function mapDuration(
-  durationTicks: number,
+  event: TimedEvent,
   ticksPerQuarter: number,
   diagnostics: Diagnostic[]
 ): { duration: string; dots: number } | undefined {
+  if (event.kind === 'note') {
+    const fromType = mapDurationFromType(event.noteType, event.dotCount);
+    if (fromType) {
+      return fromType;
+    }
+
+    if (event.grace) {
+      // Grace notes often omit `<duration>` in MusicXML. Use a stable visual default.
+      return { duration: '8', dots: event.dotCount ?? 0 };
+    }
+  }
+
+  const durationTicks = event.durationTicks;
   if (durationTicks <= 0) {
     diagnostics.push({
       code: 'NON_POSITIVE_DURATION',
@@ -292,6 +564,35 @@ function mapDuration(
     message: `Unsupported duration ratio ${ratio.toFixed(4)} quarter notes. Using quarter note fallback.`
   });
   return { duration: 'q', dots: 0 };
+}
+
+/** Map MusicXML `<type>` + `<dot/>` values into VexFlow duration tokens. */
+function mapDurationFromType(noteType: string | undefined, dotCount: number | undefined): { duration: string; dots: number } | undefined {
+  if (!noteType) {
+    return undefined;
+  }
+
+  const map: Record<string, string> = {
+    longa: 'w',
+    breve: 'w',
+    whole: 'w',
+    half: 'h',
+    quarter: 'q',
+    eighth: '8',
+    '16th': '16',
+    '32nd': '32',
+    '64th': '64'
+  };
+
+  const duration = map[noteType.toLowerCase()];
+  if (!duration) {
+    return undefined;
+  }
+
+  return {
+    duration,
+    dots: Math.max(0, dotCount ?? 0)
+  };
 }
 
 /** Map MusicXML clef descriptors into VexFlow clef IDs. */

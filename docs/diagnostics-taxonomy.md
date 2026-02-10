@@ -1,4 +1,4 @@
-# Diagnostics Taxonomy (M5 Baseline)
+# Diagnostics Taxonomy (M6 Baseline)
 
 Severity levels:
 - `error`: parse cannot proceed or strict-mode validation failure.
@@ -43,7 +43,15 @@ Renderer mapping/layout codes:
 - `UNSUPPORTED_CLEF`
 - `UNSUPPORTED_TIMED_EVENT`
 - `UNSUPPORTED_ARTICULATION`
+- `UNSUPPORTED_ORNAMENT`
 - `UNPITCHED_NOTE_UNSUPPORTED`
+- `GRACE_NOTES_WITHOUT_ANCHOR`
+- `UNMATCHED_TUPLET_STOP`
+- `UNCLOSED_TUPLET_START`
+- `OVERLAPPING_TUPLET_START`
+- `TUPLET_NOT_ENOUGH_NOTES`
+- `TUPLET_RENDER_FAILED`
+- `CUE_NOTE_RENDERED`
 - `EMPTY_SCORE`
 - `EMPTY_PART`
 

@@ -98,4 +98,72 @@ describe('render note mapper', () => {
     expect(upper.noteByEventKey.has('1:0')).toBe(true);
     expect(lower.noteByEventKey.has('2:0')).toBe(true);
   });
+
+  it('attaches grace/ornament modifiers and emits tuplet payloads for M6 baseline', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Advanced</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>6</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note>
+        <grace slash="yes"/>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>eighth</type>
+      </note>
+      <note>
+        <cue/>
+        <pitch><step>E</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+        <notations>
+          <ornaments><trill-mark/></ornaments>
+          <tuplet type="start" number="1" show-number="both"/>
+        </notations>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+        <notations><tuplet type="stop" number="1"/></notations>
+      </note>
+      <note><rest/><duration>18</duration><voice>1</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    expect(noteResult.notes).toHaveLength(4);
+    expect(noteResult.tuplets).toHaveLength(1);
+    expect(noteResult.tuplets[0]?.numNotes).toBe(3);
+    expect(noteResult.tuplets[0]?.notesOccupied).toBe(2);
+
+    const firstModifiers = noteResult.notes[0]?.getModifiersByType('GraceNoteGroup') ?? [];
+    const firstOrnaments = noteResult.notes[0]?.getModifiersByType('Ornament') ?? [];
+    expect(firstModifiers.length).toBe(1);
+    expect(firstOrnaments.length).toBe(1);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'CUE_NOTE_RENDERED')).toBe(true);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'NON_POSITIVE_DURATION')).toBe(false);
+  });
 });

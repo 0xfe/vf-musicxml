@@ -1,4 +1,4 @@
-# CSM Overview (M4)
+# CSM Overview (M6)
 
 The canonical score model (CSM) is the parser output and renderer input.
 
@@ -20,8 +20,13 @@ The canonical score model (CSM) is the parser output and renderer input.
   - `Measure.directions[]` stores words, tempo, dynamics, and wedge tokens.
 - Measure-level harmony:
   - `Measure.harmonies[]` stores harmony symbols with measure-relative offsets.
+- Measure-level barline metadata:
+  - `Measure.barlines[]` stores per-location repeat/ending semantics.
 - Note-level notation:
-  - `NoteData.ties[]`, `NoteData.slurs[]`, `NoteData.articulations[]`, and `NoteData.lyrics[]`.
+  - `NoteData.ties[]`, `NoteData.slurs[]`, `NoteData.articulations[]`, `NoteData.ornaments[]`, and `NoteData.lyrics[]`.
+- Note-event advanced metadata:
+  - `NoteEvent.grace`, `NoteEvent.cue`, `NoteEvent.noteType`, `NoteEvent.dotCount`
+  - `NoteEvent.tuplets[]` and `NoteEvent.timeModification`
 - Cross-event relations:
   - `Score.spanners[]` stores normalized tie/slur/wedge relations with `EventRef` anchors.
   - Spanner linking is built after measure parsing and emits diagnostics for unmatched/unclosed markers.

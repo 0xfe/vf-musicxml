@@ -1,0 +1,10 @@
+id: advanced-m6-notation-baseline
+source: https://lilypond.org/doc/v2.24/input/regression/musicxml/collated-files.html
+category: advanced
+expected: pass
+status: active
+notes: M6 baseline fixture for grace notes, cue-sized notes, ornaments, tuplets, and repeat/ending barline semantics.
+linked_todo: R-003
+collision_audit:
+  selector: ".vf-notehead path"
+  max_overlaps: 1

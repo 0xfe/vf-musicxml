@@ -193,6 +193,7 @@ function parseMeasure(
   let streamCursorTicks = 0;
   let barline: BarlineInfo | undefined;
   let warnedMissingDivisions = false;
+  const barlines: BarlineInfo[] = [];
 
   // Measure children are read in document order while we maintain
   // a single stream cursor that backup/forward can mutate.
@@ -295,7 +296,9 @@ function parseMeasure(
         break;
       }
       case 'barline': {
-        barline = parseBarline(child);
+        const parsedBarline = parseBarline(child);
+        barlines.push(parsedBarline);
+        barline = mergeBarlineInfo(barline, parsedBarline);
         break;
       }
       case 'harmony': {
@@ -348,6 +351,32 @@ function parseMeasure(
     voices: voiceTimelines,
     directions,
     harmonies,
+    barlines: barlines.length > 0 ? barlines : undefined,
     barline
   };
+}
+
+/** Merge per-location barline fragments into one measure-level summary payload. */
+function mergeBarlineInfo(existing: BarlineInfo | undefined, incoming: BarlineInfo): BarlineInfo {
+  if (!existing) {
+    return {
+      ...incoming,
+      repeats: incoming.repeats ? [...incoming.repeats] : undefined,
+      endings: incoming.endings ? [...incoming.endings] : undefined
+    };
+  }
+
+  const merged: BarlineInfo = {
+    location: incoming.location ?? existing.location,
+    style: incoming.style ?? existing.style
+  };
+
+  if (existing.repeats || incoming.repeats) {
+    merged.repeats = [...(existing.repeats ?? []), ...(incoming.repeats ?? [])];
+  }
+  if (existing.endings || incoming.endings) {
+    merged.endings = [...(existing.endings ?? []), ...(incoming.endings ?? [])];
+  }
+
+  return merged;
 }

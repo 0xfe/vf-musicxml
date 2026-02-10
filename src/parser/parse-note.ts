@@ -1,6 +1,8 @@
 import type {
   ArticulationInfo,
+  BarlineEndingInfo,
   BarlineInfo,
+  BarlineRepeatInfo,
   ClefInfo,
   DirectionEvent,
   EffectiveAttributes,
@@ -8,11 +10,14 @@ import type {
   LyricInfo,
   NoteData,
   NoteEvent,
+  OrnamentInfo,
   Pitch,
   RestEvent,
   SlurEndpoint,
   TimedEvent,
   TieEndpoint,
+  TupletEndpoint,
+  TupletTimeModification,
   Unpitched
 } from '../core/score.js';
 import { TICKS_PER_QUARTER } from './parse-constants.js';
@@ -60,6 +65,9 @@ export function parseNote(
   const staff = parseOptionalInt(textOf(firstChild(noteNode, 'staff')));
   const isChord = !!firstChild(noteNode, 'chord');
   const isRest = !!firstChild(noteNode, 'rest');
+  const graceNode = firstChild(noteNode, 'grace');
+  const isGrace = !!graceNode;
+  const isCue = !!firstChild(noteNode, 'cue');
 
   const duration = parseDurationTicks(noteNode, effectiveAttributes, warnedMissingDivisions, ctx, 'note');
 
@@ -86,6 +94,13 @@ export function parseNote(
     kind: 'note',
     voice,
     staff,
+    cue: isCue,
+    grace: isGrace,
+    graceSlash: isGrace && attribute(graceNode, 'slash') === 'yes',
+    noteType: textOf(firstChild(noteNode, 'type')) ?? undefined,
+    dotCount: childrenOf(noteNode, 'dot').length || undefined,
+    timeModification: parseTimeModification(noteNode),
+    tuplets: parseTuplets(noteNode),
     offsetTicks: streamCursorTicks,
     durationTicks: duration.ticks,
     notes: [noteData]
@@ -138,15 +153,46 @@ export function parseDirection(directionNode: XmlNode, offsetTicks: number): Dir
 export function parseBarline(barlineNode: XmlNode): BarlineInfo {
   const location = attribute(barlineNode, 'location');
   const style = textOf(firstChild(barlineNode, 'bar-style'));
+  const resolvedLocation = location === 'left' || location === 'right' || location === 'middle' ? location : 'right';
+  const repeatDirection = attribute(firstChild(barlineNode, 'repeat'), 'direction');
+  const endingNode = firstChild(barlineNode, 'ending');
 
-  if (location === 'left' || location === 'right' || location === 'middle') {
-    return {
-      location,
-      style
-    };
+  const parsed: BarlineInfo = {
+    location: resolvedLocation,
+    style
+  };
+
+  if (repeatDirection === 'forward' || repeatDirection === 'backward') {
+    const repeats: BarlineRepeatInfo[] = [
+      {
+        location: resolvedLocation,
+        direction: repeatDirection
+      }
+    ];
+    parsed.repeats = repeats;
   }
 
-  return { style };
+  if (endingNode) {
+    const endingType = attribute(endingNode, 'type');
+    if (
+      endingType === 'start' ||
+      endingType === 'stop' ||
+      endingType === 'discontinue' ||
+      endingType === 'continue'
+    ) {
+      const endings: BarlineEndingInfo[] = [
+        {
+          location: resolvedLocation,
+          type: endingType,
+          number: attribute(endingNode, 'number') ?? undefined,
+          text: textOf(endingNode) ?? undefined
+        }
+      ];
+      parsed.endings = endings;
+    }
+  }
+
+  return parsed;
 }
 
 /** Parse optional rest display hints (`display-step`, `display-octave`). */
@@ -189,6 +235,7 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
   const ties = parseTies(noteNode);
   const slurs = parseSlurs(noteNode);
   const articulations = parseArticulations(noteNode);
+  const ornaments = parseOrnaments(noteNode);
   const lyrics = parseLyrics(noteNode);
 
   return {
@@ -199,6 +246,7 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
     ties,
     slurs,
     articulations,
+    ornaments,
     lyrics
   };
 }
@@ -265,6 +313,17 @@ export function parseArticulations(noteNode: XmlNode): ArticulationInfo[] | unde
   return articulations.length > 0 ? articulations : undefined;
 }
 
+/** Parse ornament tokens nested under `<notations><ornaments>`. */
+export function parseOrnaments(noteNode: XmlNode): OrnamentInfo[] | undefined {
+  const ornamentsNode = firstChild(firstChild(noteNode, 'notations'), 'ornaments');
+  if (!ornamentsNode) {
+    return undefined;
+  }
+
+  const ornaments = ornamentsNode.children.map((node) => ({ type: node.name }));
+  return ornaments.length > 0 ? ornaments : undefined;
+}
+
 /** Parse slur endpoints nested under `<notations><slur>`. */
 export function parseSlurs(noteNode: XmlNode): SlurEndpoint[] | undefined {
   const notationsNode = firstChild(noteNode, 'notations');
@@ -325,6 +384,53 @@ export function parseLyrics(noteNode: XmlNode): LyricInfo[] | undefined {
   return lyrics.length > 0 ? lyrics : undefined;
 }
 
+/** Parse tuplet endpoint records from `<notations><tuplet ...>`. */
+export function parseTuplets(noteNode: XmlNode): TupletEndpoint[] | undefined {
+  const notationsNode = firstChild(noteNode, 'notations');
+  if (!notationsNode) {
+    return undefined;
+  }
+
+  const tuplets: TupletEndpoint[] = [];
+  for (const tupletNode of childrenOf(notationsNode, 'tuplet')) {
+    const type = attribute(tupletNode, 'type');
+    if (type !== 'start' && type !== 'stop') {
+      continue;
+    }
+
+    tuplets.push({
+      type,
+      number: attribute(tupletNode, 'number') ?? undefined,
+      bracket: parseYesNo(attribute(tupletNode, 'bracket')),
+      showNumber: attribute(tupletNode, 'show-number') ?? undefined,
+      placement: attribute(tupletNode, 'placement') ?? undefined
+    });
+  }
+
+  return tuplets.length > 0 ? tuplets : undefined;
+}
+
+/** Parse tuplet ratio metadata from `<time-modification>`. */
+export function parseTimeModification(noteNode: XmlNode): TupletTimeModification | undefined {
+  const modificationNode = firstChild(noteNode, 'time-modification');
+  if (!modificationNode) {
+    return undefined;
+  }
+
+  const actualNotes = parseOptionalInt(textOf(firstChild(modificationNode, 'actual-notes')));
+  const normalNotes = parseOptionalInt(textOf(firstChild(modificationNode, 'normal-notes')));
+  if (!actualNotes || !normalNotes) {
+    return undefined;
+  }
+
+  return {
+    actualNotes,
+    normalNotes,
+    actualType: textOf(firstChild(modificationNode, 'actual-type')) ?? undefined,
+    normalType: textOf(firstChild(modificationNode, 'normal-type')) ?? undefined
+  };
+}
+
 /** Parse `<direction-type><dynamics>` tokens into ordered dynamic markers. */
 function parseDirectionDynamics(directionTypeNode: XmlNode | undefined): string[] {
   const dynamicsNode = firstChild(directionTypeNode, 'dynamics');
@@ -333,6 +439,17 @@ function parseDirectionDynamics(directionTypeNode: XmlNode | undefined): string[
   }
 
   return dynamicsNode.children.map((node) => node.name);
+}
+
+/** Parse MusicXML yes/no attributes into boolean values. */
+function parseYesNo(value: string | undefined): boolean | undefined {
+  if (value === 'yes') {
+    return true;
+  }
+  if (value === 'no') {
+    return false;
+  }
+  return undefined;
 }
 
 /** Parse `<direction-type><wedge>` attributes into a normalized wedge event token. */

@@ -2,7 +2,7 @@
 
 TypeScript-first MusicXML parsing and rendering library for VexFlow.
 
-Current milestone: `M5` completed (multi-part/multi-staff layout baseline, lyric/harmony attachment baseline, and modularization decision record).
+Current milestone: `M6` completed (advanced notation baseline: grace/cue/ornaments/tuplets/repeats/endings).
 
 ## Project goals
 - Parser + canonical score model that is independent from rendering backend.
@@ -13,7 +13,7 @@ Current milestone: `M5` completed (multi-part/multi-staff layout baseline, lyric
 ## Architecture (M0 layout)
 - `src/core/`: shared types and diagnostics.
 - `src/parser/`: parser pipeline (`saxes` AST + AST-to-CSM transform).
-- `src/vexflow/`: rendering adapter (M5 baseline in progress).
+- `src/vexflow/`: rendering adapter (M6 advanced-notation baseline).
 - `src/public/`: exported API surface.
 - `src/testkit/`: conformance fixture and metadata tooling.
 - `tests/`: unit, integration, conformance, headless SVG, and browser visual suites.
@@ -29,6 +29,24 @@ npm run lint
 npm run typecheck
 npm run test
 ```
+
+## Demos
+Demo sources live in:
+- `demos/scores/happy-birthday.musicxml`
+- `demos/scores/jingle-bells.musicxml`
+
+Build static demo pages:
+```bash
+npm run demos:build
+```
+
+Serve locally and open in a browser:
+```bash
+npm run demos:serve
+```
+
+Then visit:
+- `http://localhost:4173/`
 
 ## Playwright Browser Setup (Local)
 Install and run visual tests with a repo-local browser cache:
@@ -64,6 +82,8 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run test:conformance:report`: run conformance execution and emit JSON/Markdown artifacts (diagnostic histograms + category rollups) into `artifacts/conformance/`.
 - `npm run test:visual`: run Playwright browser visual smoke tests.
 - `npm run test:visual:update`: update Playwright visual snapshot baselines.
+- `npm run demos:build`: build static demo HTML pages from `demos/scores/*.musicxml`.
+- `npm run demos:serve`: build demos and serve them locally at `http://localhost:4173/`.
 
 ## Testkit utilities
 - `src/testkit/svg-collision.ts` provides headless SVG collision-audit helpers:
@@ -104,6 +124,7 @@ Current staged conformance fixtures:
 - `fixtures/conformance/notation/m4-notation-baseline.musicxml` (`expected: pass`, M4 notation/direction baseline)
 - `fixtures/conformance/layout/m5-multipart-baseline.musicxml` (`expected: pass`, M5 multi-part/multi-staff baseline)
 - `fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml` (`expected: pass`, M5 lyric/harmony text baseline)
+- `fixtures/conformance/advanced/m6-advanced-notation-baseline.musicxml` (`expected: pass`, M6 advanced notation baseline)
 
 Visual sentinel coverage:
 - `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, `rhythm`, M4 `notation`, and M5 `layout` + `text`.
@@ -119,11 +140,11 @@ Visual sentinel coverage:
 ## Current API state
 - `parseMusicXML`: supports `score-partwise` parsing and `score-timewise` normalization to partwise.
 - `parseMusicXMLAsync`: supports XML and `.mxl` (ZIP) container decode with `META-INF/container.xml` rootfile resolution and diagnostics.
-- `renderToSVGPages`: includes M4 notation/direction rendering, M5 multi-part/multi-staff layout/connectors, and baseline lyric/harmony text attachment (single-voice-per-staff fallback).
+- `renderToSVGPages`: includes M4/M5 baselines plus M6 advanced notation support (grace/cue notes, ornament mapping baseline, tuplet draw pass, repeat/ending stave semantics).
 - `renderToElement`: implemented with DOM lifecycle (`dispose`) for browser integration.
 
 ## Notation Support Matrix
-- See `/Users/mo/git/musicxml/docs/notation-support-matrix.md` for supported M4 notation features, degradation diagnostics, and known gaps.
+- See `/Users/mo/git/musicxml/docs/notation-support-matrix.md` for supported M6 notation features, degradation diagnostics, and known gaps.
 
 ## Core docs
 - `docs/adr/0001-xml-parser-stack.md`
@@ -133,6 +154,7 @@ Visual sentinel coverage:
 - `docs/rendering-pipeline.md`
 - `docs/timing-model.md`
 - `docs/notation-support-matrix.md`
+- `docs/advanced-notation-policy.md`
 - `docs/layout-heuristics.md`
 - `docs/modularization-decision.md`
 - `docs/musicxml-tips.md`

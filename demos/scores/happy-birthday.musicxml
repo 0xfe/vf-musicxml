@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Lead</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key>
+          <fifths>0</fifths>
+        </key>
+        <time>
+          <beats>4</beats>
+          <beat-type>4</beat-type>
+        </time>
+        <clef>
+          <sign>G</sign>
+          <line>2</line>
+        </clef>
+      </attributes>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="maj">major</kind>
+      </harmony>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>Hap</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>py</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>birth</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>day</text></lyric></note>
+    </measure>
+    <measure number="2">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>to</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>you</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>hap</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>py</text></lyric></note>
+    </measure>
+    <measure number="3">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>birth</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>day</text></lyric></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>to</text></lyric></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>you</text></lyric></note>
+    </measure>
+    <measure number="4">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="maj">major</kind>
+      </harmony>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>hap</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>py</text></lyric></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>birth</text></lyric></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>day</text></lyric></note>
+    </measure>
+    <measure number="5">
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="maj">major</kind>
+      </harmony>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>dear</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>friend</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>hap</text></lyric></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>py</text></lyric></note>
+    </measure>
+    <measure number="6">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="maj">major</kind>
+      </harmony>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>birth</text></lyric></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>day</text></lyric></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>to</text></lyric></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>you</text></lyric></note>
+    </measure>
+    <measure number="7">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>hap</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>py</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>birth</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>day</text></lyric></note>
+    </measure>
+    <measure number="8">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="maj">major</kind>
+      </harmony>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>to</text></lyric></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>you</text></lyric></note>
+      <note><rest/><duration>1</duration><type>quarter</type></note>
+      <note><rest/><duration>1</duration><type>quarter</type></note>
+      <barline location="right">
+        <bar-style>light-heavy</bar-style>
+      </barline>
+    </measure>
+  </part>
+</score-partwise>

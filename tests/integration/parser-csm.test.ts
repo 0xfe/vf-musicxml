@@ -384,6 +384,107 @@ describe('parser CSM transformation', () => {
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'PART_GROUP_STOP_WITHOUT_START')).toBe(true);
   });
 
+  it('parses M6 advanced note/barline metadata for grace, cue, ornaments, tuplets, repeats, and endings', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Advanced</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>6</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <barline location="left"><repeat direction="forward"/><ending number="1" type="start">1.</ending></barline>
+      <note>
+        <grace slash="yes"/>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>eighth</type>
+      </note>
+      <note>
+        <cue/>
+        <pitch><step>E</step><octave>5</octave></pitch>
+        <duration>6</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <notations><ornaments><trill-mark/></ornaments></notations>
+      </note>
+      <note><rest/><duration>18</duration><voice>1</voice><type>half</type></note>
+    </measure>
+    <measure number="2">
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+        <notations><tuplet type="start" number="1" bracket="yes" show-number="both"/></notations>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>5</octave></pitch>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>
+        <notations><tuplet type="stop" number="1"/></notations>
+      </note>
+      <note><rest/><duration>18</duration><voice>1</voice><type>half</type></note>
+      <barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const measureOne = result.score?.parts[0]?.measures[0];
+    const measureTwo = result.score?.parts[0]?.measures[1];
+    const graceEvent = measureOne?.voices[0]?.events[0];
+    const cueEvent = measureOne?.voices[0]?.events[1];
+    const tupletStartEvent = measureTwo?.voices[0]?.events[0];
+    const tupletStopEvent = measureTwo?.voices[0]?.events[2];
+
+    expect(graceEvent?.kind).toBe('note');
+    if (graceEvent?.kind === 'note') {
+      expect(graceEvent.grace).toBe(true);
+      expect(graceEvent.graceSlash).toBe(true);
+      expect(graceEvent.noteType).toBe('eighth');
+    }
+
+    expect(cueEvent?.kind).toBe('note');
+    if (cueEvent?.kind === 'note') {
+      expect(cueEvent.cue).toBe(true);
+      expect(cueEvent.notes[0]?.ornaments?.[0]?.type).toBe('trill-mark');
+    }
+
+    expect(tupletStartEvent?.kind).toBe('note');
+    if (tupletStartEvent?.kind === 'note') {
+      expect(tupletStartEvent.timeModification?.actualNotes).toBe(3);
+      expect(tupletStartEvent.timeModification?.normalNotes).toBe(2);
+      expect(tupletStartEvent.tuplets?.[0]?.type).toBe('start');
+      expect(tupletStartEvent.tuplets?.[0]?.showNumber).toBe('both');
+    }
+
+    expect(tupletStopEvent?.kind).toBe('note');
+    if (tupletStopEvent?.kind === 'note') {
+      expect(tupletStopEvent.tuplets?.[0]?.type).toBe('stop');
+    }
+
+    const leftRepeat = measureOne?.barlines?.flatMap((barline) => barline.repeats ?? []).find((repeat) => repeat.location === 'left');
+    const leftEnding = measureOne?.barlines?.flatMap((barline) => barline.endings ?? []).find((ending) => ending.location === 'left');
+    const rightRepeat = measureTwo?.barlines?.flatMap((barline) => barline.repeats ?? []).find((repeat) => repeat.location === 'right');
+    const rightEnding = measureTwo?.barlines?.flatMap((barline) => barline.endings ?? []).find((ending) => ending.location === 'right');
+    expect(leftRepeat?.direction).toBe('forward');
+    expect(leftEnding?.type).toBe('start');
+    expect(rightRepeat?.direction).toBe('backward');
+    expect(rightEnding?.type).toBe('stop');
+  });
+
   it('conserves randomized backup/forward timing invariants across voices', () => {
     const rng = createDeterministicRng(0xC0FFEE);
 

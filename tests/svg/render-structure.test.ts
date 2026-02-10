@@ -148,4 +148,23 @@ describe('SVG rendering structure', () => {
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'LYRIC_TEXT_RENDERED')).toBe(true);
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
   });
+
+  it('renders M6 advanced baseline with grace/cue/tuplet and repeat-ending semantics', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/advanced/m6-advanced-notation-baseline.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, { sourceName: 'm6-advanced-notation-baseline.musicxml' });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    const svg = rendered.pages[0] ?? '';
+
+    expect(rendered.pages.length).toBe(1);
+    expect((svg.match(/vf-notehead/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(svg).toContain('1.');
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'CUE_NOTE_RENDERED')).toBe(true);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'TUPLET_RENDER_FAILED')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'TUPLET_NOT_ENOUGH_NOTES')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+  });
 });

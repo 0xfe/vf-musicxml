@@ -1,5 +1,15 @@
 import { JSDOM } from 'jsdom';
-import { Formatter, Renderer, Stave, StaveConnector, type StaveConnectorType, type StaveNote, Voice } from 'vexflow';
+import {
+  BarlineType,
+  Formatter,
+  Renderer,
+  Stave,
+  StaveConnector,
+  type StaveConnectorType,
+  type StaveNote,
+  Voice,
+  VoltaType
+} from 'vexflow';
 
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { ClefInfo, Measure, Part, Score } from '../core/score.js';
@@ -15,6 +25,7 @@ import {
   drawMeasureDirections,
   drawMeasureHarmonies,
   drawMeasureLyrics,
+  drawMeasureTuplets,
   drawScoreSpanners,
   registerMeasureEventNotes
 } from './render-notations.js';
@@ -201,6 +212,9 @@ function renderIntoContainer(
             }
           }
 
+          if (measure) {
+            applyMeasureBarlineSemantics(stave, measure, staffNumber);
+          }
           stave.setContext(context).draw();
           staves.push(stave);
 
@@ -218,6 +232,7 @@ function renderIntoContainer(
 
             new Formatter().joinVoices([voice]).format([voice], measureWidth - 30);
             voice.draw(context, stave);
+            drawMeasureTuplets(noteResult.tuplets, diagnostics, context);
           }
 
           if (staffNumber === 1) {
@@ -328,6 +343,67 @@ function estimateRequiredHeight(layouts: PartLayout[]): number {
   }
 
   return last.topY + last.staffCount * STAFF_ROW_HEIGHT + BOTTOM_MARGIN;
+}
+
+/** Apply repeat-barline and volta metadata to a stave before drawing. */
+function applyMeasureBarlineSemantics(stave: Stave, measure: Measure, staffNumber: number): void {
+  const barlines = measure.barlines && measure.barlines.length > 0 ? measure.barlines : measure.barline ? [measure.barline] : [];
+  if (barlines.length === 0) {
+    return;
+  }
+
+  let hasForwardRepeat = false;
+  let hasBackwardRepeat = false;
+  let endingStart = false;
+  let endingMid = false;
+  let endingStop = false;
+  let endingLabel = '';
+
+  for (const barline of barlines) {
+    for (const repeat of barline.repeats ?? []) {
+      if (repeat.direction === 'forward' && repeat.location === 'left') {
+        hasForwardRepeat = true;
+      }
+      if (repeat.direction === 'backward' && repeat.location === 'right') {
+        hasBackwardRepeat = true;
+      }
+    }
+
+    for (const ending of barline.endings ?? []) {
+      if (!endingLabel) {
+        endingLabel = ending.number ?? ending.text ?? '';
+      }
+      if (ending.type === 'start') {
+        endingStart = true;
+      }
+      if (ending.type === 'continue') {
+        endingMid = true;
+      }
+      if (ending.type === 'stop' || ending.type === 'discontinue') {
+        endingStop = true;
+      }
+    }
+  }
+
+  if (hasForwardRepeat) {
+    stave.setBegBarType(BarlineType.REPEAT_BEGIN);
+  }
+
+  if (hasBackwardRepeat) {
+    stave.setEndBarType(hasForwardRepeat ? BarlineType.REPEAT_BOTH : BarlineType.REPEAT_END);
+  }
+
+  if (staffNumber === 1) {
+    if (endingStart && endingStop) {
+      stave.setVoltaType(VoltaType.BEGIN_END, endingLabel, 8);
+    } else if (endingStart) {
+      stave.setVoltaType(VoltaType.BEGIN, endingLabel, 8);
+    } else if (endingMid) {
+      stave.setVoltaType(VoltaType.MID, endingLabel, 8);
+    } else if (endingStop) {
+      stave.setVoltaType(VoltaType.END, endingLabel, 8);
+    }
+  }
 }
 
 /** Draw a stave connector between top and bottom staves for a given style. */

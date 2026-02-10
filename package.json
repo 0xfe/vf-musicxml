@@ -30,7 +30,9 @@
     "test:conformance:report": "CONFORMANCE_REPORT_OUT_DIR=artifacts/conformance vitest run tests/conformance/execution.test.ts",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demos:build": "npm run build && node scripts/build-demos.mjs",
+    "demos:serve": "npm run demos:build && node scripts/serve-demos.mjs"
   },
   "peerDependencies": {
     "vexflow": "^4.2.0"

@@ -14,7 +14,7 @@ describe('conformance execution baseline', () => {
     const fixtures = await loadConformanceFixtures(path.resolve('fixtures/conformance'));
     const report = await executeConformanceFixtures(fixtures);
 
-    expect(report.fixtureCount).toBeGreaterThanOrEqual(9);
+    expect(report.fixtureCount).toBeGreaterThanOrEqual(10);
     expect(report.failCount).toBe(0);
     expect(report.results.every((result) => result.success)).toBe(true);
     expect((report.parseDiagnosticCodeHistogram.XML_NOT_WELL_FORMED ?? 0) > 0).toBe(true);
@@ -27,6 +27,7 @@ describe('conformance execution baseline', () => {
     expect(report.categoryRollups.notation?.fixtureCount).toBeGreaterThanOrEqual(3);
     expect(report.categoryRollups.layout?.fixtureCount).toBeGreaterThanOrEqual(1);
     expect(report.categoryRollups.text?.fixtureCount).toBeGreaterThanOrEqual(1);
+    expect(report.categoryRollups.advanced?.fixtureCount).toBeGreaterThanOrEqual(1);
 
     const expectedFailFixture = report.results.find((result) => result.fixtureId === 'parser-malformed-xml');
     expect(expectedFailFixture).toBeDefined();
@@ -91,6 +92,13 @@ describe('conformance execution baseline', () => {
     expect(m5TextFixture?.observed).toBe('pass');
     expect(m5TextFixture?.success).toBe(true);
 
+    const m6AdvancedFixture = report.results.find((result) => result.fixtureId === 'advanced-m6-notation-baseline');
+    expect(m6AdvancedFixture).toBeDefined();
+    expect(m6AdvancedFixture?.parseMode).toBe('lenient');
+    expect(m6AdvancedFixture?.expected).toBe('pass');
+    expect(m6AdvancedFixture?.observed).toBe('pass');
+    expect(m6AdvancedFixture?.success).toBe(true);
+
     const markdownSummary = formatConformanceReportMarkdown(report);
     expect(markdownSummary).toContain('# Conformance Execution Report');
     expect(markdownSummary).toContain('smoke-minimal-partwise');
@@ -102,6 +110,7 @@ describe('conformance execution baseline', () => {
     expect(markdownSummary).toContain('notation-m4-baseline');
     expect(markdownSummary).toContain('layout-m5-multipart-baseline');
     expect(markdownSummary).toContain('text-m5-lyrics-harmony-baseline');
+    expect(markdownSummary).toContain('advanced-m6-notation-baseline');
     expect(markdownSummary).toContain('## Diagnostic Histograms');
     expect(markdownSummary).toContain('### Parse Diagnostic Codes');
     expect(markdownSummary).toContain('## Category Rollups');

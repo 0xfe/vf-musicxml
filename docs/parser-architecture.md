@@ -1,4 +1,4 @@
-# Parser Architecture (M1-M3 Baseline)
+# Parser Architecture (M1-M6 Baseline)
 
 Pipeline:
 1. `parseXmlToAst` (`saxes` tokenizer + AST builder).
@@ -18,5 +18,6 @@ Pipeline:
 
 Current scope:
 - Supports partwise parsing for attributes, notes, rests, directions, and barlines.
+- Supports advanced note/barline metadata including grace/cue/ornament/tuplet and repeat/ending semantics.
 - Supports score-timewise input through normalization to partwise before CSM transform.
-- Leaves advanced notation mapping for later milestones.
+- Leaves deeper post-M6 domains (dense multi-voice tuplets, full repeat playback graph, etc.) for later milestones.

@@ -5,11 +5,17 @@
 - Dev/test baseline is pinned in `package.json` (`4.2.3` currently).
 - Keep local compatibility shims in `src/vexflow/*`; avoid leaking VexFlow specifics into parser/core.
 
-## Current renderer scope (M2/M3)
-- Rendering intentionally constrained:
-  - first part only
-  - first voice for each measure
-  - single-page horizontal measure layout
+## Current renderer scope (M6)
+- Rendering supports:
+  - multi-part vertical stacking
+  - multi-staff routing
+  - single-voice-per-staff baseline
+  - notation/text layers (ties/slurs/wedges, harmony/lyrics, tuplets)
+- M6 additions:
+  - `GraceNote` + `GraceNoteGroup` for grace attachment.
+  - `Ornament` for mapped ornament tokens.
+  - `Tuplet` for parsed tuplet endpoint groups.
+  - `BarlineType` + `VoltaType` for repeat and ending semantics.
 - Unsupported/partial behavior should emit diagnostics instead of silently failing.
 
 ## Important integration patterns in this repo
@@ -22,9 +28,9 @@
 - Text/layout can differ between Node/jsdom and browser environments.
   - Keep structural tests headless.
   - Keep visual tests selective and high-signal.
-- Duration mapping currently supports a limited vocabulary.
-  - Unmapped durations degrade with warnings.
-- Multi-part/multi-voice rendering is intentionally deferred; do not widen scope inside M3.
+- Grace notes often have no `<duration>`; map them to a stable visual default instead of treating as fatal.
+- MusicXML `<type>` + `<dot/>` usually gives better VexFlow duration mapping than pure tick ratios.
+- Tuplet groups should be built from explicit start/stop markers, then rendered after voice draw.
 
 ## If VexFlow patches are needed
 - Keep app changes isolated with small compatibility wrappers first.

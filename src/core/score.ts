@@ -53,6 +53,7 @@ export interface Measure {
   voices: VoiceTimeline[];
   directions: DirectionEvent[];
   harmonies?: HarmonyEvent[];
+  barlines?: BarlineInfo[];
   barline?: BarlineInfo;
 }
 
@@ -120,6 +121,22 @@ export interface HarmonyEvent {
 export interface BarlineInfo {
   location?: 'left' | 'right' | 'middle';
   style?: string;
+  repeats?: BarlineRepeatInfo[];
+  endings?: BarlineEndingInfo[];
+}
+
+/** Repeat marker parsed from `<barline><repeat direction="...">`. */
+export interface BarlineRepeatInfo {
+  location: 'left' | 'right' | 'middle';
+  direction: 'forward' | 'backward';
+}
+
+/** Volta/ending marker parsed from `<barline><ending ...>`. */
+export interface BarlineEndingInfo {
+  location: 'left' | 'right' | 'middle';
+  type: 'start' | 'stop' | 'discontinue' | 'continue';
+  number?: string;
+  text?: string;
 }
 
 /** Ordered event stream for one voice inside one measure. */
@@ -142,6 +159,13 @@ export interface NoteEvent extends Timed {
   kind: 'note';
   voice: string;
   staff?: number;
+  cue?: boolean;
+  grace?: boolean;
+  graceSlash?: boolean;
+  noteType?: string;
+  dotCount?: number;
+  timeModification?: TupletTimeModification;
+  tuplets?: TupletEndpoint[];
   notes: NoteData[];
 }
 
@@ -154,6 +178,7 @@ export interface NoteData {
   ties?: TieEndpoint[];
   slurs?: SlurEndpoint[];
   articulations?: ArticulationInfo[];
+  ornaments?: OrnamentInfo[];
   lyrics?: LyricInfo[];
   notationRefs?: string[];
 }
@@ -191,6 +216,11 @@ export interface ArticulationInfo {
   type: string;
 }
 
+/** Ornament token attached to a note entry. */
+export interface OrnamentInfo {
+  type: string;
+}
+
 /** Slur endpoint relation attached to a note entry. */
 export interface SlurEndpoint {
   type: 'start' | 'stop';
@@ -205,6 +235,23 @@ export interface LyricInfo {
   syllabic?: string;
   text?: string;
   extend?: boolean;
+}
+
+/** Tuplet endpoint relation attached to a note event. */
+export interface TupletEndpoint {
+  type: 'start' | 'stop';
+  number?: string;
+  bracket?: boolean;
+  showNumber?: string;
+  placement?: string;
+}
+
+/** Tuplet ratio data parsed from `<time-modification>`. */
+export interface TupletTimeModification {
+  actualNotes: number;
+  normalNotes: number;
+  normalType?: string;
+  actualType?: string;
 }
 
 /** Rest event with optional display positioning metadata. */
