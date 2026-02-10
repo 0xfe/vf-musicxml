@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://musicxml.dev/schemas/conformance-fixture-meta.schema.json",
+  "title": "Conformance Fixture Metadata",
+  "type": "object",
+  "required": ["id", "source", "category", "expected", "status"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "skip"]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "linked_todo": {
+      "type": "string"
+    },
+    "waivers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

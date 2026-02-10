@@ -1,0 +1,9 @@
+id: smoke-minimal-partwise
+source: https://www.w3.org/2021/06/musicxml40/musicxml-reference/examples/
+category: smoke
+expected: fail
+status: active
+notes: Parser and renderer not implemented in M0; fixture validates harness wiring.
+linked_todo: R-003
+waivers:
+  - M0 harness-only baseline
