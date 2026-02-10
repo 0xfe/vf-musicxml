@@ -9,6 +9,7 @@ This repository tracks a staged buildout of a MusicXML parser + VexFlow renderer
 - Keep `/Users/mo/git/musicxml/ai-state.md` current so future AI agents can resume quickly without deep rediscovery.
 - For complex dependencies/tooling, maintain focused tips docs under `/Users/mo/git/musicxml/docs/` (for example VexFlow, MusicXML, Playwright/tooling).
 - Keep demo coverage current: as milestones add capabilities, add or update MusicXML demos under `/Users/mo/git/musicxml/demos/scores/` and keep demo build/view instructions current.
+- Prefer canonical web fixtures (especially LilyPond collated-suite files) for demos; keep source links and category status current in `/Users/mo/git/musicxml/demos/lilypond/manifest.json`.
 
 ## Branch and change policy
 - We might have to make changes to vexflow, make patch updates locally and track all vexflow changes in a separate branch, so we can

@@ -32,8 +32,9 @@ npm run test
 
 ## Demos
 Demo sources live in:
-- `demos/scores/happy-birthday.musicxml`
-- `demos/scores/jingle-bells.musicxml`
+- `demos/scores/lilypond-01c-pitches-no-voice.musicxml`
+- `demos/scores/lilypond-71g-multiple-chordnames.musicxml`
+- `demos/lilypond/manifest.json` (suite coverage roadmap)
 
 Build static demo pages:
 ```bash
@@ -47,6 +48,7 @@ npm run demos:serve
 
 Then visit:
 - `http://localhost:4173/`
+- `http://localhost:4173/lilypond-roadmap.html`
 
 ## Playwright Browser Setup (Local)
 Install and run visual tests with a repo-local browser cache:
@@ -160,4 +162,5 @@ Visual sentinel coverage:
 - `docs/musicxml-tips.md`
 - `docs/vexflow-tips.md`
 - `docs/playwright-tips.md`
+- `docs/lilypond-suite-tips.md`
 - `ai-state.md` (dense agent handoff/context file)

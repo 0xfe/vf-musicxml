@@ -26,8 +26,11 @@
   - `/Users/mo/git/musicxml/src/testkit/svg-collision.ts`
 - Demo pipeline:
   - `/Users/mo/git/musicxml/demos/scores/*.musicxml`
+  - `/Users/mo/git/musicxml/demos/lilypond/manifest.json`
   - `/Users/mo/git/musicxml/scripts/build-demos.mjs`
   - `/Users/mo/git/musicxml/scripts/serve-demos.mjs`
+- Suite tips:
+  - `/Users/mo/git/musicxml/docs/lilypond-suite-tips.md`
 
 ## Current conformance model
 - Metadata schema: `/Users/mo/git/musicxml/fixtures/conformance/schema/conformance-fixture-meta.schema.json`
@@ -87,7 +90,7 @@
   - `npm run test:visual -- --workers=4`
 - Demos:
   - `npm run demos:build`
-  - `npm run demos:serve` (open `http://localhost:4173/`)
+  - `npm run demos:serve` (open `http://localhost:4173/` and `http://localhost:4173/lilypond-roadmap.html`)
 
 ## Playwright notes
 - Browser-required tests: prefer MCP Playwright browser tool.
@@ -104,5 +107,6 @@
 
 ## Next likely work (M7 start)
 - Push broader LilyPond conformance fixture import/promotion with explicit expected-fail rationales.
+- Expand seeded LilyPond demos category-by-category and keep `demos/lilypond/manifest.json` status aligned.
 - Add parse/render performance baselines and profiling artifacts.
 - Stabilize visual baseline regeneration in canonical CI/browser environment.
