@@ -32,6 +32,29 @@ export interface NotationGeometrySummary {
   noteheadBarlineIntrusionCount: number;
 }
 
+/** Measure-level spacing metrics derived from notehead centers and barline partitions. */
+export interface MeasureSpacingSample {
+  measureIndex: number;
+  noteheadCount: number;
+  averageGap: number | null;
+  minimumGap: number | null;
+  maximumGap: number | null;
+}
+
+/** Aggregate summary used by spacing regression checks and quality reports. */
+export interface MeasureSpacingSummary {
+  samples: MeasureSpacingSample[];
+  firstMeasureAverageGap: number | null;
+  medianOtherMeasuresAverageGap: number | null;
+  firstToMedianOtherGapRatio: number | null;
+}
+
+/** Tuning knobs for spacing extraction stability across floating-point jitter. */
+export interface MeasureSpacingSummaryOptions {
+  barlineMergeTolerance?: number;
+  noteheadMergeTolerance?: number;
+}
+
 /** Collect geometry for core notation primitives used by renderer-quality checks. */
 export function collectNotationGeometry(svgMarkup: string): NotationGeometrySnapshot {
   return {
@@ -116,9 +139,149 @@ export function summarizeNotationGeometry(
   };
 }
 
+/**
+ * Summarize per-measure notehead spacing by segmenting noteheads between
+ * adjacent barline centers and measuring center-to-center gaps.
+ */
+export function summarizeMeasureSpacingByBarlines(
+  geometry: NotationGeometrySnapshot,
+  options: MeasureSpacingSummaryOptions = {}
+): MeasureSpacingSummary {
+  const barlineMergeTolerance = options.barlineMergeTolerance ?? 1.5;
+  const noteheadMergeTolerance = options.noteheadMergeTolerance ?? 0.75;
+  const barlineCenters = collapseCenters(
+    geometry.barlines.map((barline) => barline.bounds.x + barline.bounds.width / 2),
+    barlineMergeTolerance
+  );
+
+  const samples: MeasureSpacingSample[] = [];
+  if (barlineCenters.length < 2) {
+    return {
+      samples,
+      firstMeasureAverageGap: null,
+      medianOtherMeasuresAverageGap: null,
+      firstToMedianOtherGapRatio: null
+    };
+  }
+
+  for (let index = 0; index + 1 < barlineCenters.length; index += 1) {
+    const leftBoundary = barlineCenters[index];
+    const rightBoundary = barlineCenters[index + 1];
+    if (leftBoundary === undefined || rightBoundary === undefined) {
+      continue;
+    }
+
+    const noteCenters = collapseCenters(
+      geometry.noteheads
+        .map((notehead) => notehead.bounds.x + notehead.bounds.width / 2)
+        .filter((center) => center >= leftBoundary && center < rightBoundary),
+      noteheadMergeTolerance
+    );
+    const gaps = buildAdjacentGaps(noteCenters);
+
+    samples.push({
+      measureIndex: index,
+      noteheadCount: noteCenters.length,
+      averageGap: gaps.length > 0 ? average(gaps) : null,
+      minimumGap: gaps.length > 0 ? Math.min(...gaps) : null,
+      maximumGap: gaps.length > 0 ? Math.max(...gaps) : null
+    });
+  }
+
+  const firstMeasureAverageGap = samples[0]?.averageGap ?? null;
+  const otherMeasureAverages = samples
+    .slice(1)
+    .map((sample) => sample.averageGap)
+    .filter((value): value is number => value !== null)
+    .sort((left, right) => left - right);
+  const medianOtherMeasuresAverageGap = median(otherMeasureAverages);
+
+  return {
+    samples,
+    firstMeasureAverageGap,
+    medianOtherMeasuresAverageGap,
+    firstToMedianOtherGapRatio:
+      firstMeasureAverageGap !== null &&
+      medianOtherMeasuresAverageGap !== null &&
+      medianOtherMeasuresAverageGap > 0
+        ? Number((firstMeasureAverageGap / medianOtherMeasuresAverageGap).toFixed(4))
+        : null
+  };
+}
+
 /** Compute 1D overlap between two closed intervals. */
 function overlapLength(startA: number, endA: number, startB: number, endB: number): number {
   const start = Math.max(startA, startB);
   const end = Math.min(endA, endB);
   return Math.max(0, end - start);
+}
+
+/** Collapse sorted center values so tiny coordinate noise stays stable across runs. */
+function collapseCenters(values: number[], tolerance: number): number[] {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const collapsed: number[] = [];
+
+  for (const value of sorted) {
+    const previous = collapsed[collapsed.length - 1];
+    if (previous === undefined || Math.abs(value - previous) > tolerance) {
+      collapsed.push(value);
+    }
+  }
+
+  return collapsed;
+}
+
+/** Convert sorted center coordinates into positive adjacent spacing gaps. */
+function buildAdjacentGaps(values: number[]): number[] {
+  const gaps: number[] = [];
+
+  for (let index = 1; index < values.length; index += 1) {
+    const previous = values[index - 1];
+    const current = values[index];
+    if (previous === undefined || current === undefined) {
+      continue;
+    }
+
+    gaps.push(current - previous);
+  }
+
+  return gaps;
+}
+
+/** Compute arithmetic mean with deterministic fixed precision for reports/tests. */
+function average(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const sum = values.reduce((accumulator, value) => accumulator + value, 0);
+  return Number((sum / values.length).toFixed(4));
+}
+
+/** Compute median value from an already sorted numeric list. */
+function median(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const middleIndex = Math.floor(values.length / 2);
+  const middle = values[middleIndex];
+  if (middle === undefined) {
+    return null;
+  }
+
+  if (values.length % 2 === 1) {
+    return Number(middle.toFixed(4));
+  }
+
+  const previous = values[middleIndex - 1];
+  if (previous === undefined) {
+    return Number(middle.toFixed(4));
+  }
+
+  return Number(((previous + middle) / 2).toFixed(4));
 }

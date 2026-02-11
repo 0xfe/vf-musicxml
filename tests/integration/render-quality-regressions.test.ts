@@ -4,7 +4,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { parseMusicXML, parseMusicXMLAsync, renderToSVGPages } from '../../src/public/index.js';
-import { collectNotationGeometry, detectNoteheadBarlineIntrusions } from '../../src/testkit/notation-geometry.js';
+import {
+  collectNotationGeometry,
+  detectNoteheadBarlineIntrusions,
+  summarizeMeasureSpacingByBarlines
+} from '../../src/testkit/notation-geometry.js';
 
 /** Trim wrapper markup and return the first SVG payload for geometry audits. */
 function extractSvg(pageMarkup: string): string {
@@ -37,9 +41,17 @@ describe('renderer quality regressions', () => {
       minHorizontalOverlap: 0.75,
       minVerticalOverlap: 3
     });
+    const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
 
     expect(geometry.noteheads.length).toBeGreaterThan(8);
     expect(intrusions.length).toBe(0);
+    expect(
+      rendered.diagnostics.some((diagnostic) => diagnostic.code === 'MEASURE_LAYOUT_OVERFLOW')
+    ).toBe(false);
+    expect(spacingSummary.firstMeasureAverageGap).not.toBeNull();
+    expect(spacingSummary.medianOtherMeasuresAverageGap).not.toBeNull();
+    expect(spacingSummary.firstToMedianOtherGapRatio).not.toBeNull();
+    expect(spacingSummary.firstToMedianOtherGapRatio ?? 0).toBeGreaterThan(0.7);
   });
 
   it('renders beam groups for realworld-music21-bach-bwv1-6', async () => {

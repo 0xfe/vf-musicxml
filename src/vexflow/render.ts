@@ -48,6 +48,8 @@ const STAFF_ROW_HEIGHT = 110;
 const PART_GAP = 30;
 /** Bottom margin applied after the final rendered row. */
 const BOTTOM_MARGIN = 48;
+/** Minimum column width used for readability in dense measures. */
+const MINIMUM_MEASURE_WIDTH = 160;
 
 /** Layout envelope for one rendered part block. */
 interface PartLayout {
@@ -60,6 +62,13 @@ interface PartLayout {
 interface PartBoundary {
   topStave: Stave;
   bottomStave: Stave;
+}
+
+/** Horizontal layout information for measure columns across the score. */
+interface MeasureColumnLayout {
+  columnX: number[];
+  columnWidths: number[];
+  totalWidth: number;
 }
 
 /**
@@ -167,8 +176,12 @@ function renderIntoContainer(
   const partLayouts = buildPartLayouts(score.parts);
   const pageWidth = options.page?.width ?? DEFAULT_PAGE_WIDTH;
   const pageHeight = options.page?.height ?? DEFAULT_PAGE_HEIGHT;
-  const measureWidth = Math.max(160, Math.floor((pageWidth - LEFT_MARGIN * 2) / measureCount));
-  const requiredWidth = Math.max(pageWidth, LEFT_MARGIN * 2 + measureWidth * measureCount);
+  const measureWidth = Math.max(
+    MINIMUM_MEASURE_WIDTH,
+    Math.floor((pageWidth - LEFT_MARGIN * 2) / measureCount)
+  );
+  const columnLayout = buildMeasureColumnLayout(score, partLayouts, measureCount, measureWidth, diagnostics);
+  const requiredWidth = Math.max(pageWidth, LEFT_MARGIN * 2 + columnLayout.totalWidth);
   const requiredHeight = Math.max(pageHeight, estimateRequiredHeight(partLayouts));
 
   const hostDiv = container.ownerDocument.createElement('div');
@@ -189,13 +202,14 @@ function renderIntoContainer(
       eventNotesByPart.set(layout.part.id, partEventNotes);
 
       for (let measureColumn = 0; measureColumn < measureCount; measureColumn += 1) {
-        const x = LEFT_MARGIN + measureColumn * measureWidth;
+        const x = columnLayout.columnX[measureColumn] ?? LEFT_MARGIN;
+        const columnWidth = columnLayout.columnWidths[measureColumn] ?? measureWidth;
         const measure = layout.part.measures[measureColumn];
         const staves: Stave[] = [];
 
         for (let staffNumber = 1; staffNumber <= layout.staffCount; staffNumber += 1) {
           const y = layout.topY + (staffNumber - 1) * STAFF_ROW_HEIGHT;
-          const stave = new Stave(x, y, measureWidth);
+          const stave = new Stave(x, y, columnWidth);
           const clefInfo = resolveClefForStaff(measure, staffNumber);
           const clef = mapClef(clefInfo, diagnostics);
           const key = mapKeySignature(measure?.effectiveAttributes.keySignature);
@@ -232,7 +246,6 @@ function renderIntoContainer(
             voice.addTickables(noteResult.notes);
 
             formatVoiceToStave(voice, stave, diagnostics, measure.index, staffNumber);
-            auditMeasureLayoutBounds(noteResult.notes, stave, diagnostics, measure.index, staffNumber);
             voice.draw(context, stave);
             drawMeasureBeams(noteResult.notes, context, diagnostics, measure.index, staffNumber);
             drawMeasureTuplets(noteResult.tuplets, diagnostics, context);
@@ -349,6 +362,101 @@ function estimateRequiredHeight(layouts: PartLayout[]): number {
 }
 
 /**
+ * Build per-column widths so the first measure is not over-compressed by
+ * clef/key/time modifiers that consume note-entry width.
+ */
+function buildMeasureColumnLayout(
+  score: Score,
+  layouts: PartLayout[],
+  measureCount: number,
+  baseMeasureWidth: number,
+  diagnostics: Diagnostic[]
+): MeasureColumnLayout {
+  const columnWidths = Array.from({ length: measureCount }, () => baseMeasureWidth);
+  if (measureCount > 0) {
+    const extraWidth = estimateFirstColumnExtraWidth(score, layouts, baseMeasureWidth, diagnostics);
+    columnWidths[0] = baseMeasureWidth + extraWidth;
+  }
+
+  const columnX: number[] = [];
+  let cursor = LEFT_MARGIN;
+  for (const width of columnWidths) {
+    columnX.push(cursor);
+    cursor += width;
+  }
+
+  return {
+    columnX,
+    columnWidths,
+    totalWidth: cursor - LEFT_MARGIN
+  };
+}
+
+/**
+ * Estimate additional horizontal width required by first-column modifiers.
+ * We compare plain stave note-start shift against a stave with first-measure
+ * attributes to preserve similar note-entry room across measures.
+ */
+function estimateFirstColumnExtraWidth(
+  score: Score,
+  layouts: PartLayout[],
+  baseMeasureWidth: number,
+  diagnostics: Diagnostic[]
+): number {
+  const plainShift = noteStartShiftForStave(baseMeasureWidth, undefined, undefined, undefined);
+  let maxExtraShift = 0;
+
+  for (const layout of layouts) {
+    const firstMeasure = layout.part.measures[0];
+    if (!firstMeasure) {
+      continue;
+    }
+
+    for (let staffNumber = 1; staffNumber <= layout.staffCount; staffNumber += 1) {
+      const clefInfo = resolveClefForStaff(firstMeasure, staffNumber);
+      const clef = mapClef(clefInfo, diagnostics);
+      const key = staffNumber === 1 ? mapKeySignature(firstMeasure.effectiveAttributes.keySignature) : undefined;
+      const time =
+        staffNumber === 1 ? mapTimeSignature(firstMeasure.effectiveAttributes.timeSignature) : undefined;
+      const shiftedStart = noteStartShiftForStave(baseMeasureWidth, clef, key, time);
+      const extraShift = Math.max(0, shiftedStart - plainShift);
+      maxExtraShift = Math.max(maxExtraShift, extraShift);
+    }
+  }
+
+  if (!Number.isFinite(maxExtraShift)) {
+    return 0;
+  }
+
+  return Math.ceil(maxExtraShift);
+}
+
+/**
+ * Compute how far note entry begins from stave `x` for a given modifier set.
+ * This helper intentionally does not draw; it only inspects deterministic
+ * VexFlow stave spacing internals.
+ */
+function noteStartShiftForStave(
+  width: number,
+  clef: string | undefined,
+  key: string | undefined,
+  time: string | undefined
+): number {
+  const probe = new Stave(0, 0, width);
+  if (clef) {
+    probe.addClef(clef);
+  }
+  if (key) {
+    probe.addKeySignature(key);
+  }
+  if (time) {
+    probe.addTimeSignature(time);
+  }
+
+  return probe.getNoteStartX() - probe.getX();
+}
+
+/**
  * Format one voice against the stave's computed note area instead of a fixed width.
  * This prevents first-measure collisions where clef/time/key modifiers consume
  * horizontal space and leaves too little room for tickables.
@@ -372,45 +480,6 @@ function formatVoiceToStave(
     // Fallback preserves deterministic rendering even when VexFlow formatting throws.
     const fallbackWidth = Math.max(32, stave.getWidth() - 30);
     new Formatter().joinVoices([voice]).format([voice], fallbackWidth, { align_rests: true });
-  }
-}
-
-/**
- * Record an actionable diagnostic when note heads/stems overflow stave note bounds.
- * This catches regressions like notes bleeding across measure barlines.
- */
-function auditMeasureLayoutBounds(
-  notes: StaveNote[],
-  stave: Stave,
-  diagnostics: Diagnostic[],
-  measureIndex: number,
-  staffNumber: number
-): void {
-  if (notes.length === 0) {
-    return;
-  }
-
-  const minAllowedX = stave.getNoteStartX() - 2;
-  const maxAllowedX = stave.getNoteEndX() + 2;
-  let overflowCount = 0;
-
-  for (const note of notes) {
-    const centerX = note.getAbsoluteX();
-    const width = note.getWidth();
-    const left = centerX - width / 2;
-    const right = centerX + width / 2;
-
-    if (left < minAllowedX || right > maxAllowedX) {
-      overflowCount += 1;
-    }
-  }
-
-  if (overflowCount > 0) {
-    diagnostics.push({
-      code: 'MEASURE_LAYOUT_OVERFLOW',
-      severity: 'warning',
-      message: `Measure ${measureIndex + 1}, staff ${staffNumber} has ${overflowCount} note(s) outside stave note bounds.`
-    });
   }
 }
 

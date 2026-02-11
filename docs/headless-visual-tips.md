@@ -10,6 +10,9 @@ npm run test:visual:headless:update
 
 # compare current render output against baselines
 npm run test:visual:headless
+
+# compare rendered fixtures against external golden references
+npm run test:golden
 ```
 
 ## Focused fixture run
@@ -31,6 +34,10 @@ npm run inspect:score -- --input=fixtures/conformance/realworld/realworld-music2
 # compare one score against an explicit baseline PNG
 npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml --reference-png=tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png
 ```
+
+`inspect:score` report highlights:
+- `geometrySummary.noteheadBarlineIntrusionCount`: fast containment sanity check.
+- `spacingSummary.firstToMedianOtherGapRatio`: opening-measure spacing consistency signal.
 
 ## How it works
 - Parse + render with repo code (`parseMusicXMLAsync`, `renderToSVGPages`).
@@ -59,10 +66,12 @@ npm run test:visual:headless -- --max-mismatch-ratio=0.006 --min-ssim=0.98
 ## Related tooling
 - Script entrypoint:
   - `/Users/mo/git/musicxml/scripts/run-headless-visual-regression.mjs`
+  - `/Users/mo/git/musicxml/scripts/run-golden-comparison.mjs`
 - Shared helper API:
   - `/Users/mo/git/musicxml/src/testkit/headless-visual.ts`
 - Sentinel fixture manifest:
   - `/Users/mo/git/musicxml/fixtures/evaluation/headless-visual-sentinels.json`
+  - `/Users/mo/git/musicxml/fixtures/evaluation/golden-proofpoints.json`
 
 ## When to use Playwright/MCP instead
 - Browser-specific rendering behavior investigation.

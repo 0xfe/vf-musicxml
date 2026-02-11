@@ -3,10 +3,27 @@
 ## Canonical suite entry points
 - Collated suite index:
   - `https://lilypond.org/doc/v2.25/input/regression/musicxml/collated-files.html`
+  - `https://lilypond.org/doc/v2.24/input/regression/musicxml/collated-files.html` (golden image baseline for M8)
 - Most fixture links in the collated page resolve to hashed paths such as:
   - `https://lilypond.org/doc/v2.25/input/regression/musicxml/4a/lily-17c6267f.xml`
 - Generated corpus index in this repo:
   - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
+
+## Golden reference sync (M8)
+Build and refresh fixture-to-image golden mappings used for visual quality scoring:
+
+```bash
+cd /Users/mo/git/musicxml
+npm run golden:sync
+```
+
+Outputs:
+- `/Users/mo/git/musicxml/fixtures/golden/manifest.json`
+- `/Users/mo/git/musicxml/fixtures/golden/lilypond-v2.24/*.png`
+
+Notes:
+- v2.24 collated images are used as primary references.
+- If an active fixture is missing in v2.24 docs, sync falls back to v2.25 references and tags the manifest row as `referenceKind: lilypond-v2.25-fallback`.
 
 ## Corpus sync command
 Refresh the machine-readable corpus manifest from LilyPond:

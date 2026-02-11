@@ -13,6 +13,7 @@ import {
 import {
   collectNotationGeometry,
   detectNoteheadBarlineIntrusions,
+  summarizeMeasureSpacingByBarlines,
   summarizeNotationGeometry
 } from '../dist/testkit/notation-geometry.js';
 
@@ -154,6 +155,7 @@ async function runInspection(options) {
     minHorizontalOverlap: 0.75,
     minVerticalOverlap: 3
   });
+  const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
 
   const svgOutputPath = path.join(options.outputDir, `${options.id}.page-${options.pageIndex + 1}.svg`);
   const pngOutputPath = path.join(options.outputDir, `${options.id}.page-${options.pageIndex + 1}.png`);
@@ -194,6 +196,7 @@ async function runInspection(options) {
     parseDiagnostics: parsed.diagnostics,
     renderDiagnostics: renderResult.diagnostics,
     geometrySummary,
+    spacingSummary,
     intrusionCount: intrusions.length,
     visualDiff: visualDiffSummary
   };
@@ -208,6 +211,11 @@ async function runInspection(options) {
   console.log(
     `Geometry summary: noteheads=${geometrySummary.noteheadCount}, beams=${geometrySummary.beamCount}, barlineIntrusions=${geometrySummary.noteheadBarlineIntrusionCount}`
   );
+  if (spacingSummary.firstToMedianOtherGapRatio !== null) {
+    console.log(
+      `Measure spacing ratio (first/median-other): ${spacingSummary.firstToMedianOtherGapRatio}`
+    );
+  }
   if (visualDiffSummary) {
     console.log(
       `Visual diff vs reference: mismatchRatio=${visualDiffSummary.mismatchRatio}, ssim=${visualDiffSummary.ssim}`

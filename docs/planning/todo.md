@@ -53,6 +53,8 @@ Status legend:
   - M7B landed: conformance reports now emit quality summaries and fixture-level metrics (collision severity, spacing floors, overflow/clipping, spanner geometry checks).
   - Added notation-geometry intrusion metrics (`noteheadBarlineIntrusionCount`) and hooked them into `Q6` layout scoring to catch measure bleed regressions automatically.
   - Added explicit regression harness for beam presence and barline intrusion checks (`tests/integration/render-quality-regressions.test.ts`).
+  - Added deterministic measure-spacing summaries (`summarizeMeasureSpacingByBarlines`) and regression ratio checks so first-measure compression bugs are automatically detected.
+  - Removed noisy `MEASURE_LAYOUT_OVERFLOW` warnings that produced false positives; geometry containment/intrusion checks now act as the reliable blocking signal.
   - M7C landed: layered evaluation runner (`npm run eval:run`) with split-aware deterministic gates, fail-fast classifier outputs, and optional perceptual/model layers with versioned configs/prompts.
   - Keep high-signal visual sentinels for cases where structural metrics are insufficient.
   - Add periodic rubric audits on stratified fixture samples and track trend drift.
@@ -61,13 +63,14 @@ Status legend:
 
 ### R-016: Golden reference mismatch or incompleteness for LilyPond fixtures
 - Priority: P0
-- Status: OPEN
+- Status: MITIGATING
 - Risk: If fixture-to-golden mapping is incomplete or unstable (missing/changed reference assets), M8 quality gates can produce noisy or misleading outcomes.
 - Mitigation plan:
-  - Build and validate a version-pinned golden manifest (`fixtures/golden/manifest.json`) with source URL + checksum per fixture.
-  - Add sync tooling/tests that fail when active fixtures lack golden references.
-  - Record provenance and version pinning (LilyPond v2.24) in manifest metadata.
-  - Keep explicit waivers for fixtures with unavailable or ambiguous references.
+  - M8A baseline landed: `npm run golden:sync` now produces a version-pinned golden manifest (`fixtures/golden/manifest.json`) with source URLs, local image paths, and sha256 checksums per active LilyPond fixture.
+  - M8A baseline landed: integration gate `tests/integration/lilypond-golden-manifest.test.ts` enforces full active fixture mapping and asset/checksum validity.
+  - M8A baseline landed: explicit `referenceKind` tagging distinguishes v2.24 primary references from v2.25 fallback references for fixtures not present in v2.24 collated docs.
+  - M8C initial runner landed: `npm run test:golden` compares rendered output directly to mapped golden assets with per-fixture thresholds and blocking/advisory policy.
+  - Keep explicit waivers for fixtures with unavailable or ambiguous references and narrow fallback usage over time.
 - Close criteria:
   - 100% active LilyPond fixtures map to validated golden assets or explicit waivers.
 
@@ -187,15 +190,38 @@ Status legend:
 
 ### R-018: Geometry extraction blind spots for untagged/complex symbols
 - Priority: P1
-- Status: OPEN
+- Status: MITIGATING
 - Risk: Missing or inconsistent SVG tagging can prevent deterministic detection of key notation elements, leaving quality gaps.
 - Mitigation plan:
+  - M8B first slice landed: measure-spacing extraction by barline partitions with stable center-collapse tolerances.
   - Expand geometry extractor coverage and add fallback selectors/heuristics per element family.
   - Add fixture-backed coverage tests for each tracked symbol class.
   - Introduce diagnostics for "unable-to-inspect" regions to prevent silent pass-through.
   - Add renderer instrumentation hooks where VexFlow output lacks stable selectors.
 - Close criteria:
   - Geometry inspector covers all M8-targeted symbol classes with deterministic tests and explicit diagnostics for unsupported cases.
+
+### R-019: Engraving style policy drift (readability without explicit style gates)
+- Priority: P1
+- Status: MITIGATING
+- Risk: Without a source-linked style rulebook and measurable style gates, outputs can be functionally correct but still look inconsistent or hard to read.
+- Mitigation plan:
+  - M9 milestone opened with source-linked style references (LilyPond, SMuFL, MOLA, Behind Bars preview).
+  - Implement style dimensions (`S1..S6`) and deterministic checks for spacing, collisions, stem/beam readability, text placement, and system balance.
+  - Maintain proof-point fixtures and burndown waves so style fixes are prioritized and generalized.
+- Close criteria:
+  - M9 style gates are operational in reports/CI and no unresolved P0 style blockers remain across active fixtures.
+
+### R-020: Missing first-class pagination/page metadata support blocks PDF/image parity
+- Priority: P0
+- Status: OPEN
+- Risk: Without paginated rendering (systems/pages) and publishing metadata (title/instrument labels/page numbers), real-world score comparisons remain low-signal and quality improvements cannot be validated against canonical page-oriented references.
+- Mitigation plan:
+  - Execute M10 (pagination + publishing layout) with paginated default and continuous-mode fallback.
+  - Add proof-point parity gates for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery.
+  - Add deterministic checks for header/footer/label collision and page-break stability.
+- Close criteria:
+  - Paginated renderer API and publishing metadata elements are implemented and proof-point parity thresholds are met.
 
 ## P2
 

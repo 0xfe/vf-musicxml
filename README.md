@@ -2,7 +2,7 @@
 
 TypeScript-first MusicXML parsing and rendering library for VexFlow.
 
-Current milestone: `M7` completed (comprehensiveness + quality + evaluation + VexFlow upstream hardening).
+Current milestones: `M8`/`M9`/`M10` in progress (golden-driven quality, style fidelity, and pagination/publishing layout).
 
 ## Project goals
 - Parser + canonical score model that is independent from rendering backend.
@@ -84,6 +84,7 @@ Default visual-regression path for CI/headless servers:
 ```bash
 npm run test:visual:headless:update
 npm run test:visual:headless
+npm run test:golden
 ```
 
 What this does:
@@ -133,11 +134,13 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run test:visual:update`: update Playwright visual snapshot baselines.
 - `npm run test:visual:headless`: run browser-free visual regression checks (SVG->PNG + pixel/SSIM).
 - `npm run test:visual:headless:update`: refresh browser-free baseline images.
+- `npm run test:golden`: compare rendered fixtures directly against external golden references (`fixtures/golden/manifest.json` + `fixtures/evaluation/golden-proofpoints.json`).
 - `npm run inspect:score -- --input=<path>`: inspect one score headlessly and emit SVG/PNG/report artifacts.
 - `npm run eval:run`: run layered evaluation report generation (`artifacts/evaluation/`).
 - `npm run vexflow:gaps:check`: validate VexFlow gap registry links and lifecycle metadata.
 - `npm run vexflow:gaps:brief`: generate upstream issue/PR briefing artifacts from the gap registry.
 - `npm run patches:apply`: apply `patch-package` patches (when present).
+- `npm run golden:sync`: sync LilyPond golden reference images (v2.24 primary, v2.25 fallback) into `fixtures/golden/`.
 - `npm run corpus:lilypond:sync`: refresh canonical LilyPond corpus manifest (`fixtures/corpus/lilypond-collated-v2.25.json`).
 - `npm run corpus:lilypond:import -- --cases 12a,14a`: import selected LilyPond cases into `fixtures/conformance/lilypond/`.
 - `npm run conformance:lilypond:promote`: bulk-import remaining LilyPond fixtures and auto-classify expected pass/fail from current parse/render behavior.

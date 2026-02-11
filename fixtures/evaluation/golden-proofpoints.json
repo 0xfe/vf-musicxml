@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "realworld-music21-bach-bwv1-6-8bars",
+      "fixturePath": "fixtures/conformance/realworld/realworld-music21-bach-bwv1-6.mxl",
+      "format": "mxl",
+      "referenceImagePath": "fixtures/images/bwv-1.6-8bars.png",
+      "referenceKind": "realworld-proofpoint",
+      "blocking": false,
+      "notes": "Representative external reference for first 8 bars while pagination/title/instrument-label features are still in progress.",
+      "cropActual": {
+        "x": 0,
+        "y": 0,
+        "width": 0.39,
+        "height": 1,
+        "unit": "ratio"
+      },
+      "cropReference": {
+        "x": 0.06,
+        "y": 0.17,
+        "width": 0.9,
+        "height": 0.78,
+        "unit": "ratio"
+      },
+      "thresholds": {
+        "maxMismatchRatio": 0.08,
+        "minSsim": 0.7
+      }
+    }
+  ]
+}

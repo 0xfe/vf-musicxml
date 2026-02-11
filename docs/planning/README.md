@@ -20,6 +20,8 @@ Milestones:
 - `milestone-7C.completed.md`
 - `milestone-7D.completed.md`
 - `milestone-8.md`
+- `milestone-9.md`
+- `milestone-10.md`
 
 Convention:
 - Active milestone docs use `milestone-<id>.md`.

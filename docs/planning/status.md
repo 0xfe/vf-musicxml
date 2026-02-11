@@ -6,14 +6,14 @@ This file is the current snapshot of planning state. Update this first as milest
 
 - Last updated: 2026-02-11 (US)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M0-M7 are completed. M8 is now active as a golden-driven visual quality program: LilyPond reference-image alignment, deterministic geometry rule expansion, and fixture-by-fixture remediation execution.
+- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active for pagination/publishing-layout design and delivery.
 - Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
 
 ### Next step when execution continues:
-  1. Execute M8A: sync LilyPond v2.24 golden image references and build `fixtures/golden/manifest.json` with per-fixture mapping/checksums.
-  2. Execute M8B: expand geometry rule engine (collision/spacing/justification/presence packs) with deterministic diagnostics and tests.
-  3. Execute M8C: add headless golden comparison runner with alignment + per-fixture diff artifacts.
-  4. Start M8E Wave 1 remediation across foundational LilyPond categories and close top-severity blockers.
+  1. Continue M8B: extend geometry rule packs beyond current spacing/intrusion tooling (presence + justification + text clearances).
+  2. Continue M8C: calibrate golden excerpt alignment and thresholds, then expand coverage from proof-points to broader fixture waves.
+  3. Execute M9A/M9B: land style rule catalog and wire style diagnostics into deterministic quality gates.
+  4. Start M10A/M10B: implement first-class pagination API and page/system layout engine (paginated default + continuous mode support).
 
 ## Milestone progress:
 
@@ -31,7 +31,9 @@ This file is the current snapshot of planning state. Update this first as milest
 | M7B | Quality Rubric + Deterministic Quality Gates | Completed | Deterministic quality scoring (`Q1..Q7`) integrated into conformance reports with executable gates (weighted mean, catastrophic-readability, critical-collision). |
 | M7C | Layered Evaluation Framework | Completed | Layered evaluator (`eval:run`) landed with dataset splits, deterministic split gates, perceptual metrics hooks, model-audit prompt/schema versioning, and triage artifacts. |
 | M7D | VexFlow Gap Upstreaming + Release Hardening | Completed | VexFlow gap registry + validation tooling, upstream brief generation, sync log, and release-hardening checklist are in place and test-backed. |
-| M8 | Golden-Driven Visual Quality Program | In Progress | Build LilyPond golden mapping + geometry/presence rule packs + headless golden diff pipeline, then iterate fixture-by-fixture to high-quality output. |
+| M8 | Golden-Driven Visual Quality Program | In Progress | M8A LilyPond golden mapping baseline landed (156 fixtures; v2.24 primary + explicit v2.25 fallback tags). M8B first slice landed: first-measure spacing normalization for `01a` plus deterministic spacing-ratio tooling. |
+| M9 | Engraving Style Fidelity Program | In Progress | New style-focused milestone created with source-linked rulebook, proof-point fixtures, deterministic style-gate plan, and wave-based burndown checklist. |
+| M10 | Pagination + Publishing Layout | In Progress | New milestone opened for first-class pagination API, system/page breaking, title/part-label/page-number support, and golden comparison parity against page-oriented references. |
 
 
 
@@ -91,7 +93,13 @@ This file is the current snapshot of planning state. Update this first as milest
   - Completed M7C layered evaluation rollout with versioned split/gate/prompt configs, deterministic split evaluator utilities, layered runner artifacts (`artifacts/evaluation/*`), and evaluation runbook docs.
   - Completed M7D upstream/release hardening rollout with VexFlow gap registry validation (`vexflow:gaps:check`), upstream brief artifact generation (`vexflow:gaps:brief`), and release/sync governance docs.
   - Added generalized renderer quality remediation for two high-impact regressions:
-    - stave-aware formatter pass (`formatToStave`) + layout-overflow diagnostics to prevent noteheads bleeding through barlines.
+    - stave-aware formatter pass (`formatToStave`) to prevent noteheads bleeding through barlines.
     - automatic beam generation/drawing per voice to restore core beaming in complex real-world scores.
   - Added reusable notation-geometry audit tooling (`src/testkit/notation-geometry.ts`) and regression coverage for `lilypond-01a-pitches-pitches` + `realworld-music21-bach-bwv1-6`.
   - Opened M8 planning and execution scope in `docs/planning/milestone-8.md`, defining golden-reference ingestion, deterministic geometry inspection expansion, headless golden-diff infrastructure, and fixture-wave remediation gates.
+  - Implemented M8A golden sync pipeline (`npm run golden:sync`) and generated `/Users/mo/git/musicxml/fixtures/golden/manifest.json` plus 156 cached reference images under `/Users/mo/git/musicxml/fixtures/golden/lilypond-v2.24/`, with explicit `referenceKind` tagging for v2.24 primary vs v2.25 fallback mappings.
+  - Implemented M8B first remediation slice for `lilypond-01a-pitches-pitches`: generalized first-column width compensation to avoid opening-measure over-compression, added deterministic measure-spacing ratio tooling, and removed noisy overflow diagnostics in favor of geometry-based containment checks.
+  - Added style-fidelity milestone planning (`docs/planning/milestone-9.md`) with source-linked engraving references, style dimensions (`S1..S6`), proof-point fixtures, deterministic gate strategy, and explicit burndown execution waves.
+  - Implemented M8C initial headless golden comparison runner (`npm run test:golden`, `scripts/run-golden-comparison.mjs`) with fixture-level thresholds, blocking/advisory policy, excerpt crop support, and artifact reports under `artifacts/golden-comparison/`.
+  - Added first real-world proof-point golden fixture (`realworld-music21-bach-bwv1-6-8bars`) using `fixtures/images/bwv-1.6-8bars.png`; current advisory failure establishes baseline mismatch evidence prior to pagination/title/label support.
+  - Opened pagination/publishing-layout milestone (`docs/planning/milestone-10.md`) to deliver paginated-default rendering, continuous-mode fallback, and page-level score metadata elements (title, instrument labels, page numbers).

@@ -2,7 +2,12 @@
 
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`docs/planning/status.md` + `docs/planning/logs.md`).
-- M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos.
+- M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos, M9 is active for engraving style-fidelity execution, and M10 is active for pagination/publishing-layout delivery.
+- M8A baseline landed: full active LilyPond golden-reference mapping (156 fixtures) with cached PNGs and manifest checksums.
+- M8B first slice landed: generalized first-column width compensation fixes opening-measure compression (`lilypond-01a-pitches-pitches`), and deterministic measure-spacing ratio tooling now reports first-vs-rest spacing consistency.
+- `lilypond-01a-pitches-pitches` headless visual baseline has been refreshed post-fix (`tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png`).
+- M8C first slice landed: `npm run test:golden` now compares rendered output to external references using `fixtures/golden/manifest.json` + `fixtures/evaluation/golden-proofpoints.json`.
+- Real-world proof-point `realworld-music21-bach-bwv1-6-8bars` is configured as advisory and currently fails (large mismatch), establishing baseline evidence for pagination/title/part-label gaps.
 - M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
 - LilyPond roadmap semantics: `demos/lilypond/manifest.json` `categoryStatus` represents demo seeding only; conformance completion is computed from active fixture counts.
 - Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 6 pages).
@@ -27,6 +32,8 @@
   - `/Users/mo/git/musicxml/docs/planning/milestone-7C.completed.md`
   - `/Users/mo/git/musicxml/docs/planning/milestone-7D.completed.md`
   - `/Users/mo/git/musicxml/docs/planning/milestone-8.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-9.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-10.md`
 - Corpus/demo M7A:
   - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
   - `/Users/mo/git/musicxml/fixtures/corpus/real-world-samples.json`
@@ -37,6 +44,11 @@
   - `/Users/mo/git/musicxml/scripts/import-realworld-samples.mjs`
   - `/Users/mo/git/musicxml/scripts/build-demos.mjs`
   - `/Users/mo/git/musicxml/scripts/inspect-score-headless.mjs`
+  - `/Users/mo/git/musicxml/scripts/run-golden-comparison.mjs`
+  - `/Users/mo/git/musicxml/scripts/sync-golden-references.mjs`
+  - `/Users/mo/git/musicxml/fixtures/golden/manifest.json`
+  - `/Users/mo/git/musicxml/fixtures/golden/lilypond-v2.24/*.png`
+  - `/Users/mo/git/musicxml/fixtures/evaluation/golden-proofpoints.json`
 - Public API:
   - `/Users/mo/git/musicxml/src/public/api.ts`
 - Parser core:
@@ -61,6 +73,7 @@
   - `/Users/mo/git/musicxml/scripts/serve-demos.mjs`
 - Suite tips:
   - `/Users/mo/git/musicxml/docs/lilypond-suite-tips.md`
+  - `/Users/mo/git/musicxml/docs/notation-style-tips.md`
   - `/Users/mo/git/musicxml/docs/headless-visual-tips.md`
   - `/Users/mo/git/musicxml/docs/evaluation-tips.md`
   - `/Users/mo/git/musicxml/docs/evaluation-runbook.md`
@@ -87,7 +100,8 @@
 - `M7D` VexFlow upstream loop:
   - completed: gap registry, validation command, upstream-brief generator, sync log, and release-hardening checklist.
 - `M8` golden-driven visual quality program:
-  - active: golden reference ingestion/mapping, deterministic geometry rule expansion, headless golden diffing, and wave-based fixture remediation.
+  - active: deterministic geometry rule expansion, headless golden diffing, and wave-based fixture remediation.
+  - completed baseline: LilyPond golden ingestion/mapping with v2.24 primary references and explicit v2.25 fallback tags where v2.24 lacks corresponding fixtures.
 
 ## Conformance execution semantics
 - Implemented in `executeConformanceFixture`:
@@ -156,7 +170,7 @@
 - Notation/text render: `SPANNER_*`, `*_RENDER_FAILED`, `WEDGE_DIRECTION_TEXT_FALLBACK`, `LYRIC_TEXT_RENDERED`, `HARMONY_TEXT_STACK_HIGH`
 - Advanced notation render: `UNSUPPORTED_ORNAMENT`, `GRACE_NOTES_WITHOUT_ANCHOR`, `UNMATCHED_TUPLET_STOP`, `UNCLOSED_TUPLET_START`, `OVERLAPPING_TUPLET_START`, `TUPLET_*`, `CUE_NOTE_RENDERED`
 - Layout render baseline: `MULTI_VOICE_NOT_SUPPORTED_IN_M2` still applies per staff when more than one voice targets the same staff.
-- New renderer-quality diagnostics: `MEASURE_LAYOUT_OVERFLOW`, `VOICE_FORMAT_FAILED`, `BEAM_RENDER_FAILED`.
+- New renderer-quality diagnostics: `VOICE_FORMAT_FAILED`, `BEAM_RENDER_FAILED` (measure-overflow warning path removed because it was noisy; geometry intrusion checks are authoritative).
 
 ## Test commands
 - Fast confidence loop:
@@ -170,7 +184,9 @@
 - Browser-free visual:
   - `npm run test:visual:headless:update`
   - `npm run test:visual:headless`
+  - `npm run test:golden`
   - `npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml`
+  - inspect reports now include `spacingSummary.firstToMedianOtherGapRatio` for opening-measure compression triage.
 - Focused renderer-regression checks:
   - `npm run test:integration -- tests/integration/render-quality-regressions.test.ts`
   - `npm run test:unit -- tests/unit/notation-geometry.test.ts`
@@ -178,6 +194,8 @@
   - `npm run eval:run`
   - `npm run vexflow:gaps:check`
   - `npm run vexflow:gaps:brief`
+- M8 golden sync:
+  - `npm run golden:sync`
 - Demos:
   - `npm run corpus:lilypond:sync`
   - `npm run corpus:lilypond:import -- --cases 12a,14a`
@@ -211,7 +229,8 @@
   - Playwright CLI launch is currently blocked in this sandbox by macOS MachPort permission errors (`bootstrap_check_in ... Permission denied (1100)`).
   - Use Playwright MCP for targeted browser checks where possible; keep deterministic headless gates as primary blockers in restricted environments.
 
-## Next likely work (post-M7)
-- Drive tracked VexFlow gaps from `planned` -> `opened` -> `merged` -> `released` -> `de_patched`.
-- Add real baseline/candidate image feeds and cross-renderer artifacts to nightly M7C runs.
-- Start explicit performance and memory benchmark tracks for large-score workloads.
+## Next likely work (M8 + M9 + M10 execution)
+- Expand notation geometry rule coverage (presence, spacing, justification, collision severity, text clearances) and integrate as blocking deterministic gates.
+- Iterate golden comparison alignment/per-region metrics and expand proof-point set.
+- Land paginated-default rendering API and page metadata rendering (title/labels/page numbers) for real-world PDF/image parity.
+- Execute M9 proof-point workflow and style burndown waves in parallel with M8 remediation.

@@ -23,6 +23,7 @@ This document defines the execution strategy for making LilyPond + selected real
 - LilyPond golden references:
   - Source: `https://lilypond.org/doc/v2.24/input/regression/musicxml/collated-files.html`.
   - Goal: each local LilyPond fixture maps to a stable golden image URL + local cached asset + checksum.
+  - Operational fallback: when a local active fixture does not exist in v2.24 docs, allow explicit v2.25 fallback mapping tagged in manifest metadata.
 - Real-world references:
   - Use curated, source-traceable references (published engraving, trusted renderer output, or accepted baseline images).
   - Each non-LilyPond reference must include provenance and license metadata.
@@ -40,9 +41,9 @@ This document defines the execution strategy for making LilyPond + selected real
   - checksum stability checks.
 
 ### A.3 Exit checklist
-- [ ] 100% active LilyPond fixtures have mapped reference images.
+- [x] 100% active LilyPond fixtures have mapped reference images.
 - [ ] All selected real-world demo fixtures have explicit reference assets or documented waiver.
-- [ ] Golden manifest validation tests are green.
+- [x] Golden manifest validation tests are green.
 
 ## Track M8B: Geometry Extraction + Deterministic Rule Engine
 
@@ -79,6 +80,12 @@ This document defines the execution strategy for making LilyPond + selected real
 - [ ] Each rule emits stable machine-readable diagnostics.
 - [ ] Deterministic quality gates include collision + spacing + presence + justification signals.
 
+### B.5 Progress notes (2026-02-11)
+- Implemented generalized first-column width compensation in renderer layout so measures with opening clef/key/time modifiers do not compress note spacing.
+- Added deterministic measure-spacing extraction in `src/testkit/notation-geometry.ts` (`summarizeMeasureSpacingByBarlines`) and surfaced spacing-ratio output in `npm run inspect:score`.
+- Added regression coverage to guard first-measure spacing quality for `lilypond-01a-pitches-pitches`.
+- Removed noisy `MEASURE_LAYOUT_OVERFLOW` warning path and now rely on deterministic geometry intrusions for barline-bleed detection.
+
 ## Track M8C: Golden Image Comparison Pipeline (Headless)
 
 ### C.1 Comparison strategy
@@ -111,6 +118,16 @@ This document defines the execution strategy for making LilyPond + selected real
 - [ ] Golden comparison runs headlessly across the full active fixture set.
 - [ ] Metrics are stable across repeated runs.
 - [ ] Diff artifacts are actionable for quick triage.
+
+### C.5 Progress notes (2026-02-11)
+- Added `npm run test:golden` runner (`scripts/run-golden-comparison.mjs`) with:
+  - direct fixture-vs-golden comparison (not self-generated baselines),
+  - per-fixture thresholds and blocking/advisory status,
+  - crop support for excerpt-level references,
+  - artifact bundle output under `artifacts/golden-comparison/` (`actual`, `expected`, `diff`, JSON/markdown report).
+- Added proof-point manifest (`fixtures/evaluation/golden-proofpoints.json`) with first real-world advisory fixture:
+  - `realworld-music21-bach-bwv1-6-8bars` using `fixtures/images/bwv-1.6-8bars.png`.
+- Current proof-point result correctly flags a severe mismatch (advisory fail), which establishes a measurable baseline before pagination/title/instrument-label parity work lands.
 
 ## Track M8D: Human + AI Triage Workflow
 
