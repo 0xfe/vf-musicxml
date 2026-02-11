@@ -1,0 +1,28 @@
+{
+  "version": "2026-02-11",
+  "splits": {
+    "smoke": {
+      "fixture_ids": [
+        "smoke-minimal-partwise",
+        "timewise-minimal",
+        "rhythm-backup-forward-two-voices",
+        "notation-m4-baseline",
+        "layout-m5-multipart-baseline",
+        "advanced-m6-notation-baseline"
+      ],
+      "expected": "pass"
+    },
+    "core": {
+      "categories": ["smoke", "timewise", "rhythm", "notation", "layout", "text", "advanced"],
+      "expected": "pass"
+    },
+    "extended": {
+      "categories": ["lilypond", "realworld"],
+      "expected": "pass"
+    },
+    "nightly": {
+      "categories": ["*"],
+      "expected": "pass"
+    }
+  }
+}

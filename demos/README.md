@@ -5,6 +5,8 @@ This directory contains reference demos rendered from authoritative MusicXML fix
 ## Files
 - `scores/*.musicxml`: tracked demo source scores.
 - `lilypond/manifest.json`: suite roadmap and category coverage plan.
+  - `categoryStatus` in this manifest is demo-seeding progress only.
+  - Conformance completion is derived from `fixtures/conformance/lilypond/*.meta.yaml`.
 - `../fixtures/corpus/lilypond-collated-v2.25.json`: canonical LilyPond corpus index used by roadmap/demo validation.
 - `lilypond/README.md`: update workflow for LilyPond-based demo expansion.
 - `site/`: generated static HTML pages (created by build script; not committed).
@@ -18,6 +20,11 @@ Current seeded demo sources:
 - `lilypond-13a-key-signatures.musicxml` (from `13a-KeySignatures.xml`)
 - `lilypond-61a-lyrics.musicxml` (from `61a-Lyrics.xml`)
 - `lilypond-71g-multiple-chordnames.musicxml` (from `71g-MultipleChordnames.xml`)
+
+Build output now includes:
+- full LilyPond conformance demo pages (`lilypond-*`, one page per active fixture).
+- selected complex real-world score demos (`realworld-*`, medium/large/long-form focus).
+- seeded demos remain explicitly highlighted as the quick-review subset.
 
 ## Build demos
 ```bash

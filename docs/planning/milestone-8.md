@@ -1,0 +1,212 @@
+# Milestone 8: Golden-Driven Visual Quality Program
+
+This document defines the execution strategy for making LilyPond + selected real-world demos visually high quality against canonical references.
+
+## Outcome
+- Every LilyPond collated-suite demo and selected real-world demo is rendered with high visual quality.
+- Quality is enforced by deterministic geometry rules first, visual/reference checks second, and human/AI review last.
+- Regressions are caught quickly through headless tooling that runs on CI and local headless hosts.
+
+## Scope
+- In scope:
+  - All active LilyPond conformance fixtures (`fixtures/conformance/lilypond/*`) with reference images from LilyPond collated pages.
+  - Selected complex real-world fixtures (`fixtures/conformance/realworld/*`) with explicit quality expectations.
+  - Deterministic geometry/presence/spacing/collision/justification tooling and gates.
+  - Repeatable fixture-by-fixture triage/remediation workflow and governance.
+- Out of scope:
+  - Pixel-perfect font parity with LilyPond (minor typography/kerning differences are allowed).
+  - New advanced notation feature expansion outside quality fixes needed to match existing fixture scope.
+
+## Track M8A: Golden Reference Corpus + Mapping
+
+### A.1 Reference policy
+- LilyPond golden references:
+  - Source: `https://lilypond.org/doc/v2.24/input/regression/musicxml/collated-files.html`.
+  - Goal: each local LilyPond fixture maps to a stable golden image URL + local cached asset + checksum.
+- Real-world references:
+  - Use curated, source-traceable references (published engraving, trusted renderer output, or accepted baseline images).
+  - Each non-LilyPond reference must include provenance and license metadata.
+
+### A.2 Deliverables
+- `fixtures/golden/lilypond-v2.24/` mirrored reference images (or normalized derivatives).
+- `fixtures/golden/manifest.json`:
+  - `fixture_id`, `source_url`, `golden_image_path`, `checksum`, `reference_kind`, `notes`.
+- Script and command:
+  - `scripts/sync-golden-references.mjs`
+  - `npm run golden:sync`
+- Validation tests:
+  - manifest completeness (all active LilyPond fixtures mapped),
+  - URL/path integrity,
+  - checksum stability checks.
+
+### A.3 Exit checklist
+- [ ] 100% active LilyPond fixtures have mapped reference images.
+- [ ] All selected real-world demo fixtures have explicit reference assets or documented waiver.
+- [ ] Golden manifest validation tests are green.
+
+## Track M8B: Geometry Extraction + Deterministic Rule Engine
+
+### B.1 Geometry model
+- Extend existing notation geometry extraction (`src/testkit/notation-geometry.ts`) into a richer scene graph:
+  - noteheads, stems, beams, flags, rests, accidentals, dots,
+  - articulations/ornaments,
+  - lyrics/harmony/direction text,
+  - barlines, clefs, key/time signatures, slurs/ties/hairpins, tuplets.
+- Normalize coordinates into staff/system/measure-local frames for stable rule checks.
+- Add deterministic element identity when needed (measure index, part/staff index, voice index).
+
+### B.2 Rule packs
+- Collision rules:
+  - critical and non-critical overlap classes with severity buckets.
+- Spacing rules:
+  - minimum horizontal gaps (notehead/accidental/dot clusters),
+  - lyric and harmony clearance,
+  - system crowding/utilization thresholds.
+- Justification/system rules:
+  - over-compression, under-fill, and ragged spacing anomalies.
+- Presence/semantic rules:
+  - expected beams, dots, tuplets, ornaments, slurs/ties, repeats/endings when source semantics require them.
+
+### B.3 Deliverables
+- Rule engine modules under `src/testkit/` with stable diagnostic codes.
+- Fixture-level geometry/rule reports in `artifacts/evaluation/` and/or `artifacts/conformance/`.
+- Deterministic test coverage:
+  - unit tests per rule class,
+  - regression tests for known failures.
+
+### B.4 Exit checklist
+- [ ] Core rule packs implemented and test-backed.
+- [ ] Each rule emits stable machine-readable diagnostics.
+- [ ] Deterministic quality gates include collision + spacing + presence + justification signals.
+
+## Track M8C: Golden Image Comparison Pipeline (Headless)
+
+### C.1 Comparison strategy
+- Keep browser-free path as default:
+  - SVG -> PNG rasterization (`resvg`) + robust comparison metrics.
+- Use alignment before diff:
+  - normalize canvas bounds,
+  - register by system/staff geometry and/or edge profile,
+  - compare globally and by system region.
+- Ignore tolerable typography differences:
+  - allow text-sensitive masks or lower weights for text-only regions.
+
+### C.2 Metrics
+- Primary:
+  - mismatch ratio,
+  - SSIM.
+- Secondary:
+  - edge-map overlap and region-weighted diff scores.
+- Outlier detection:
+  - severe-localized layout defects (e.g., barline bleed, missing beams) should fail even if global metrics look acceptable.
+
+### C.3 Deliverables
+- `scripts/run-golden-comparison.mjs` (or extension of current headless visual runner).
+- Baseline/golden artifacts:
+  - actual, expected, diff, and aligned overlays.
+- Per-fixture comparison report fields:
+  - metric values, worst regions, fail reasons, linked diagnostics.
+
+### C.4 Exit checklist
+- [ ] Golden comparison runs headlessly across the full active fixture set.
+- [ ] Metrics are stable across repeated runs.
+- [ ] Diff artifacts are actionable for quick triage.
+
+## Track M8D: Human + AI Triage Workflow
+
+### D.1 Triage process
+- Every failing fixture gets a deterministic triage bundle:
+  - source diagnostics,
+  - geometry rule failures,
+  - golden diff artifacts,
+  - first-bad-system/measure hint.
+- Keep a prioritized queue:
+  - P0 readability blockers,
+  - P1 quality degradations,
+  - P2 cosmetic variance.
+
+### D.2 Review policy
+- Deterministic failures are blocking.
+- For issues not deterministically capturable:
+  - manual review plus optional model-assisted rubric pass (advisory).
+- Every accepted waiver must include rationale and re-evaluation trigger.
+
+### D.3 Deliverables
+- Triage command path (fixture or batch scoped).
+- Standard review template for logs/todo updates.
+- Evidence checklist per fix (before/after metrics + screenshots/diffs + tests).
+
+### D.4 Exit checklist
+- [ ] Triage queue is reproducible from commands and artifacts.
+- [ ] Every visual blocker has an owner and linked issue/todo item.
+- [ ] Manual-only waivers are explicit, minimal, and time-bounded.
+
+## Track M8E: Fixture-by-Fixture Remediation Execution
+
+### E.1 Execution waves
+- Wave 1: foundational categories (`01`, `02`, `03`, `11`, `12`, `13`, `14`) to stabilize pitch/rhythm/attributes spacing.
+- Wave 2: notation-heavy categories (`21`-`46`) for beams/slurs/tuplets/articulations/directions.
+- Wave 3: text/chord/lyrics categories (`61`, `71`-`75`).
+- Wave 4: remaining categories (`90`, `99`) and real-world complexity set.
+
+### E.2 Per-fixture loop
+1. Run deterministic geometry + golden comparison reports.
+2. Identify root cause category:
+   - parser semantics,
+   - renderer layout logic,
+   - VexFlow limitation/bug.
+3. Implement generalized fix (avoid single-fixture patching).
+4. Add/extend deterministic tests.
+5. Re-run:
+   - targeted fixture checks,
+   - category regression set,
+   - global gates.
+6. Update planning/todo/logs and gap registry as needed.
+
+### E.3 VexFlow gap handling
+- Any required VexFlow workaround must be:
+  - tracked in the existing registry,
+  - linked to fixture failures and local patch IDs,
+  - prepared for upstream PR flow.
+
+### E.4 Exit checklist
+- [ ] All fixture fixes are generalized and test-backed.
+- [ ] No unresolved blocker lacks tracking metadata.
+- [ ] Regression suites prove no major backsliding across earlier categories.
+
+## Track M8F: Gates, Reporting, and Completion Criteria
+
+### F.1 Blocking gates
+- Deterministic geometry gate:
+  - zero critical collisions on active expected-pass fixtures.
+  - zero severe measure-overflow/barline-intrusion incidents.
+  - presence-rule pass rate for required features above agreed threshold.
+- Golden comparison gate:
+  - full-suite aggregate thresholds for mismatch/SSIM.
+  - no unresolved severe outliers.
+
+### F.2 Reporting
+- Extend conformance/evaluation reports with M8 sections:
+  - golden coverage and pass rate,
+  - geometry rule fail histograms,
+  - top regressions by severity,
+  - per-category trend deltas.
+
+### F.3 Completion criteria
+- [ ] 100% active LilyPond fixtures evaluated against mapped goldens.
+- [ ] Selected real-world fixtures pass deterministic quality gates and visual review.
+- [ ] No P0 visual quality blockers remain open.
+- [ ] M8 documentation/runbook is complete and operational for future agents.
+- [ ] Milestone doc renamed to `milestone-8.completed.md` with cross-reference updates.
+
+## Planned Commands (to implement during M8)
+- `npm run golden:sync`
+- `npm run test:geometry`
+- `npm run test:golden`
+- `npm run triage:fixture -- --id=<fixture-id>`
+
+## Immediate first execution steps
+1. Implement M8A golden-manifest and sync tooling for LilyPond v2.24 references.
+2. Land M8B v1 geometry rule pack (collision + barline intrusion + beam/dot/ornament presence + spacing floors).
+3. Integrate M8C golden comparison runner with per-fixture artifact output and fail codes.
+4. Start Wave 1 fixture remediation and close the highest-impact visual blockers first.

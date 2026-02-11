@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import {
   BarlineType,
+  Beam,
   Formatter,
   Renderer,
   Stave,
@@ -230,8 +231,10 @@ function renderIntoContainer(
             const voice = new Voice({ num_beats: numBeats, beat_value: beatValue }).setMode(Voice.Mode.SOFT);
             voice.addTickables(noteResult.notes);
 
-            new Formatter().joinVoices([voice]).format([voice], measureWidth - 30);
+            formatVoiceToStave(voice, stave, diagnostics, measure.index, staffNumber);
+            auditMeasureLayoutBounds(noteResult.notes, stave, diagnostics, measure.index, staffNumber);
             voice.draw(context, stave);
+            drawMeasureBeams(noteResult.notes, context, diagnostics, measure.index, staffNumber);
             drawMeasureTuplets(noteResult.tuplets, diagnostics, context);
           }
 
@@ -343,6 +346,106 @@ function estimateRequiredHeight(layouts: PartLayout[]): number {
   }
 
   return last.topY + last.staffCount * STAFF_ROW_HEIGHT + BOTTOM_MARGIN;
+}
+
+/**
+ * Format one voice against the stave's computed note area instead of a fixed width.
+ * This prevents first-measure collisions where clef/time/key modifiers consume
+ * horizontal space and leaves too little room for tickables.
+ */
+function formatVoiceToStave(
+  voice: Voice,
+  stave: Stave,
+  diagnostics: Diagnostic[],
+  measureIndex: number,
+  staffNumber: number
+): void {
+  try {
+    new Formatter().joinVoices([voice]).formatToStave([voice], stave, { align_rests: true });
+  } catch (error) {
+    diagnostics.push({
+      code: 'VOICE_FORMAT_FAILED',
+      severity: 'warning',
+      message: `Measure ${measureIndex + 1}, staff ${staffNumber} failed stave-aware formatting (${String(error)}).`
+    });
+
+    // Fallback preserves deterministic rendering even when VexFlow formatting throws.
+    const fallbackWidth = Math.max(32, stave.getWidth() - 30);
+    new Formatter().joinVoices([voice]).format([voice], fallbackWidth, { align_rests: true });
+  }
+}
+
+/**
+ * Record an actionable diagnostic when note heads/stems overflow stave note bounds.
+ * This catches regressions like notes bleeding across measure barlines.
+ */
+function auditMeasureLayoutBounds(
+  notes: StaveNote[],
+  stave: Stave,
+  diagnostics: Diagnostic[],
+  measureIndex: number,
+  staffNumber: number
+): void {
+  if (notes.length === 0) {
+    return;
+  }
+
+  const minAllowedX = stave.getNoteStartX() - 2;
+  const maxAllowedX = stave.getNoteEndX() + 2;
+  let overflowCount = 0;
+
+  for (const note of notes) {
+    const centerX = note.getAbsoluteX();
+    const width = note.getWidth();
+    const left = centerX - width / 2;
+    const right = centerX + width / 2;
+
+    if (left < minAllowedX || right > maxAllowedX) {
+      overflowCount += 1;
+    }
+  }
+
+  if (overflowCount > 0) {
+    diagnostics.push({
+      code: 'MEASURE_LAYOUT_OVERFLOW',
+      severity: 'warning',
+      message: `Measure ${measureIndex + 1}, staff ${staffNumber} has ${overflowCount} note(s) outside stave note bounds.`
+    });
+  }
+}
+
+/**
+ * Generate and draw beam groups for the current voice.
+ * Keeping this pass centralized makes it reusable for richer beam diagnostics/evals.
+ */
+function drawMeasureBeams(
+  notes: StaveNote[],
+  context: ReturnType<Renderer['getContext']>,
+  diagnostics: Diagnostic[],
+  measureIndex: number,
+  staffNumber: number
+): void {
+  if (notes.length < 2) {
+    return;
+  }
+
+  try {
+    const beams = Beam.generateBeams(notes, {
+      beam_rests: false,
+      maintain_stem_directions: false,
+      show_stemlets: false
+    });
+
+    for (const beam of beams) {
+      beam.setContext(context).draw();
+    }
+  } catch (error) {
+    diagnostics.push({
+      code: 'BEAM_RENDER_FAILED',
+      severity: 'warning',
+      message: `Measure ${measureIndex + 1}, staff ${staffNumber} beam generation failed (${String(error)}).`
+    });
+  }
 }
 
 /** Apply repeat-barline and volta metadata to a stave before drawing. */

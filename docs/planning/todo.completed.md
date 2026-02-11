@@ -31,3 +31,5 @@ This file tracks closed risks and bugs moved out of the active backlog.
 ## Closed Bugs
 
 - B-002 (P1, CLOSED): `24a-GraceNotes.xml` runtime throw (`BadArguments` from `GraceNoteGroup` beaming) is mitigated by graceful beaming fallback (`GRACE_NOTES_BEAMING_FAILED` warning), and fixture `lilypond-24a-gracenotes` is now active expected-pass.
+- B-003 (P1, CLOSED): `lilypond-01a-pitches-pitches` first-measure noteheads intruded across the opening barline due fixed-width formatting (`measureWidth - 30`); renderer now uses stave-aware formatting (`Formatter.formatToStave`) plus `MEASURE_LAYOUT_OVERFLOW` diagnostics and geometry regression checks.
+- B-004 (P1, CLOSED): `realworld-music21-bach-bwv1-6` rendered without beam groups; renderer now performs centralized per-voice `Beam.generateBeams(...)` drawing and regression tests enforce non-zero beam output for this fixture family.

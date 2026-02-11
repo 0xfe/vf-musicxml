@@ -2,8 +2,18 @@
 
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`docs/planning/status.md` + `docs/planning/logs.md`).
-- M6 completed; M7 has started with a split execution model (M7A-M7D) for comprehensiveness, quality rubric, layered evaluation, and VexFlow upstream hardening.
+- M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos.
 - M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
+- LilyPond roadmap semantics: `demos/lilypond/manifest.json` `categoryStatus` represents demo seeding only; conformance completion is computed from active fixture counts.
+- Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 6 pages).
+- M7B baseline landed: deterministic quality rubric (`Q1..Q7`) and gate enforcement integrated into conformance execution/reporting.
+- Post-M7 renderer hardening landed for two high-signal defects:
+  - stave-aware measure formatting (`Formatter.formatToStave`) replaced fixed-width formatting to prevent notehead/barline bleed.
+  - automatic per-voice beam generation (`Beam.generateBeams`) restored missing beaming in complex real-world fixtures.
+- Browser-free visual regression pipeline landed:
+  - `resvg` rasterization + pixel/SSIM diff via `npm run test:visual:headless`.
+  - baseline refresh via `npm run test:visual:headless:update`.
+  - one-score triage via `npm run inspect:score -- --input=<path-to-score>`.
 
 ## High-signal files
 - Plan/risk:
@@ -11,11 +21,12 @@
   - `/Users/mo/git/musicxml/docs/planning/logs.md`
   - `/Users/mo/git/musicxml/docs/planning/todo.md`
   - `/Users/mo/git/musicxml/docs/planning/todo.completed.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7.completed.md`
   - `/Users/mo/git/musicxml/docs/planning/milestone-7A.completed.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7B.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7C.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7D.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7B.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7C.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7D.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-8.md`
 - Corpus/demo M7A:
   - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
   - `/Users/mo/git/musicxml/fixtures/corpus/real-world-samples.json`
@@ -25,6 +36,7 @@
   - `/Users/mo/git/musicxml/scripts/promote-lilypond-conformance.mjs`
   - `/Users/mo/git/musicxml/scripts/import-realworld-samples.mjs`
   - `/Users/mo/git/musicxml/scripts/build-demos.mjs`
+  - `/Users/mo/git/musicxml/scripts/inspect-score-headless.mjs`
 - Public API:
   - `/Users/mo/git/musicxml/src/public/api.ts`
 - Parser core:
@@ -40,6 +52,7 @@
 - Conformance/testkit:
   - `/Users/mo/git/musicxml/src/testkit/conformance.ts`
   - `/Users/mo/git/musicxml/src/testkit/conformance-execution.ts`
+  - `/Users/mo/git/musicxml/src/testkit/notation-geometry.ts`
   - `/Users/mo/git/musicxml/src/testkit/svg-collision.ts`
 - Demo pipeline:
   - `/Users/mo/git/musicxml/demos/scores/*.musicxml`
@@ -48,7 +61,13 @@
   - `/Users/mo/git/musicxml/scripts/serve-demos.mjs`
 - Suite tips:
   - `/Users/mo/git/musicxml/docs/lilypond-suite-tips.md`
+  - `/Users/mo/git/musicxml/docs/headless-visual-tips.md`
   - `/Users/mo/git/musicxml/docs/evaluation-tips.md`
+  - `/Users/mo/git/musicxml/docs/evaluation-runbook.md`
+  - `/Users/mo/git/musicxml/docs/vexflow-gap-registry.md`
+  - `/Users/mo/git/musicxml/docs/vexflow-upstream-playbook.md`
+  - `/Users/mo/git/musicxml/docs/vexflow-upstream-sync-log.md`
+  - `/Users/mo/git/musicxml/docs/release-hardening-checklist.md`
   - `/Users/mo/git/musicxml/docs/realworld-corpus-tips.md`
 
 ## Current conformance model
@@ -58,16 +77,17 @@
 - `parse_mode` can override parser mode per fixture (`lenient` default, `strict` when needed).
 - Optional `collision_audit` block drives overlap checks.
 
-## M7 execution model (active)
+## M7 execution model (completed)
 - `M7A` corpus comprehensiveness:
   - completed: collated-suite index sync/import parity, real-world breadth + long-form coverage gates, and malformed-source expected-fail policy are test-backed.
 - `M7B` quality rubric + deterministic gates:
-  - formal `Q1..Q7` quality scoring dimensions.
-  - deterministic proxies (collision severity, spacing floors, overflow checks, spanner geometry checks).
+  - completed: formal `Q1..Q7` quality scoring dimensions, weighted summary, deterministic proxies, and gate assertions in conformance tests.
 - `M7C` layered evaluation framework:
-  - deterministic SVG checks -> visual/perceptual metrics -> cross-renderer comparisons -> model-assisted sampled audits.
+  - completed: split/gate config, layered runner (`npm run eval:run`), fail-fast classifier summaries, and artifact/report pipeline under `artifacts/evaluation/`.
 - `M7D` VexFlow upstream loop:
-  - gap registry, patch-package traceability, upstream issue/PR lifecycle, de-patch strategy.
+  - completed: gap registry, validation command, upstream-brief generator, sync log, and release-hardening checklist.
+- `M8` golden-driven visual quality program:
+  - active: golden reference ingestion/mapping, deterministic geometry rule expansion, headless golden diffing, and wave-based fixture remediation.
 
 ## Conformance execution semantics
 - Implemented in `executeConformanceFixture`:
@@ -118,6 +138,10 @@
   - `lilypond` conformance fixtures: 156 active (`155 expected: pass`, `1 expected: fail`).
   - `realworld` conformance fixtures: 8 active (`8 expected: pass`).
   - total active conformance fixtures: 176 (`171 expected: pass`, `5 expected: fail`).
+- M7B current quality summary (from latest `artifacts/conformance/conformance-report.json`):
+  - expected-pass weighted mean: `4.8591`
+  - expected-pass catastrophic readability fixtures: `0`
+  - expected-pass critical collision count: `0`
   - expected-fail LilyPond fixture: `lilypond-23c-tuplet-display-nonstandard` (explicit malformed-source waiver for undefined entity + `XML_NOT_WELL_FORMED` parse failure).
 - Recently resolved M7A blocker:
   - `lilypond-24a-gracenotes` moved to `status: active`, `expected: pass` after graceful fallback handling for VexFlow grace beaming failures (`GRACE_NOTES_BEAMING_FAILED` warning path).
@@ -132,6 +156,7 @@
 - Notation/text render: `SPANNER_*`, `*_RENDER_FAILED`, `WEDGE_DIRECTION_TEXT_FALLBACK`, `LYRIC_TEXT_RENDERED`, `HARMONY_TEXT_STACK_HIGH`
 - Advanced notation render: `UNSUPPORTED_ORNAMENT`, `GRACE_NOTES_WITHOUT_ANCHOR`, `UNMATCHED_TUPLET_STOP`, `UNCLOSED_TUPLET_START`, `OVERLAPPING_TUPLET_START`, `TUPLET_*`, `CUE_NOTE_RENDERED`
 - Layout render baseline: `MULTI_VOICE_NOT_SUPPORTED_IN_M2` still applies per staff when more than one voice targets the same staff.
+- New renderer-quality diagnostics: `MEASURE_LAYOUT_OVERFLOW`, `VOICE_FORMAT_FAILED`, `BEAM_RENDER_FAILED`.
 
 ## Test commands
 - Fast confidence loop:
@@ -142,6 +167,17 @@
 - Full:
   - `npm run test`
   - `npm run test:visual -- --workers=4`
+- Browser-free visual:
+  - `npm run test:visual:headless:update`
+  - `npm run test:visual:headless`
+  - `npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml`
+- Focused renderer-regression checks:
+  - `npm run test:integration -- tests/integration/render-quality-regressions.test.ts`
+  - `npm run test:unit -- tests/unit/notation-geometry.test.ts`
+- Evaluation + upstream lifecycle:
+  - `npm run eval:run`
+  - `npm run vexflow:gaps:check`
+  - `npm run vexflow:gaps:brief`
 - Demos:
   - `npm run corpus:lilypond:sync`
   - `npm run corpus:lilypond:import -- --cases 12a,14a`
@@ -157,13 +193,25 @@
   - `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`
 - Visual sentinel spec now covers active pass fixtures across categories including M4 notation and M5 layout/text:
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts`
+- Sentinel spec now also includes focused regression fixtures:
+  - `lilypond-01a-pitches-pitches`
+  - `realworld-music21-bach-bwv1-6`
+- Headless visual sentinel manifest:
+  - `/Users/mo/git/musicxml/fixtures/evaluation/headless-visual-sentinels.json`
+- Headless visual artifacts:
+  - `/Users/mo/git/musicxml/tests/visual-headless/baselines/`
+  - `/Users/mo/git/musicxml/artifacts/visual-headless/`
 - Snapshot baselines live at:
   - `/Users/mo/git/musicxml/tests/visual/conformance-sentinels.spec.ts-snapshots`
   - `/Users/mo/git/musicxml/tests/visual/render-visual.spec.ts-snapshots`
-- Latest run status: `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:integration`, `npm run test:svg`, `npm run test:conformance`, and `npm run test` pass.
-- Visual status: local Playwright visual runs are currently passing with repo-local browser binaries (`PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`).
+- Latest run status:
+  - Passing: `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:integration`, `npm run test:svg`.
+  - `npm run test` / `npm run test:conformance` currently hit Node OOM in this environment once large conformance suites start; targeted suites complete successfully.
+- Visual status:
+  - Playwright CLI launch is currently blocked in this sandbox by macOS MachPort permission errors (`bootstrap_check_in ... Permission denied (1100)`).
+  - Use Playwright MCP for targeted browser checks where possible; keep deterministic headless gates as primary blockers in restricted environments.
 
-## Next likely work (M7 start)
-- Execute M7B next: wire rubric dimensions/proxy metrics into conformance report outputs and set initial gating thresholds.
-- Execute M7C after M7B thresholds are stable: add perceptual and model-assisted audit layers.
-- Start M7D in parallel: maintain VexFlow gap registry with fixture reproducer links and upstream status.
+## Next likely work (post-M7)
+- Drive tracked VexFlow gaps from `planned` -> `opened` -> `merged` -> `released` -> `de_patched`.
+- Add real baseline/candidate image feeds and cross-renderer artifacts to nightly M7C runs.
+- Start explicit performance and memory benchmark tracks for large-score workloads.

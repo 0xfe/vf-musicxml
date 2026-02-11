@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseMusicXML, renderToSVGPages } from '../dist/public/index.js';
+import { parseMusicXMLAsync, renderToSVGPages } from '../dist/public/index.js';
 import { loadConformanceFixtures } from '../dist/testkit/index.js';
 
 /** Absolute repository root path resolved from this script location. */
@@ -13,6 +13,8 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const SITE_DIR = path.join(ROOT_DIR, 'demos', 'site');
 /** LilyPond demo roadmap manifest tracked in git. */
 const LILYPOND_MANIFEST_PATH = path.join(ROOT_DIR, 'demos', 'lilypond', 'manifest.json');
+/** Real-world corpus metadata used to select complex showcase demos. */
+const REALWORLD_CORPUS_PATH = path.join(ROOT_DIR, 'fixtures', 'corpus', 'real-world-samples.json');
 /** Conformance fixture root used for roadmap alignment reporting. */
 const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
 
@@ -31,6 +33,8 @@ const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
 /**
  * @typedef {{
  *   id: string;
+ *   // Demo-page seeding progress for this category. This is intentionally
+ *   // separate from conformance completion status.
  *   status: 'seeded' | 'in-progress' | 'not-started';
  *   notes: string;
  * }} LilyPondCategoryStatus
@@ -41,6 +45,7 @@ const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
  *   suiteSource: string;
  *   corpusManifestPath: string;
  *   endGoal: string;
+ *   categoryStatusSemantics?: string;
  *   seedDemos: LilyPondSeedDemo[];
  *   categoryStatus: LilyPondCategoryStatus[];
  * }} LilyPondManifest
@@ -77,7 +82,40 @@ const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
  *   sourceName: string;
  *   sourceUrl: string;
  *   scorePath: string;
+ *   expected: 'pass' | 'fail';
+ *   parseMode: 'strict' | 'lenient';
+ *   category: string;
+ *   collection: 'lilypond' | 'realworld';
  * }} DemoDefinition
+ */
+
+/**
+ * @typedef {{
+ *   observedOutcome: 'pass' | 'parse-fail' | 'render-fail';
+ *   svgMarkup: string | null;
+ *   diagnostics: import('../src/core/diagnostics.js').Diagnostic[];
+ * }} DemoRenderOutcome
+ */
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   title: string;
+ *   bucket: string;
+ *   complexity_level: 'small' | 'medium' | 'large';
+ *   part_count_hint: number;
+ *   long_form: boolean;
+ *   sourceUrl: string;
+ *   notes: string;
+ * }} RealWorldSample
+ */
+
+/**
+ * @typedef {{
+ *   schemaVersion: number;
+ *   generatedAt: string;
+ *   samples: RealWorldSample[];
+ * }} RealWorldCorpusManifest
  */
 
 /**
@@ -111,19 +149,52 @@ function renderDiagnosticsList(diagnostics) {
   return `<ul class="diag-list">${items}</ul>`;
 }
 
-/** Build a source-reference line for one demo page. */
-function renderDemoSource(demo) {
-  if (!demo.sourceUrl) {
-    return '';
+/** Derive a compact source label from URL/path when explicit names are unavailable. */
+function inferSourceName(sourceUrl, scorePath) {
+  if (sourceUrl) {
+    try {
+      const { pathname } = new globalThis.URL(sourceUrl);
+      const urlLeaf = path.basename(pathname);
+      if (urlLeaf) {
+        return urlLeaf;
+      }
+    } catch {
+      // Non-URL sources fall back to score path.
+    }
   }
 
-  const sourceLabel = escapeHtml(demo.sourceName ?? demo.sourceUrl);
+  return path.basename(scorePath);
+}
+
+/** Build a source-reference line for one demo page. */
+function renderDemoSource(demo) {
+  const sourceLabel = escapeHtml(demo.sourceName);
+  if (!demo.sourceUrl) {
+    return `<p><strong>Source:</strong> ${sourceLabel}</p>`;
+  }
   const sourceUrl = escapeHtml(demo.sourceUrl);
   return `<p><strong>Source:</strong> <a href="${sourceUrl}" target="_blank" rel="noreferrer">${sourceLabel}</a></p>`;
 }
 
 /** Build one standalone HTML page for a rendered demo score. */
-function buildDemoPageHtml(demo, svgMarkup, diagnostics) {
+function buildDemoPageHtml(demo, renderOutcome) {
+  const observedLabel =
+    renderOutcome.observedOutcome === 'pass'
+      ? 'pass'
+      : renderOutcome.observedOutcome === 'parse-fail'
+      ? 'parse-fail'
+      : 'render-fail';
+  const expectedMatches =
+    (demo.expected === 'pass' && renderOutcome.observedOutcome === 'pass') ||
+    (demo.expected === 'fail' && renderOutcome.observedOutcome !== 'pass');
+  const statusTone = expectedMatches ? '#1b6f3a' : '#7a2f2f';
+  const renderSurface =
+    renderOutcome.svgMarkup === null
+      ? `<p><strong>No SVG output.</strong> This fixture currently produced <code>${escapeHtml(
+          observedLabel
+        )}</code> in demo generation.</p>`
+      : renderOutcome.svgMarkup;
+
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -190,13 +261,19 @@ function buildDemoPageHtml(demo, svgMarkup, diagnostics) {
       <a href="./index.html">Back to demos</a>
       <h1>${escapeHtml(demo.title)}</h1>
       <p>${escapeHtml(demo.description)}</p>
+      <p><strong>Category:</strong> ${escapeHtml(demo.category)} | <strong>Collection:</strong> ${escapeHtml(
+        demo.collection
+      )}</p>
+      <p><strong>Expected outcome:</strong> ${escapeHtml(demo.expected)} | <strong>Observed outcome:</strong> <span style="color:${statusTone};">${escapeHtml(
+        observedLabel
+      )}</span> | <strong>Parse mode:</strong> ${escapeHtml(demo.parseMode)}</p>
       ${renderDemoSource(demo)}
       <section class="surface">
-        ${svgMarkup}
+        ${renderSurface}
       </section>
       <section class="surface">
         <h2>Diagnostics</h2>
-        ${renderDiagnosticsList(diagnostics)}
+        ${renderDiagnosticsList(renderOutcome.diagnostics)}
       </section>
     </main>
   </body>
@@ -209,17 +286,67 @@ function toRepoRelativePath(absolutePath) {
   return path.relative(ROOT_DIR, absolutePath).replaceAll(path.sep, '/');
 }
 
+/** Render one shared table row for index-page demo collections. */
+function renderDemoTableRow(demo) {
+  const source = demo.sourceUrl
+    ? `<a href="${escapeHtml(demo.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(demo.sourceName)}</a>`
+    : escapeHtml(demo.sourceName);
+  return `<tr>
+  <td><a href="./${escapeHtml(demo.id)}.html">${escapeHtml(demo.id)}</a></td>
+  <td>${escapeHtml(demo.title)}</td>
+  <td>${escapeHtml(demo.expected)}</td>
+  <td>${escapeHtml(demo.parseMode)}</td>
+  <td>${source}</td>
+</tr>`;
+}
+
+/** Build one per-category details block for full LilyPond suite navigation. */
+function renderLilyPondCategorySection(categoryId, demosInCategory) {
+  const rows = demosInCategory.map((demo) => renderDemoTableRow(demo)).join('\n');
+  return `<details class="category-details">
+  <summary>Category ${escapeHtml(categoryId)} (${demosInCategory.length} demos)</summary>
+  <table>
+    <thead>
+      <tr>
+        <th>Fixture ID</th>
+        <th>Title</th>
+        <th>Expected</th>
+        <th>Parse Mode</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+</details>`;
+}
+
 /** Build the static index page that links to each generated demo page. */
-function buildIndexPageHtml(demos, lilypondManifest, conformanceSummary) {
-  const links = demos
-    .map((demo) => {
-      const source = demo.sourceUrl
-        ? ` (<a href="${escapeHtml(demo.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(demo.sourceName)}</a>)`
-        : '';
-      return `<li><a href="./${demo.id}.html">${escapeHtml(demo.title)}</a> - ${escapeHtml(
-        demo.description
-      )}${source}</li>`;
-    })
+function buildIndexPageHtml(
+  featuredDemos,
+  lilypondSuiteDemos,
+  complexScoreDemos,
+  lilypondManifest,
+  conformanceSummary
+) {
+  const featuredRows = featuredDemos.map((demo) => renderDemoTableRow(demo)).join('\n');
+  const complexRows = complexScoreDemos.map((demo) => renderDemoTableRow(demo)).join('\n');
+  const lilyPondByCategory = new Map();
+  for (const demo of lilypondSuiteDemos) {
+    const categoryId = demo.category.replace('lilypond-', '');
+    const existing = lilyPondByCategory.get(categoryId) ?? [];
+    existing.push(demo);
+    lilyPondByCategory.set(categoryId, existing);
+  }
+  const lilyPondCategorySections = [...lilyPondByCategory.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([categoryId, demosInCategory]) =>
+      renderLilyPondCategorySection(
+        categoryId,
+        [...demosInCategory].sort((left, right) => left.id.localeCompare(right.id))
+      )
+    )
     .join('\n');
 
   return `<!doctype html>
@@ -246,21 +373,34 @@ function buildIndexPageHtml(demos, lilypondManifest, conformanceSummary) {
         margin: 0 0 10px;
       }
 
-      ul {
-        margin: 16px 0 0;
-        padding-left: 20px;
-      }
-
-      li {
-        margin-bottom: 10px;
-      }
-
       .panel {
         margin-top: 18px;
         padding: 14px;
         border: 1px solid #d7dbe3;
         border-radius: 12px;
         background: #ffffff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th, td {
+        border: 1px solid #d7dbe3;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .category-details {
+        margin-top: 12px;
+      }
+
+      .category-details summary {
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 8px;
       }
     </style>
   </head>
@@ -277,12 +417,53 @@ function buildIndexPageHtml(demos, lilypondManifest, conformanceSummary) {
           expected fail: <strong>${conformanceSummary.expectedFail}</strong>)
         </p>
         <p>
+          Full LilyPond demo pages: <strong>${lilypondSuiteDemos.length}</strong> |
+          Featured seed demos: <strong>${featuredDemos.length}</strong> |
+          Selected complex demos: <strong>${complexScoreDemos.length}</strong>
+        </p>
+        <p>
           <a href="./lilypond-roadmap.html">Open roadmap and coverage matrix</a>
         </p>
       </section>
-      <ul>
-        ${links}
-      </ul>
+      <section class="panel">
+        <h2>Featured Seed Demos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Fixture ID</th>
+              <th>Title</th>
+              <th>Expected</th>
+              <th>Parse Mode</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${featuredRows}
+          </tbody>
+        </table>
+      </section>
+      <section class="panel">
+        <h2>Selected Complex Score Demos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Fixture ID</th>
+              <th>Title</th>
+              <th>Expected</th>
+              <th>Parse Mode</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${complexRows}
+          </tbody>
+        </table>
+      </section>
+      <section class="panel">
+        <h2>All LilyPond Suite Demos</h2>
+        <p>Every active LilyPond conformance fixture is generated as an individual demo page below.</p>
+        ${lilyPondCategorySections}
+      </section>
     </main>
   </body>
 </html>
@@ -299,17 +480,24 @@ function buildCategoryPlanRows(manifest, corpusManifest, activeConformanceByCate
   return corpusManifest.categories.map((category) => {
     const statusEntry = statusByCategoryId.get(category.id);
     const activeConformanceCount = activeConformanceByCategoryId.get(category.id) ?? 0;
-    let status = statusEntry?.status;
+    let demoStatus = statusEntry?.status;
     let notes = statusEntry?.notes;
 
-    if (!status) {
+    if (!demoStatus) {
       if (activeConformanceCount > 0) {
-        status = 'in-progress';
+        demoStatus = 'in-progress';
         notes = 'Conformance fixtures are active; seeded demo page pending.';
       } else {
-        status = 'not-started';
+        demoStatus = 'not-started';
         notes = 'Planned for M7 activation.';
       }
+    }
+
+    let conformanceStatus = 'not-started';
+    if (activeConformanceCount >= category.fixtureCount && category.fixtureCount > 0) {
+      conformanceStatus = 'complete';
+    } else if (activeConformanceCount > 0) {
+      conformanceStatus = 'in-progress';
     }
 
     return {
@@ -317,33 +505,96 @@ function buildCategoryPlanRows(manifest, corpusManifest, activeConformanceByCate
       title: category.title,
       fixtureCount: category.fixtureCount,
       activeConformanceCount,
-      status,
+      conformanceStatus,
+      demoStatus,
       notes
     };
   });
 }
 
-/**
- * Build one demo definition record from one seeded manifest entry.
- * The output is normalized to absolute local score paths for renderer execution.
- */
-function toDemoDefinition(seedDemo) {
-  return {
-    id: seedDemo.id,
-    title: seedDemo.title,
-    description: seedDemo.description,
-    sourceName: seedDemo.sourceName,
-    sourceUrl: seedDemo.sourceUrl,
-    scorePath: path.join(ROOT_DIR, seedDemo.localScore)
-  };
+/** Select a stable subset of real-world fixtures that represent high complexity. */
+function isComplexRealWorldSample(sample) {
+  return sample.long_form || sample.complexity_level !== 'small' || sample.part_count_hint >= 4;
 }
 
-/**
- * Convert all seeded demos from the manifest into renderable build definitions.
- * The ordering is preserved because it controls index and roadmap presentation.
- */
-function buildDemoDefinitions(manifest) {
-  return manifest.seedDemos.map((seedDemo) => toDemoDefinition(seedDemo));
+/** Build demo definitions for the full active LilyPond conformance suite. */
+function buildLilyPondDemoDefinitions(manifest, conformanceFixtures) {
+  const seedById = new Map(manifest.seedDemos.map((seedDemo) => [seedDemo.id, seedDemo]));
+
+  return conformanceFixtures
+    .filter((fixture) => fixture.meta.status === 'active' && fixture.meta.category.startsWith('lilypond-'))
+    .sort((left, right) => left.meta.id.localeCompare(right.meta.id))
+    .map((fixture) => {
+      const seed = seedById.get(fixture.meta.id);
+      const sourceUrl = typeof fixture.meta.source === 'string' ? fixture.meta.source : '';
+      const sourceName = seed?.sourceName ?? inferSourceName(sourceUrl, fixture.scorePath);
+      const compactCaseId = fixture.meta.id.replace(/^lilypond-/, '').replaceAll('-', ' ');
+      return {
+        id: fixture.meta.id,
+        title: seed?.title ?? `LilyPond ${compactCaseId}`,
+        description:
+          seed?.description ??
+          `LilyPond collated-suite fixture ${sourceName} from ${fixture.meta.category}. Expected ${fixture.meta.expected}.`,
+        sourceName,
+        sourceUrl,
+        scorePath: fixture.scorePath,
+        expected: fixture.meta.expected,
+        parseMode: fixture.meta.parse_mode ?? 'lenient',
+        category: fixture.meta.category,
+        collection: 'lilypond'
+      };
+    });
+}
+
+/** Build demo definitions for selected complex real-world corpus fixtures. */
+function buildComplexRealWorldDemoDefinitions(conformanceFixtures, realWorldManifest) {
+  const sampleById = new Map(realWorldManifest.samples.map((sample) => [sample.id, sample]));
+
+  return conformanceFixtures
+    .filter((fixture) => fixture.meta.status === 'active' && fixture.meta.category.startsWith('realworld-'))
+    .map((fixture) => {
+      const sample = sampleById.get(fixture.meta.id);
+      if (!sample || !isComplexRealWorldSample(sample)) {
+        return null;
+      }
+
+      const sourceUrl = typeof fixture.meta.source === 'string' ? fixture.meta.source : sample.sourceUrl;
+      const sourceName = inferSourceName(sourceUrl, fixture.scorePath);
+      return {
+        id: fixture.meta.id,
+        title: sample.title,
+        description: `${sample.notes} Bucket: ${sample.bucket}. Complexity: ${sample.complexity_level}.`,
+        sourceName,
+        sourceUrl,
+        scorePath: fixture.scorePath,
+        expected: fixture.meta.expected,
+        parseMode: fixture.meta.parse_mode ?? 'lenient',
+        category: fixture.meta.category,
+        collection: 'realworld'
+      };
+    })
+    .filter((demoDefinition) => demoDefinition !== null)
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+/** Resolve featured seed demos against the generated full LilyPond demo set. */
+function buildFeaturedDemoDefinitions(manifest, lilyPondDemoDefinitions) {
+  const toCaseKey = (fixtureId) => fixtureId.split('-').slice(0, 2).join('-');
+  const lilyById = new Map(lilyPondDemoDefinitions.map((demoDefinition) => [demoDefinition.id, demoDefinition]));
+  const lilyByCaseKey = new Map(lilyPondDemoDefinitions.map((demoDefinition) => [toCaseKey(demoDefinition.id), demoDefinition]));
+  return manifest.seedDemos.map((seedDemo) => {
+    const resolved = lilyById.get(seedDemo.id) ?? lilyByCaseKey.get(toCaseKey(seedDemo.id));
+    if (!resolved) {
+      throw new Error(
+        `seed demo '${seedDemo.id}' (${seedDemo.sourceName}) is missing from active LilyPond conformance fixtures`
+      );
+    }
+    return {
+      ...resolved,
+      title: seedDemo.title,
+      description: seedDemo.description
+    };
+  });
 }
 
 /**
@@ -369,6 +620,45 @@ function assertSeedDemoCorpusAlignment(manifest, corpusManifest) {
       );
     }
   }
+}
+
+/** Parse/render one demo fixture and classify observed outcome for page generation. */
+async function renderDemoFixture(demoDefinition) {
+  const sourceData = await readFile(demoDefinition.scorePath);
+  const parsed = await parseMusicXMLAsync(
+    {
+      data: sourceData,
+      format: 'auto'
+    },
+    {
+      sourceName: demoDefinition.scorePath,
+      mode: demoDefinition.parseMode
+    }
+  );
+  const parseErrors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (!parsed.score || parseErrors.length > 0) {
+    return /** @type {DemoRenderOutcome} */ ({
+      observedOutcome: 'parse-fail',
+      svgMarkup: null,
+      diagnostics: parsed.diagnostics
+    });
+  }
+
+  const rendered = renderToSVGPages(parsed.score);
+  const renderErrors = rendered.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (rendered.pages.length === 0 || renderErrors.length > 0) {
+    return /** @type {DemoRenderOutcome} */ ({
+      observedOutcome: 'render-fail',
+      svgMarkup: rendered.pages[0] ?? null,
+      diagnostics: [...parsed.diagnostics, ...rendered.diagnostics]
+    });
+  }
+
+  return /** @type {DemoRenderOutcome} */ ({
+    observedOutcome: 'pass',
+    svgMarkup: rendered.pages[0],
+    diagnostics: [...parsed.diagnostics, ...rendered.diagnostics]
+  });
 }
 
 /** Build the LilyPond roadmap page with category status and conformance alignment. */
@@ -408,7 +698,8 @@ function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtu
   <td>${escapeHtml(category.title)}</td>
   <td>${category.fixtureCount}</td>
   <td>${category.activeConformanceCount}</td>
-  <td>${escapeHtml(category.status)}</td>
+  <td>${escapeHtml(category.conformanceStatus)}</td>
+  <td>${escapeHtml(category.demoStatus)}</td>
   <td>${escapeHtml(category.notes)}</td>
 </tr>`;
     })
@@ -505,7 +796,7 @@ function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtu
       </section>
 
       <section class="panel">
-        <h2>Category Coverage Plan</h2>
+        <h2>Category Coverage (Conformance + Demo Seeding)</h2>
         <table>
           <thead>
             <tr>
@@ -513,7 +804,8 @@ function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtu
               <th>Title</th>
               <th>Fixture Count</th>
               <th>Active Conformance</th>
-              <th>Status</th>
+              <th>Conformance Status</th>
+              <th>Demo Status</th>
               <th>Notes</th>
             </tr>
           </thead>
@@ -561,40 +853,54 @@ async function loadLilyPondCorpusManifest(manifest) {
   return /** @type {LilyPondCorpusManifest} */ (JSON.parse(raw));
 }
 
+/** Read and parse real-world corpus metadata used for complex demo selection. */
+async function loadRealWorldCorpusManifest() {
+  const raw = await readFile(REALWORLD_CORPUS_PATH, 'utf8');
+  return /** @type {RealWorldCorpusManifest} */ (JSON.parse(raw));
+}
+
 /** Build static demo pages from tracked MusicXML demo scores. */
 async function buildDemos() {
   const lilypondManifest = await loadLilyPondManifest();
   const lilypondCorpusManifest = await loadLilyPondCorpusManifest(lilypondManifest);
+  const realWorldCorpusManifest = await loadRealWorldCorpusManifest();
   assertSeedDemoCorpusAlignment(lilypondManifest, lilypondCorpusManifest);
-  const demoDefinitions = buildDemoDefinitions(lilypondManifest);
+  const conformanceFixtures = await loadConformanceFixtures(CONFORMANCE_FIXTURES_DIR);
+  const lilyPondSuiteDemoDefinitions = buildLilyPondDemoDefinitions(lilypondManifest, conformanceFixtures);
+  const complexScoreDemoDefinitions = buildComplexRealWorldDemoDefinitions(
+    conformanceFixtures,
+    realWorldCorpusManifest
+  );
+  const featuredDemoDefinitions = buildFeaturedDemoDefinitions(lilypondManifest, lilyPondSuiteDemoDefinitions);
+  const allDemoDefinitionsById = new Map(
+    [...lilyPondSuiteDemoDefinitions, ...complexScoreDemoDefinitions].map((demoDefinition) => [
+      demoDefinition.id,
+      demoDefinition
+    ])
+  );
+  const allDemoDefinitions = [...allDemoDefinitionsById.values()].sort((left, right) =>
+    left.id.localeCompare(right.id)
+  );
 
   await rm(SITE_DIR, { recursive: true, force: true });
   await mkdir(SITE_DIR, { recursive: true });
 
-  for (const demo of demoDefinitions) {
-    const xml = await readFile(demo.scorePath, 'utf8');
-    const parsed = parseMusicXML(xml, { sourceName: demo.scorePath, mode: 'lenient' });
-    const parseErrors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-
-    if (!parsed.score || parseErrors.length > 0) {
+  for (const demoDefinition of allDemoDefinitions) {
+    const renderOutcome = await renderDemoFixture(demoDefinition);
+    const expectedPass = demoDefinition.expected === 'pass';
+    if (expectedPass && renderOutcome.observedOutcome !== 'pass') {
+      const failureCodes = renderOutcome.diagnostics
+        .filter((diagnostic) => diagnostic.severity === 'error')
+        .map((diagnostic) => diagnostic.code)
+        .join(', ');
       throw new Error(
-        `Demo '${demo.id}' failed to parse: ${parseErrors.map((diagnostic) => diagnostic.code).join(', ')}`
+        `Demo '${demoDefinition.id}' expected pass but observed ${renderOutcome.observedOutcome}: ${failureCodes}`
       );
     }
-
-    const rendered = renderToSVGPages(parsed.score);
-    const renderErrors = rendered.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-    if (rendered.pages.length === 0 || renderErrors.length > 0) {
-      throw new Error(
-        `Demo '${demo.id}' failed to render: ${renderErrors.map((diagnostic) => diagnostic.code).join(', ')}`
-      );
-    }
-
-    const pageHtml = buildDemoPageHtml(demo, rendered.pages[0], [...parsed.diagnostics, ...rendered.diagnostics]);
-    await writeFile(path.join(SITE_DIR, `${demo.id}.html`), pageHtml, 'utf8');
+    const pageHtml = buildDemoPageHtml(demoDefinition, renderOutcome);
+    await writeFile(path.join(SITE_DIR, `${demoDefinition.id}.html`), pageHtml, 'utf8');
   }
 
-  const conformanceFixtures = await loadConformanceFixtures(CONFORMANCE_FIXTURES_DIR);
   const activeFixtures = conformanceFixtures.filter((fixture) => fixture.meta.status === 'active');
   const conformanceSummary = {
     active: activeFixtures.length,
@@ -609,12 +915,18 @@ async function buildDemos() {
   );
   await writeFile(
     path.join(SITE_DIR, 'index.html'),
-    buildIndexPageHtml(demoDefinitions, lilypondManifest, conformanceSummary),
+    buildIndexPageHtml(
+      featuredDemoDefinitions,
+      lilyPondSuiteDemoDefinitions,
+      complexScoreDemoDefinitions,
+      lilypondManifest,
+      conformanceSummary
+    ),
     'utf8'
   );
   // Console output is intentionally short because this script is used in npm pipelines.
   console.log(
-    `Built ${demoDefinitions.length} demos + LilyPond roadmap (${conformanceSummary.active} active fixtures) into ${SITE_DIR}`
+    `Built ${allDemoDefinitions.length} demos + LilyPond roadmap (${conformanceSummary.active} active fixtures) into ${SITE_DIR}`
   );
 }
 

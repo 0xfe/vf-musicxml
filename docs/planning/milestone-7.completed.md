@@ -3,15 +3,15 @@ Outcome:
 - Demonstrable high-quality rendering across the vast majority of representative MusicXML fixtures.
 - Repeatable quality evidence from deterministic, perceptual, and model-assisted evaluation layers.
 - Explicit VexFlow upstream path for every blocking renderer gap.
-- Track status: `M7A` completed; `M7B` is the active next track.
+- Track status: `M7A`, `M7B`, `M7C`, and `M7D` completed.
 
 Execution strategy:
 - M7 is now split into four tracks so progress can be measured independently and executed in parallel where safe.
 - Canonical design + thresholds + references are maintained in:
   - `/Users/mo/git/musicxml/docs/planning/milestone-7A.completed.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7B.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7C.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-7D.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7B.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7C.completed.md`
+  - `/Users/mo/git/musicxml/docs/planning/milestone-7D.completed.md`
 
 ### M7A: Corpus Comprehensiveness
 Outcome:

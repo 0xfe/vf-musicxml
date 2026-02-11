@@ -1,0 +1,33 @@
+{
+  "version": "2026-02-11",
+  "deterministic": {
+    "smoke": {
+      "expected_pass_rate_min": 1,
+      "weighted_mean_min": 4.4,
+      "max_catastrophic_expected_pass": 0,
+      "max_critical_collisions_expected_pass": 0
+    },
+    "core": {
+      "expected_pass_rate_min": 0.99,
+      "weighted_mean_min": 4.35,
+      "max_catastrophic_expected_pass": 0,
+      "max_critical_collisions_expected_pass": 0
+    },
+    "extended": {
+      "expected_pass_rate_min": 0.97,
+      "weighted_mean_min": 4.2,
+      "max_catastrophic_expected_pass": 0,
+      "max_critical_collisions_expected_pass": 0
+    },
+    "nightly": {
+      "expected_pass_rate_min": 0.97,
+      "weighted_mean_min": 4.2,
+      "max_catastrophic_expected_pass": 0,
+      "max_critical_collisions_expected_pass": 0
+    }
+  },
+  "perceptual": {
+    "pixelmatch_mismatch_ratio_max": 0.015,
+    "ssim_min": 0.985
+  }
+}

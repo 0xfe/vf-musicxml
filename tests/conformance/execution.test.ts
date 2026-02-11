@@ -30,6 +30,13 @@ describe('conformance execution baseline', () => {
     expect(report.categoryRollups.advanced?.fixtureCount).toBeGreaterThanOrEqual(1);
     expect(report.categoryRollups.lilypond?.fixtureCount).toBeGreaterThanOrEqual(20);
     expect(report.categoryRollups.realworld?.fixtureCount).toBeGreaterThanOrEqual(8);
+    expect(report.qualitySummary.scoredFixtureCount).toBeGreaterThanOrEqual(
+      report.qualitySummary.expectedPassScoredFixtureCount
+    );
+    expect(report.qualitySummary.scoredFixtureCount).toBeGreaterThanOrEqual(170);
+    expect(report.qualitySummary.expectedPassScoredFixtureCount).toBeGreaterThanOrEqual(170);
+    expect(report.qualitySummary.weights.Q1).toBeGreaterThan(0);
+    expect(report.qualitySummary.criticalDimensions.length).toBeGreaterThanOrEqual(3);
 
     // M7A execution gates:
     // - expected-pass parse/render success >= 97%
@@ -43,6 +50,14 @@ describe('conformance execution baseline', () => {
     const unexpectedFailures = report.results.filter((result) => !result.success);
     const unexpectedFailureRate = unexpectedFailures.length / Math.max(1, report.results.length);
     expect(unexpectedFailureRate).toBeLessThanOrEqual(0.01);
+
+    // M7B execution gates:
+    // - expected-pass weighted rubric mean >= 4.2 / 5
+    // - no expected-pass fixture with catastrophic readability
+    // - expected-pass critical collision count must stay zero (unless waived)
+    expect(report.qualitySummary.expectedPassWeightedMean).toBeGreaterThanOrEqual(4.2);
+    expect(report.qualitySummary.expectedPassCatastrophicFixtureIds).toHaveLength(0);
+    expect(report.qualitySummary.expectedPassCriticalCollisionCount).toBe(0);
 
     const lilyPondCategoryResults = new Map<string, typeof report.results>();
     for (const result of report.results) {
@@ -150,6 +165,8 @@ describe('conformance execution baseline', () => {
     expect(markdownSummary).toContain('layout-m5-multipart-baseline');
     expect(markdownSummary).toContain('text-m5-lyrics-harmony-baseline');
     expect(markdownSummary).toContain('advanced-m6-notation-baseline');
+    expect(markdownSummary).toContain('## Quality Summary');
+    expect(markdownSummary).toContain('### Quality Dimension Averages (Expected-pass)');
     expect(markdownSummary).toContain('## Diagnostic Histograms');
     expect(markdownSummary).toContain('### Parse Diagnostic Codes');
     expect(markdownSummary).toContain('## Category Rollups');
@@ -160,5 +177,5 @@ describe('conformance execution baseline', () => {
       expect(paths.jsonPath.endsWith('conformance-report.json')).toBe(true);
       expect(paths.markdownPath.endsWith('conformance-report.md')).toBe(true);
     }
-  }, 15000);
+  }, 90000);
 });

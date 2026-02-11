@@ -23,6 +23,19 @@
 - `renderScoreToElement` for browser DOM integration.
 - `ensureDomGlobals` bridges jsdom/browser differences for VexFlow internals.
 - `render-note-mapper.ts` is the main translation boundary from CSM events to `StaveNote`.
+- `formatVoiceToStave` (`src/vexflow/render.ts`) uses `Formatter.formatToStave(...)` so first-measure modifier widths (clef/key/time) are respected; avoid fixed-width formatter calls for production layout.
+- `drawMeasureBeams` (`src/vexflow/render.ts`) centralizes `Beam.generateBeams(...)` + draw logic for reusable beam-quality diagnostics.
+
+## Geometry audit helpers for renderer triage
+- `src/testkit/notation-geometry.ts` exposes reusable SVG geometry tooling:
+  - `collectNotationGeometry(...)`
+  - `detectNoteheadBarlineIntrusions(...)`
+  - `summarizeNotationGeometry(...)`
+- Primary use cases:
+  - detect notehead/barline bleed regressions caused by spacing/format bugs
+  - assert beam presence in complex fixtures (for example real-world chorales)
+- Current regression gates:
+  - `tests/integration/render-quality-regressions.test.ts`
 
 ## Common pitfalls
 - Text/layout can differ between Node/jsdom and browser environments.
@@ -37,3 +50,17 @@
 - For temporary local fixes, prefer small patch-based approach.
 - Track intended upstream PR scope in `/Users/mo/git/musicxml/docs/planning/todo.md` with fixture-backed repro.
 - Use dedicated branch for VexFlow patch prep when needed (`codex/vexflow-<scope>`).
+
+## M7D tracking and release-hardening docs
+- Gap registry:
+  - `/Users/mo/git/musicxml/fixtures/vexflow/gap-registry.json`
+- Registry validation:
+  - `npm run vexflow:gaps:check`
+- Upstream brief generation:
+  - `npm run vexflow:gaps:brief`
+- Upstream playbook:
+  - `/Users/mo/git/musicxml/docs/vexflow-upstream-playbook.md`
+- Sync log:
+  - `/Users/mo/git/musicxml/docs/vexflow-upstream-sync-log.md`
+- Release checklist:
+  - `/Users/mo/git/musicxml/docs/release-hardening-checklist.md`

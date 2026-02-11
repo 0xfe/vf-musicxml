@@ -3,42 +3,63 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { parseMusicXML, renderToSVGPages } from '../../src/public/index.js';
+import { parseMusicXMLAsync, renderToSVGPages } from '../../src/public/index.js';
 
 /** High-signal conformance fixtures kept as browser visual sentinels in M3-M5. */
 const VISUAL_SENTINELS = [
   {
     id: 'smoke-minimal-partwise',
-    fixturePath: 'fixtures/conformance/smoke/minimal-partwise.musicxml'
+    fixturePath: 'fixtures/conformance/smoke/minimal-partwise.musicxml',
+    format: 'xml'
   },
   {
     id: 'timewise-minimal',
-    fixturePath: 'fixtures/conformance/timewise/minimal-timewise.musicxml'
+    fixturePath: 'fixtures/conformance/timewise/minimal-timewise.musicxml',
+    format: 'xml'
   },
   {
     id: 'rhythm-backup-forward-two-voices',
-    fixturePath: 'fixtures/conformance/rhythm/backup-forward-two-voices.musicxml'
+    fixturePath: 'fixtures/conformance/rhythm/backup-forward-two-voices.musicxml',
+    format: 'xml'
   },
   {
     id: 'notation-m4-baseline',
-    fixturePath: 'fixtures/conformance/notation/m4-notation-baseline.musicxml'
+    fixturePath: 'fixtures/conformance/notation/m4-notation-baseline.musicxml',
+    format: 'xml'
   },
   {
     id: 'layout-m5-multipart-baseline',
-    fixturePath: 'fixtures/conformance/layout/m5-multipart-baseline.musicxml'
+    fixturePath: 'fixtures/conformance/layout/m5-multipart-baseline.musicxml',
+    format: 'xml'
   },
   {
     id: 'text-m5-lyrics-harmony-baseline',
-    fixturePath: 'fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml'
+    fixturePath: 'fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml',
+    format: 'xml'
+  },
+  {
+    id: 'lilypond-01a-pitches-pitches',
+    fixturePath: 'fixtures/conformance/lilypond/01a-pitches-pitches.musicxml',
+    format: 'xml'
+  },
+  {
+    id: 'realworld-music21-bach-bwv1-6',
+    fixturePath: 'fixtures/conformance/realworld/realworld-music21-bach-bwv1-6.mxl',
+    format: 'mxl'
   }
 ] as const;
 
 for (const sentinel of VISUAL_SENTINELS) {
   test(`renders visual sentinel fixture ${sentinel.id}`, async ({ page }) => {
     const fixturePath = path.resolve(sentinel.fixturePath);
-    const xml = await readFile(fixturePath, 'utf8');
-
-    const parsed = parseMusicXML(xml, { sourceName: sentinel.fixturePath });
+    const raw = await readFile(fixturePath);
+    const parsed = await parseMusicXMLAsync(
+      {
+        data: new Uint8Array(raw),
+        format: sentinel.format
+      },
+      { sourceName: sentinel.fixturePath, mode: 'lenient' }
+    );
     expect(parsed.score).toBeDefined();
 
     const rendered = renderToSVGPages(parsed.score!);

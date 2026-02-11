@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "smoke-minimal-partwise",
+      "fixturePath": "fixtures/conformance/smoke/minimal-partwise.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "timewise-minimal",
+      "fixturePath": "fixtures/conformance/timewise/minimal-timewise.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "rhythm-backup-forward-two-voices",
+      "fixturePath": "fixtures/conformance/rhythm/backup-forward-two-voices.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "notation-m4-baseline",
+      "fixturePath": "fixtures/conformance/notation/m4-notation-baseline.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "layout-m5-multipart-baseline",
+      "fixturePath": "fixtures/conformance/layout/m5-multipart-baseline.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "text-m5-lyrics-harmony-baseline",
+      "fixturePath": "fixtures/conformance/text/m5-lyrics-harmony-baseline.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "lilypond-01a-pitches-pitches",
+      "fixturePath": "fixtures/conformance/lilypond/01a-pitches-pitches.musicxml",
+      "format": "xml"
+    },
+    {
+      "id": "realworld-music21-bach-bwv1-6",
+      "fixturePath": "fixtures/conformance/realworld/realworld-music21-bach-bwv1-6.mxl",
+      "format": "mxl"
+    }
+  ]
+}

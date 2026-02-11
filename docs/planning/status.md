@@ -4,15 +4,16 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ## Status
 
-- Last updated: 2026-02-10 (US)
+- Last updated: 2026-02-11 (US)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M6 and M7A are completed. M7A exit criteria are now test-backed (corpus breadth/long-form coverage, expected-fail triage policy for `lilypond-23c`, and conformance threshold gates), and the project is ready to execute M7B quality-rubric implementation.
+- Current state: M0-M7 are completed. M8 is now active as a golden-driven visual quality program: LilyPond reference-image alignment, deterministic geometry rule expansion, and fixture-by-fixture remediation execution.
 - Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
 
 ### Next step when execution continues:
-  1. Execute M7B: lock rubric dimensions (`Q1..Q7`) and land deterministic collision/spacing/layout gate metrics in conformance reports.
-  2. Execute M7D in parallel: track every VexFlow gap with reproducer fixture, patch-package linkage, and upstream PR status.
-  3. Execute M7C once M7B thresholds are stable: add perceptual/model-assisted evaluation layers and artifact pipelines.
+  1. Execute M8A: sync LilyPond v2.24 golden image references and build `fixtures/golden/manifest.json` with per-fixture mapping/checksums.
+  2. Execute M8B: expand geometry rule engine (collision/spacing/justification/presence packs) with deterministic diagnostics and tests.
+  3. Execute M8C: add headless golden comparison runner with alignment + per-fixture diff artifacts.
+  4. Start M8E Wave 1 remediation across foundational LilyPond categories and close top-severity blockers.
 
 ## Milestone progress:
 
@@ -25,11 +26,12 @@ This file is the current snapshot of planning state. Update this first as milest
 | M4 | Notations and Directions | Completed | Ties/slurs/articulations/dynamics/tempo/wedges baseline with parser-model-render coverage, tests, and docs landed. |
 | M5 | Multi-Part Layout, Text, and Modularization Decision | Completed | Multi-part/staff layout + connector semantics + lyric/harmony baseline + modularization decision delivered with test/docs gates. |
 | M6 | Advanced Notation Coverage | Completed | Grace/cue/ornament/tuplet/repeat+ending baseline with deterministic tests, conformance fixture promotion, and fallback policy docs landed. |
-| M7 | Full Conformance + Quality Program (Umbrella) | In progress | Execution is now split into M7A-M7D tracks with independent quality gates and release criteria. |
+| M7 | Full Conformance + Quality Program (Umbrella) | Completed | All M7 tracks (`M7A`-`M7D`) are complete with executable gates, reports, and lifecycle tooling. |
 | M7A | Corpus Comprehensiveness | Completed | Canonical collated corpus manifest + full LilyPond conformance import (156 active fixtures), expanded real-world onboarding (8 fixtures including lead-sheet/orchestral + long-form chamber coverage), explicit `23c` malformed-source waiver policy, and executable M7A threshold gates are in place. |
-| M7B | Quality Rubric + Deterministic Quality Gates | Not started | Define page-level quality rubric and deterministic analytical proxies with per-category thresholds. |
-| M7C | Layered Evaluation Framework | Not started | Add visual/perceptual/model-assisted eval layers and artifact/report pipeline. |
-| M7D | VexFlow Gap Upstreaming + Release Hardening | Not started | Operationalize patch/PR lifecycle, de-patch flow, and release readiness policies. |
+| M7B | Quality Rubric + Deterministic Quality Gates | Completed | Deterministic quality scoring (`Q1..Q7`) integrated into conformance reports with executable gates (weighted mean, catastrophic-readability, critical-collision). |
+| M7C | Layered Evaluation Framework | Completed | Layered evaluator (`eval:run`) landed with dataset splits, deterministic split gates, perceptual metrics hooks, model-audit prompt/schema versioning, and triage artifacts. |
+| M7D | VexFlow Gap Upstreaming + Release Hardening | Completed | VexFlow gap registry + validation tooling, upstream brief generation, sync log, and release-hardening checklist are in place and test-backed. |
+| M8 | Golden-Driven Visual Quality Program | In Progress | Build LilyPond golden mapping + geometry/presence rule packs + headless golden diff pipeline, then iterate fixture-by-fixture to high-quality output. |
 
 
 
@@ -70,7 +72,7 @@ This file is the current snapshot of planning state. Update this first as milest
   - Added M6 advanced fallback policy doc (`docs/advanced-notation-policy.md`) and refreshed notation/rendering/tips docs plus AI handoff state.
   - Replaced hand-authored demos with canonical LilyPond fixture downloads (`01c`, `71g`) and added `demos/lilypond/manifest.json` plus generated `lilypond-roadmap.html` for category-level coverage planning.
   - Researched quality and evaluation references for engraving/readability, visual diffing, cross-renderer parity, and model-assisted assessment.
-  - Added M7 strategy document (now split across `docs/planning/milestone-7.md` and `docs/planning/milestone-7A.completed.md` through `docs/planning/milestone-7D.md`) with executable track-level checklists and initial pass/fail quality thresholds.
+  - Added M7 strategy document (now split across `docs/planning/milestone-7.completed.md` and `docs/planning/milestone-7A.completed.md` through `docs/planning/milestone-7D.completed.md`) with executable track-level checklists and initial pass/fail quality thresholds.
   - Reframed M7 into four execution tracks (M7A-M7D) to keep comprehensiveness, quality, eval infrastructure, and VexFlow upstreaming independently measurable.
   - Added canonical LilyPond corpus index sync pipeline (`scripts/sync-lilypond-corpus.mjs`) and generated `fixtures/corpus/lilypond-collated-v2.25.json` with all 30 categories and 156 fixtures.
   - Refactored demo build pipeline to load seeded demos from `demos/lilypond/manifest.json` and validate seeded entries against the canonical corpus manifest.
@@ -85,3 +87,11 @@ This file is the current snapshot of planning state. Update this first as milest
   - Expanded real-world corpus coverage with required M7A breadth buckets (`solo-lead-sheet`, `orchestral-excerpt`) and promoted corresponding active conformance fixtures (`fixtures/conformance/realworld/`, now 8 fixtures including long-form chamber stress coverage).
   - Added reusable LilyPond conformance import tooling (`scripts/import-lilypond-fixtures.mjs`, `npm run corpus:lilypond:import`) for deterministic case-ID-driven tranche promotion.
   - Completed M7A closeout with test-backed long-form real-world metadata gates (`complexity_level`, `part_count_hint`, `long_form`), explicit expected-fail policy for malformed source fixture `lilypond-23c-tuplet-display-nonstandard`, and conformance-threshold assertions for expected-pass/unexpected-failure/category-floor targets.
+  - Completed M7B quality-rubric rollout by adding deterministic `Q1..Q7` scoring to conformance execution/reporting, codifying catastrophic/collision waiver semantics, and enforcing M7B gate thresholds in `tests/conformance/execution.test.ts` with green full-test validation.
+  - Completed M7C layered evaluation rollout with versioned split/gate/prompt configs, deterministic split evaluator utilities, layered runner artifacts (`artifacts/evaluation/*`), and evaluation runbook docs.
+  - Completed M7D upstream/release hardening rollout with VexFlow gap registry validation (`vexflow:gaps:check`), upstream brief artifact generation (`vexflow:gaps:brief`), and release/sync governance docs.
+  - Added generalized renderer quality remediation for two high-impact regressions:
+    - stave-aware formatter pass (`formatToStave`) + layout-overflow diagnostics to prevent noteheads bleeding through barlines.
+    - automatic beam generation/drawing per voice to restore core beaming in complex real-world scores.
+  - Added reusable notation-geometry audit tooling (`src/testkit/notation-geometry.ts`) and regression coverage for `lilypond-01a-pitches-pitches` + `realworld-music21-bach-bwv1-6`.
+  - Opened M8 planning and execution scope in `docs/planning/milestone-8.md`, defining golden-reference ingestion, deterministic geometry inspection expansion, headless golden-diff infrastructure, and fixture-wave remediation gates.

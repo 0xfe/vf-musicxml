@@ -2,6 +2,7 @@
   "suiteSource": "https://lilypond.org/doc/v2.25/input/regression/musicxml/collated-files.html",
   "corpusManifestPath": "fixtures/corpus/lilypond-collated-v2.25.json",
   "endGoal": "Render every LilyPond MusicXML test fixture with zero unexpected parse or render failures, then keep visual baselines stable in CI.",
+  "categoryStatusSemantics": "categoryStatus tracks seeded demo-page coverage only. Conformance completion is derived from active fixture counts in fixtures/conformance/lilypond/*.meta.yaml.",
   "seedDemos": [
     {
       "id": "lilypond-01a-pitches-pitches",

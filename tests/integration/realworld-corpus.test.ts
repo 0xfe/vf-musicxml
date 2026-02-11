@@ -34,6 +34,11 @@ interface RealworldManifest {
   samples: RealworldSampleRecord[];
 }
 
+/** Match build-demos complex-score selection criteria to prevent drift. */
+function isSelectedComplexSample(sample: RealworldSampleRecord): boolean {
+  return sample.long_form || sample.complexity_level !== 'small' || sample.part_count_hint >= 4;
+}
+
 /** Parse one JSON file from disk with strict UTF-8 semantics. */
 async function readJson<T>(filePath: string): Promise<T> {
   const raw = await readFile(filePath, 'utf8');
@@ -97,5 +102,25 @@ describe('real-world corpus manifest', () => {
     // so corpus comprehensiveness is not biased toward only short examples.
     expect(longFormByBucket.get('chamber-quartet') ?? 0).toBeGreaterThanOrEqual(1);
     expect(longFormByBucket.get('orchestral-excerpt') ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  it('keeps selected complex real-world samples aligned with active conformance fixtures', async () => {
+    const manifest = await readJson<RealworldManifest>(REALWORLD_CORPUS_MANIFEST_PATH);
+    const conformanceFixtures = await loadConformanceFixtures(path.resolve('fixtures/conformance'));
+    const activeRealworldFixtureIds = new Set(
+      conformanceFixtures
+        .filter((fixture) => fixture.meta.status === 'active' && fixture.meta.category.startsWith('realworld-'))
+        .map((fixture) => fixture.meta.id)
+    );
+
+    const selectedComplexSampleIds = manifest.samples.filter(isSelectedComplexSample).map((sample) => sample.id);
+    expect(selectedComplexSampleIds.length).toBeGreaterThanOrEqual(5);
+
+    for (const sampleId of selectedComplexSampleIds) {
+      expect(
+        activeRealworldFixtureIds.has(sampleId),
+        `selected complex sample '${sampleId}' should have an active real-world conformance fixture`
+      ).toBe(true);
+    }
   });
 });

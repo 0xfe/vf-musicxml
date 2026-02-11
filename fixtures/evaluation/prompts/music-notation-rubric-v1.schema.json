@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Music Notation Rubric Audit V1",
+  "type": "object",
+  "required": ["pages", "summary"],
+  "properties": {
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["page_id", "scores", "catastrophic", "confidence", "rationale"],
+        "properties": {
+          "page_id": {
+            "type": "string"
+          },
+          "scores": {
+            "type": "object",
+            "required": ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7"],
+            "properties": {
+              "Q1": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q2": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q3": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q4": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q5": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q6": { "type": "number", "minimum": 0, "maximum": 5 },
+              "Q7": { "type": "number", "minimum": 0, "maximum": 5 }
+            },
+            "additionalProperties": false
+          },
+          "catastrophic": { "type": "boolean" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "rationale": { "type": "string" },
+          "issues": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["weighted_mean", "critical_issue_count", "notes"],
+      "properties": {
+        "weighted_mean": { "type": "number", "minimum": 0, "maximum": 5 },
+        "critical_issue_count": { "type": "integer", "minimum": 0 },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

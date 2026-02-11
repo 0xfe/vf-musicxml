@@ -23,6 +23,37 @@ Quick context for quality-eval tooling so future agents do not need to re-derive
   - Strong perceptual metric but heavier runtime/dependency cost.
   - Prefer nightly/batch usage first.
 
+## M7B deterministic rubric implementation
+- Source: `/Users/mo/git/musicxml/src/testkit/conformance-execution.ts`
+- Report outputs:
+  - per fixture: `result.quality.{weightedScore,dimensions,metrics,...}`
+  - aggregate: `report.qualitySummary`
+- Dimension IDs:
+  - `Q1` spacing, `Q2` collisions, `Q3` stems/beams/rests, `Q4` spanners, `Q5` text, `Q6` layout, `Q7` symbol fidelity
+- Added deterministic layout-specific signal for barline bleed regressions:
+  - `noteheadBarlineIntrusionCount` from `src/testkit/notation-geometry.ts`
+  - counted in fixture metrics and penalized in `Q6` layout quality scoring
+- Gate semantics:
+  - expected-pass weighted mean must be `>= 4.2`
+  - expected-pass catastrophic readability list must be empty
+  - expected-pass critical collision count must be `0` unless fixture waiver exists
+- Waiver keys:
+  - `quality-critical-collision`
+  - `quality-catastrophic-readability`
+
+## M7C execution entrypoints
+- Layered run command:
+  - `npm run eval:run`
+- Config files:
+  - `/Users/mo/git/musicxml/fixtures/evaluation/splits.json`
+  - `/Users/mo/git/musicxml/fixtures/evaluation/gates.json`
+- Outputs:
+  - `/Users/mo/git/musicxml/artifacts/evaluation/evaluation-report.json`
+  - `/Users/mo/git/musicxml/artifacts/evaluation/evaluation-report.md`
+  - `/Users/mo/git/musicxml/artifacts/evaluation/perceptual-diffs/**` (when baseline/candidate dirs are provided)
+- Operational runbook:
+  - `/Users/mo/git/musicxml/docs/evaluation-runbook.md`
+
 ## Cross-renderer caveats
 - LilyPond, MuseScore, and Verovio can disagree on legal engraving decisions.
 - Treat renderer comparisons as reference signals, not strict truth labels.

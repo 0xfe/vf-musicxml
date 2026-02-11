@@ -11,6 +11,12 @@ The manifest is the planning bridge between:
 - conformance fixtures under `/Users/mo/git/musicxml/fixtures/conformance/`
 - full-suite M7 end goal in `/Users/mo/git/musicxml/plan.md`
 
+Important:
+- `manifest.json` `categoryStatus` is demo-page seeding status, not conformance completion.
+- Conformance completion is calculated from active LilyPond fixtures in `/Users/mo/git/musicxml/fixtures/conformance/lilypond/*.meta.yaml`.
+- `npm run demos:build` generates demo pages for all active LilyPond conformance fixtures (not only seeded rows).
+- Seeded rows are the curated featured subset shown first on the demo index.
+
 ## Update flow
 1. Refresh corpus index:
    - `npm run corpus:lilypond:sync`

@@ -37,6 +37,11 @@ Every function, constant, enum, class, or major relevant identifier should be cl
   - But don't overdo it -- visual tests are still useful for catching regressions, especially where the SVG structure is complex or hard to reason about.
 - Every behavior change should have at least one deterministic test.
 - Use the Playwright MCP server for tests that require the browser.
+- Prefer browser-free visual checks for CI/headless portability:
+  - `npm run test:visual:headless`
+  - `npm run test:visual:headless:update`
+  - `npm run inspect:score -- --input=<path-to-score.musicxml-or-.mxl>`
+- Use Playwright/MCP for interactive triage or browser-specific rendering validation only.
 - Local Playwright CLI setup (for `npm run test:visual`) must use repo-local browser binaries:
   - Install: `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright install chromium`
   - Run tests: `PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`
@@ -58,6 +63,13 @@ Every function, constant, enum, class, or major relevant identifier should be cl
 - `npm run test:conformance:report`
 - `npm run test:visual`
 - `npm run test:visual:update`
+- `npm run test:visual:headless`
+- `npm run test:visual:headless:update`
+- `npm run inspect:score -- --input=<path-to-score.musicxml-or-.mxl>`
+- `npm run eval:run`
+- `npm run vexflow:gaps:check`
+- `npm run vexflow:gaps:brief`
+- `npm run patches:apply`
 - `npm run corpus:lilypond:sync`
 - `npm run corpus:lilypond:import -- --cases <comma-separated-case-ids>`
 - `npm run conformance:lilypond:promote`

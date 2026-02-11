@@ -19,6 +19,10 @@ Status legend:
 - Visual suite re-run under elevated permissions succeeded (`npm run test:visual -- --workers=4` passes for smoke + conformance sentinel specs).
 - Visual snapshot baselines now exist for smoke + conformance sentinel specs, including the M4 notation sentinel (`tests/visual/*-snapshots/`).
 - Local visual runs are currently stable when repo-local browser binaries are used (`PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npm run test:visual -- --workers=4`); keep CI/browser-environment controls in place to avoid regressions.
+  - Browser-free visual portability path is now available and should be used as default gate/triage in constrained environments:
+    - `npm run test:visual:headless`
+    - `npm run test:visual:headless:update`
+    - `npm run inspect:score -- --input=<path>`
   - Pin browser version and font set in CI.
   - Keep visual tests small and high-signal.
   - Use headless SVG structural/collision tests as primary gate.
@@ -45,12 +49,27 @@ Status legend:
 - Status: MITIGATING
 - Risk: Scores can pass parse/render/conformance gates but still produce poor engraving quality (spacing/collision/readability regressions).
 - Mitigation plan:
-  - Define and enforce weighted quality rubric dimensions (`Q1..Q7`) in M7B.
-  - Add deterministic quality proxies to conformance reports (collision severity, spacing floors, overflow/clipping, spanner geometry checks).
+  - M7B landed: weighted quality rubric dimensions (`Q1..Q7`) and deterministic conformance quality gates are now enforced in `tests/conformance/execution.test.ts`.
+  - M7B landed: conformance reports now emit quality summaries and fixture-level metrics (collision severity, spacing floors, overflow/clipping, spanner geometry checks).
+  - Added notation-geometry intrusion metrics (`noteheadBarlineIntrusionCount`) and hooked them into `Q6` layout scoring to catch measure bleed regressions automatically.
+  - Added explicit regression harness for beam presence and barline intrusion checks (`tests/integration/render-quality-regressions.test.ts`).
+  - M7C landed: layered evaluation runner (`npm run eval:run`) with split-aware deterministic gates, fail-fast classifier outputs, and optional perceptual/model layers with versioned configs/prompts.
   - Keep high-signal visual sentinels for cases where structural metrics are insufficient.
   - Add periodic rubric audits on stratified fixture samples and track trend drift.
 - Close criteria:
   - Quality rubric and deterministic proxies are integrated into CI/nightly gates and no active expected-pass fixture falls below agreed critical thresholds without waiver.
+
+### R-016: Golden reference mismatch or incompleteness for LilyPond fixtures
+- Priority: P0
+- Status: OPEN
+- Risk: If fixture-to-golden mapping is incomplete or unstable (missing/changed reference assets), M8 quality gates can produce noisy or misleading outcomes.
+- Mitigation plan:
+  - Build and validate a version-pinned golden manifest (`fixtures/golden/manifest.json`) with source URL + checksum per fixture.
+  - Add sync tooling/tests that fail when active fixtures lack golden references.
+  - Record provenance and version pinning (LilyPond v2.24) in manifest metadata.
+  - Keep explicit waivers for fixtures with unavailable or ambiguous references.
+- Close criteria:
+  - 100% active LilyPond fixtures map to validated golden assets or explicit waivers.
 
 ## P1
 
@@ -130,9 +149,11 @@ Status legend:
 
 ### R-014: Model-assisted evaluation drift (cost, latency, prompt instability)
 - Priority: P1
-- Status: OPEN
+- Status: MITIGATING
 - Risk: Image-model scoring can be expensive, nondeterministic, or prompt-sensitive, causing unstable quality trends.
 - Mitigation plan:
+  - M7C landed: model-audit integration path in `scripts/run-evaluation.mjs` with explicit sample controls and advisory/non-blocking semantics.
+  - M7C landed: prompt + schema are versioned under `fixtures/evaluation/prompts/`.
   - Restrict model-assisted audits to sampled nightly/weekly runs.
   - Version prompts/schemas and retain historical outputs for drift detection.
   - Treat model scores as advisory until correlation with deterministic metrics is demonstrated.
@@ -151,6 +172,30 @@ Status legend:
   - Keep patch-package diffs minimal and isolated by scope.
 - Close criteria:
   - Every active patch has upstream status visibility and no stale patch lacks an owner/de-patch path.
+
+### R-017: Overfitting renderer behavior to raster goldens
+- Priority: P1
+- Status: OPEN
+- Risk: Tuning only for visual similarity can hide semantic/layout correctness regressions and reduce generalization to non-golden corpora.
+- Mitigation plan:
+  - Keep deterministic geometry/presence/spacing rules as primary blocking checks.
+  - Treat golden-image similarity as secondary evidence (with region-aware thresholds).
+  - Require semantic regression tests for every major visual fix.
+  - Track and review disagreements between deterministic and visual signals.
+- Close criteria:
+  - M8 gating policy enforces deterministic correctness first and documents acceptable golden variance.
+
+### R-018: Geometry extraction blind spots for untagged/complex symbols
+- Priority: P1
+- Status: OPEN
+- Risk: Missing or inconsistent SVG tagging can prevent deterministic detection of key notation elements, leaving quality gaps.
+- Mitigation plan:
+  - Expand geometry extractor coverage and add fallback selectors/heuristics per element family.
+  - Add fixture-backed coverage tests for each tracked symbol class.
+  - Introduce diagnostics for "unable-to-inspect" regions to prevent silent pass-through.
+  - Add renderer instrumentation hooks where VexFlow output lacks stable selectors.
+- Close criteria:
+  - Geometry inspector covers all M8-targeted symbol classes with deterministic tests and explicit diagnostics for unsupported cases.
 
 ## P2
 

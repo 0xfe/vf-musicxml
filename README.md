@@ -2,7 +2,7 @@
 
 TypeScript-first MusicXML parsing and rendering library for VexFlow.
 
-Current milestone: `M7` in progress (comprehensiveness + quality + evaluation + VexFlow upstream hardening). `M6` advanced notation baseline is completed.
+Current milestone: `M7` completed (comprehensiveness + quality + evaluation + VexFlow upstream hardening).
 
 ## Project goals
 - Parser + canonical score model that is independent from rendering backend.
@@ -31,7 +31,7 @@ npm run test
 ```
 
 ## Demos
-Demo sources live in:
+Featured seed demo sources live in:
 - `demos/scores/lilypond-01a-pitches-pitches.musicxml`
 - `demos/scores/lilypond-01c-pitches-no-voice.musicxml`
 - `demos/scores/lilypond-02a-rests-durations.musicxml`
@@ -43,6 +43,11 @@ Demo sources live in:
 - `demos/lilypond/manifest.json` (suite coverage roadmap)
 - `fixtures/corpus/lilypond-collated-v2.25.json` (canonical collated-suite index)
 - `fixtures/corpus/real-world-samples.json` (representative non-LilyPond sample set + provenance)
+
+Generated demo output includes:
+- all active LilyPond conformance fixtures (`fixtures/conformance/lilypond/*`) as individual demo pages.
+- selected complex real-world fixtures (`fixtures/conformance/realworld/*`) from medium/large/long-form corpus samples.
+- featured seed demos from `demos/scores/*` highlighted at the top of the index.
 
 Build static demo pages:
 ```bash
@@ -73,6 +78,40 @@ Why this is required:
 
 For interactive browser checks in Codex, use the Playwright MCP browser tools. Use the local CLI setup above when running the repository Playwright test command.
 
+## Fast Headless Visual Checks (No Browser)
+Default visual-regression path for CI/headless servers:
+
+```bash
+npm run test:visual:headless:update
+npm run test:visual:headless
+```
+
+What this does:
+- Parses/render fixtures with the library (no browser runtime).
+- Rasterizes SVG via `resvg` to PNG.
+- Compares PNGs with pixel diff + SSIM.
+- Emits artifacts to:
+  - `tests/visual-headless/baselines/` (snapshots)
+  - `artifacts/visual-headless/` (actual/diff images + report)
+
+Useful focused run:
+```bash
+npm run test:visual:headless -- --fixtures=lilypond-01a-pitches-pitches,realworld-music21-bach-bwv1-6
+```
+
+Quick one-score inspection (writes SVG/PNG/report without a browser):
+```bash
+npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml
+npm run inspect:score -- --input=fixtures/conformance/realworld/realworld-music21-bach-bwv1-6.mxl
+```
+
+Optional reference diff for one score:
+```bash
+npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml --reference-png=tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png
+```
+
+One-score artifacts are emitted under `artifacts/score-inspection/<score-id>/`.
+
 If you see an executable-path mismatch (for example Playwright looks for `mac-x64` but only `mac-arm64` exists), reinstall from this repo environment:
 
 ```bash
@@ -92,17 +131,28 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run test:conformance:report`: run conformance execution and emit JSON/Markdown artifacts (diagnostic histograms + category rollups) into `artifacts/conformance/`.
 - `npm run test:visual`: run Playwright browser visual smoke tests.
 - `npm run test:visual:update`: update Playwright visual snapshot baselines.
+- `npm run test:visual:headless`: run browser-free visual regression checks (SVG->PNG + pixel/SSIM).
+- `npm run test:visual:headless:update`: refresh browser-free baseline images.
+- `npm run inspect:score -- --input=<path>`: inspect one score headlessly and emit SVG/PNG/report artifacts.
+- `npm run eval:run`: run layered evaluation report generation (`artifacts/evaluation/`).
+- `npm run vexflow:gaps:check`: validate VexFlow gap registry links and lifecycle metadata.
+- `npm run vexflow:gaps:brief`: generate upstream issue/PR briefing artifacts from the gap registry.
+- `npm run patches:apply`: apply `patch-package` patches (when present).
 - `npm run corpus:lilypond:sync`: refresh canonical LilyPond corpus manifest (`fixtures/corpus/lilypond-collated-v2.25.json`).
 - `npm run corpus:lilypond:import -- --cases 12a,14a`: import selected LilyPond cases into `fixtures/conformance/lilypond/`.
 - `npm run conformance:lilypond:promote`: bulk-import remaining LilyPond fixtures and auto-classify expected pass/fail from current parse/render behavior.
 - `npm run conformance:realworld:import`: import representative real-world `.mxl` samples into `fixtures/conformance/realworld/`.
-- `npm run demos:build`: build static demo HTML pages from `demos/scores/*.musicxml`.
+- `npm run demos:build`: build static demo HTML pages for full LilyPond conformance coverage plus selected complex real-world fixtures.
 - `npm run demos:serve`: build demos and serve them locally at `http://localhost:4173/`.
 
 ## Testkit utilities
 - `src/testkit/svg-collision.ts` provides headless SVG collision-audit helpers:
   - `extractSvgElementBounds(...)`
   - `detectSvgOverlaps(...)`
+- `src/testkit/notation-geometry.ts` provides notation-aware SVG quality probes:
+  - `collectNotationGeometry(...)`
+  - `detectNoteheadBarlineIntrusions(...)`
+  - `summarizeNotationGeometry(...)`
 - `src/testkit/conformance.ts` provides conformance loader + collision report plumbing:
   - `loadConformanceFixtures(...)`
   - `runConformanceCollisionAudit(...)`
@@ -143,7 +193,7 @@ Current staged conformance fixtures:
 - `fixtures/conformance/realworld/*.mxl` (M7A representative real-world samples: solo lead-sheet, vocal song, SATB chorale, chamber quartet incl. long-form stress sample, piano solo/sonata, orchestral excerpt)
 
 Visual sentinel coverage:
-- `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, `rhythm`, M4 `notation`, and M5 `layout` + `text`.
+- `tests/visual/conformance-sentinels.spec.ts` exercises browser rendering for active pass fixtures in `smoke`, `timewise`, `rhythm`, M4 `notation`, M5 `layout` + `text`, plus focused regression sentinels for `lilypond-01a-pitches-pitches` and `realworld-music21-bach-bwv1-6`.
 - Snapshot baselines are stored in:
   - `tests/visual/conformance-sentinels.spec.ts-snapshots/`
   - `tests/visual/render-visual.spec.ts-snapshots/`
@@ -182,11 +232,11 @@ Visual sentinel coverage:
 - `docs/planning/milestone-4.completed.md`
 - `docs/planning/milestone-5.completed.md`
 - `docs/planning/milestone-6.completed.md`
-- `docs/planning/milestone-7.md`
+- `docs/planning/milestone-7.completed.md`
 - `docs/planning/milestone-7A.completed.md`
-- `docs/planning/milestone-7B.md`
-- `docs/planning/milestone-7C.md`
-- `docs/planning/milestone-7D.md`
+- `docs/planning/milestone-7B.completed.md`
+- `docs/planning/milestone-7C.completed.md`
+- `docs/planning/milestone-7D.completed.md`
 - `docs/planning/feedback.md`
 - `docs/layout-heuristics.md`
 - `docs/modularization-decision.md`
@@ -195,5 +245,10 @@ Visual sentinel coverage:
 - `docs/playwright-tips.md`
 - `docs/lilypond-suite-tips.md`
 - `docs/evaluation-tips.md`
+- `docs/evaluation-runbook.md`
 - `docs/realworld-corpus-tips.md`
+- `docs/vexflow-gap-registry.md`
+- `docs/vexflow-upstream-playbook.md`
+- `docs/vexflow-upstream-sync-log.md`
+- `docs/release-hardening-checklist.md`
 - `ai-state.md` (dense agent handoff/context file)

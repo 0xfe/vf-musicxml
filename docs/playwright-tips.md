@@ -1,8 +1,10 @@
 # Playwright / Visual Test Tips
 
 ## Which path to use
+- Default visual regression in CI/headless hosts: use browser-free command `npm run test:visual:headless`.
+- Fast single-score triage path: `npm run inspect:score -- --input=<path-to-score.musicxml-or-.mxl>`.
 - Browser-required interactive checks in Codex: use Playwright MCP browser tools.
-- Repository visual test command (`npm run test:visual`): local Playwright CLI.
+- Browser snapshot suite (`npm run test:visual`): keep as selective sentinel/triage coverage.
 
 ## Local CLI setup required in this repo
 ```bash
@@ -23,9 +25,25 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 ```
 
 ## Test strategy in this repo
-- Treat visual tests as selective regression sentinels.
+- Treat browser snapshots as selective regression sentinels.
+- Prefer browser-free visual diffs for high-volume fixture checks.
 - Keep primary correctness checks headless (`test:unit`, `test:integration`, `test:svg`, `test:conformance`).
 - Prefer structural SVG assertions and collision audits before expanding screenshot baselines.
+
+## Browser-free visual pipeline
+```bash
+npm run test:visual:headless:update
+npm run test:visual:headless
+npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml
+```
+
+- Uses `resvg` for SVG-to-PNG rasterization (no Chromium).
+- Diffs with `pixelmatch` and computes SSIM.
+- Artifacts:
+  - baselines: `/Users/mo/git/musicxml/tests/visual-headless/baselines/`
+  - run outputs: `/Users/mo/git/musicxml/artifacts/visual-headless/`
+- Fixture list:
+  - `/Users/mo/git/musicxml/fixtures/evaluation/headless-visual-sentinels.json`
 
 ## Environment caveat (restricted sandboxes)
 - Some restricted macOS sandboxes can fail Chromium headless launch with:

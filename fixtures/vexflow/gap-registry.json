@@ -1,0 +1,34 @@
+{
+  "version": "2026-02-11",
+  "generated_at": "2026-02-11T00:00:00Z",
+  "entries": [
+    {
+      "id": "VF-GAP-001",
+      "title": "GraceNoteGroup beaming can throw on sparse grace clusters",
+      "lifecycle_stage": "reproduced",
+      "severity": "medium",
+      "owner": "musicxml-core",
+      "musicxml_fixture_ids": [
+        "advanced-m6-notation-baseline",
+        "lilypond-24a-gracenotes",
+        "lilypond-24h-gracenote-simultaneous"
+      ],
+      "diagnostic_codes": ["GRACE_NOTES_BEAMING_FAILED"],
+      "workaround_summary": "Renderer catches grace-note beaming failures and degrades to unbeamed grace notes with explicit diagnostics.",
+      "local_patch": {
+        "type": "wrapper",
+        "scope": "musicxml-renderer",
+        "path": "/Users/mo/git/musicxml/src/vexflow/render-notations.ts"
+      },
+      "upstream": {
+        "status": "planned",
+        "target_branch": "codex/vexflow-grace-beaming-fallback"
+      },
+      "tests": [
+        "/Users/mo/git/musicxml/tests/integration/grace-render-regression.test.ts",
+        "/Users/mo/git/musicxml/tests/conformance/execution.test.ts"
+      ],
+      "updated_at": "2026-02-11"
+    }
+  ]
+}

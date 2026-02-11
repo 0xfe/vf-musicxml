@@ -14,11 +14,12 @@ Milestones:
 - `milestone-4.completed.md`
 - `milestone-5.completed.md`
 - `milestone-6.completed.md`
-- `milestone-7.md`
+- `milestone-7.completed.md`
 - `milestone-7A.completed.md`
-- `milestone-7B.md`
-- `milestone-7C.md`
-- `milestone-7D.md`
+- `milestone-7B.completed.md`
+- `milestone-7C.completed.md`
+- `milestone-7D.completed.md`
+- `milestone-8.md`
 
 Convention:
 - Active milestone docs use `milestone-<id>.md`.
