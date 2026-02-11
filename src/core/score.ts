@@ -14,12 +14,35 @@ export interface Score {
 export interface ScoreDefaults {
   scalingMillimeters?: number;
   scalingTenths?: number;
+  pageWidth?: number;
+  pageHeight?: number;
+  pageMargins?: ScorePageMargins;
+  systemMargins?: ScoreSystemMargins;
+  systemDistance?: number;
+  topSystemDistance?: number;
+  staffDistance?: number;
+}
+
+/** Normalized page-margin values from MusicXML `<defaults><page-layout>`. */
+export interface ScorePageMargins {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+
+/** Normalized system-margin values from MusicXML `<system-layout><system-margins>`. */
+export interface ScoreSystemMargins {
+  left?: number;
+  right?: number;
 }
 
 /** Small metadata surface preserved from header elements. */
 export interface ScoreMetadata {
   workTitle?: string;
   movementTitle?: string;
+  headerLeft?: string;
+  headerRight?: string;
 }
 
 /** Normalized part identity from `<part-list>`. */
@@ -48,6 +71,9 @@ export interface Part {
 export interface Measure {
   index: number;
   numberLabel?: string;
+  /** Source MusicXML `<measure width="...">` hint in tenths, when provided. */
+  sourceWidthTenths?: number;
+  print?: MeasurePrint;
   effectiveAttributes: EffectiveAttributes;
   attributeChanges: AttributeEvent[];
   voices: VoiceTimeline[];
@@ -55,6 +81,15 @@ export interface Measure {
   harmonies?: HarmonyEvent[];
   barlines?: BarlineInfo[];
   barline?: BarlineInfo;
+}
+
+/** Print/layout directives attached to one measure start (MusicXML `<print>`). */
+export interface MeasurePrint {
+  newSystem?: boolean;
+  newPage?: boolean;
+  pageWidth?: number;
+  pageHeight?: number;
+  pageMargins?: ScorePageMargins;
 }
 
 /** Mid-measure attribute mutation captured at a tick offset. */
@@ -89,7 +124,11 @@ export interface KeySignatureInfo {
 export interface TimeSignatureInfo {
   beats: number;
   beatType: number;
+  symbol?: TimeSignatureSymbol;
 }
+
+/** MusicXML `<time symbol="...">` tokens used for time-signature glyph style. */
+export type TimeSignatureSymbol = 'normal' | 'common' | 'cut' | 'single-number' | 'note';
 
 /** Direction anchor currently used for words and tempo markings. */
 export interface DirectionEvent {
@@ -159,6 +198,12 @@ export interface NoteEvent extends Timed {
   kind: 'note';
   voice: string;
   staff?: number;
+  /** Source MusicXML `default-x` hint in tenths for this note onset, when provided. */
+  sourceDefaultXTenths?: number;
+  /** Source MusicXML `<stem>` token when explicitly authored. */
+  stemDirection?: 'up' | 'down';
+  /** Source MusicXML `<beam>` markers in score order. */
+  beams?: BeamInfo[];
   cue?: boolean;
   grace?: boolean;
   graceSlash?: boolean;
@@ -252,6 +297,15 @@ export interface TupletTimeModification {
   normalNotes: number;
   normalType?: string;
   actualType?: string;
+}
+
+/** Beam marker token parsed from MusicXML `<beam>` text payload. */
+export type BeamValue = 'begin' | 'continue' | 'end' | 'forward hook' | 'backward hook';
+
+/** Beam marker attached to one note event for authored beam-group reconstruction. */
+export interface BeamInfo {
+  number: number;
+  value: BeamValue;
 }
 
 /** Rest event with optional display positioning metadata. */

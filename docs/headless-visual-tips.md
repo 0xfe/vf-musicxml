@@ -39,6 +39,50 @@ npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitch
 - `geometrySummary.noteheadBarlineIntrusionCount`: fast containment sanity check.
 - `spacingSummary.firstToMedianOtherGapRatio`: opening-measure spacing consistency signal.
 
+## Golden proof-point auto-crop (system-aware)
+Use `autoCropActual.systems` in `/Users/mo/git/musicxml/fixtures/evaluation/golden-proofpoints.json` when comparing to excerpt references (for example first N systems of a page). This is more stable than ratio crops.
+
+Example:
+```json
+{
+  "id": "realworld-music21-bach-bwv1-6-8bars",
+  "autoCropActual": {
+    "systems": {
+      "stavesPerSystem": 5,
+      "startSystemIndex": 0,
+      "systemCount": 2,
+      "includeFullWidth": true,
+      "headerPadding": 120,
+      "paddingBottom": 14
+    }
+  }
+}
+```
+
+## Golden comparison alignment controls
+Use proof-point `normalization` options when the same excerpt is globally shifted but otherwise comparable.
+
+Example:
+```json
+{
+  "id": "realworld-music21-bach-bwv1-6-8bars",
+  "normalization": {
+    "trimWhitespace": true,
+    "trimThreshold": 248,
+    "trimPadding": 10,
+    "resizeActualToReference": true,
+    "resizeMode": "fit",
+    "alignByInkCentroid": true,
+    "maxAlignmentShift": 24,
+    "alignmentAxis": "x"
+  }
+}
+```
+
+Notes:
+- `alignmentAxis: "x"` is recommended for multi-system score excerpts to avoid over-correcting vertical spacing.
+- Golden report rows include `alignmentShiftX` / `alignmentShiftY` for fast triage.
+
 ## How it works
 - Parse + render with repo code (`parseMusicXMLAsync`, `renderToSVGPages`).
 - Extract root SVG from renderer page markup.
@@ -57,6 +101,7 @@ npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitch
 ## Thresholds
 - Default max mismatch ratio: `0.004`
 - Default min SSIM: `0.985`
+- Golden reports also include `structuralMismatchRatio` (ink-mask tolerant metric) for triage when glyph/font style differs between sources.
 
 Override example:
 ```bash

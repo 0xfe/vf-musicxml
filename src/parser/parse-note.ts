@@ -3,6 +3,8 @@ import type {
   BarlineEndingInfo,
   BarlineInfo,
   BarlineRepeatInfo,
+  BeamInfo,
+  BeamValue,
   ClefInfo,
   DirectionEvent,
   EffectiveAttributes,
@@ -15,6 +17,7 @@ import type {
   RestEvent,
   SlurEndpoint,
   TimedEvent,
+  TimeSignatureSymbol,
   TieEndpoint,
   TupletEndpoint,
   TupletTimeModification,
@@ -24,7 +27,7 @@ import { TICKS_PER_QUARTER } from './parse-constants.js';
 import type { ParseContext } from './parse-context.js';
 import { addDiagnostic } from './parse-context.js';
 import type { XmlNode } from './xml-ast.js';
-import { attribute, childrenOf, firstChild, parseOptionalInt, textOf } from './xml-utils.js';
+import { attribute, childrenOf, firstChild, parseOptionalFloat, parseOptionalInt, textOf } from './xml-utils.js';
 
 /**
  * Internal note parse representation.
@@ -68,6 +71,9 @@ export function parseNote(
   const graceNode = firstChild(noteNode, 'grace');
   const isGrace = !!graceNode;
   const isCue = !!firstChild(noteNode, 'cue');
+  const stemDirection = parseStemDirection(noteNode);
+  const beams = parseBeams(noteNode);
+  const sourceDefaultXTenths = parseOptionalFloat(attribute(noteNode, 'default-x'));
 
   const duration = parseDurationTicks(noteNode, effectiveAttributes, warnedMissingDivisions, ctx, 'note');
 
@@ -94,6 +100,9 @@ export function parseNote(
     kind: 'note',
     voice,
     staff,
+    sourceDefaultXTenths,
+    stemDirection,
+    beams: beams.length > 0 ? beams : undefined,
     cue: isCue,
     grace: isGrace,
     graceSlash: isGrace && attribute(graceNode, 'slash') === 'yes',
@@ -121,6 +130,52 @@ export function parseNote(
     event: noteEvent,
     warnedMissingDivisions: duration.warnedMissingDivisions
   };
+}
+
+/** Parse supported stem-direction tokens from `<stem>` for renderer parity. */
+function parseStemDirection(noteNode: XmlNode): NoteEvent['stemDirection'] {
+  const stem = textOf(firstChild(noteNode, 'stem'));
+  if (stem === 'up' || stem === 'down') {
+    return stem;
+  }
+  return undefined;
+}
+
+/** Parse supported `<beam number="...">token</beam>` markers. */
+function parseBeams(noteNode: XmlNode): BeamInfo[] {
+  const parsed: BeamInfo[] = [];
+  for (const beamNode of childrenOf(noteNode, 'beam')) {
+    const number = parseOptionalInt(attribute(beamNode, 'number')) ?? 1;
+    const value = parseBeamValue(textOf(beamNode));
+    if (!value) {
+      continue;
+    }
+
+    parsed.push({
+      number,
+      value
+    });
+  }
+
+  return parsed;
+}
+
+/** Normalize beam text tokens to the supported beam-value union. */
+function parseBeamValue(raw: string | undefined): BeamValue | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  switch (raw) {
+    case 'begin':
+    case 'continue':
+    case 'end':
+    case 'forward hook':
+    case 'backward hook':
+      return raw;
+    default:
+      return undefined;
+  }
 }
 
 /** Parse a direction node into words/tempo metadata anchored at an offset. */
@@ -542,8 +597,9 @@ export function parseAttributeUpdate(node: XmlNode, ctx: ParseContext): Partial<
   if (timeNode) {
     const beats = parseOptionalInt(textOf(firstChild(timeNode, 'beats')));
     const beatType = parseOptionalInt(textOf(firstChild(timeNode, 'beat-type')));
+    const symbol = normalizeTimeSignatureSymbol(attribute(timeNode, 'symbol'));
     if (beats && beatType) {
-      update.timeSignature = { beats, beatType };
+      update.timeSignature = { beats, beatType, symbol };
     } else {
       addDiagnostic(
         ctx,
@@ -579,6 +635,26 @@ export function parseAttributeUpdate(node: XmlNode, ctx: ParseContext): Partial<
   }
 
   return update;
+}
+
+/** Normalize MusicXML `<time symbol>` tokens into score-model enum values. */
+function normalizeTimeSignatureSymbol(value: string | undefined): TimeSignatureSymbol | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === 'normal' ||
+    normalized === 'common' ||
+    normalized === 'cut' ||
+    normalized === 'single-number' ||
+    normalized === 'note'
+  ) {
+    return normalized;
+  }
+
+  return undefined;
 }
 
 /** Convert MusicXML duration units into canonical ticks with lenient fallbacks. */

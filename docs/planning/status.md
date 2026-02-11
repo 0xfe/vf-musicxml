@@ -6,14 +6,14 @@ This file is the current snapshot of planning state. Update this first as milest
 
 - Last updated: 2026-02-11 (US)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active for pagination/publishing-layout design and delivery.
+- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress.
 - Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
 
 ### Next step when execution continues:
   1. Continue M8B: extend geometry rule packs beyond current spacing/intrusion tooling (presence + justification + text clearances).
   2. Continue M8C: calibrate golden excerpt alignment and thresholds, then expand coverage from proof-points to broader fixture waves.
   3. Execute M9A/M9B: land style rule catalog and wire style diagnostics into deterministic quality gates.
-  4. Start M10A/M10B: implement first-class pagination API and page/system layout engine (paginated default + continuous mode support).
+  4. Continue M10C/M10D: improve page-level fidelity (system width calibration + print-geometry alignment), reduce Bach proof-point mismatch, and promote proof-point policy from advisory toward blocking.
 
 ## Milestone progress:
 
@@ -33,7 +33,7 @@ This file is the current snapshot of planning state. Update this first as milest
 | M7D | VexFlow Gap Upstreaming + Release Hardening | Completed | VexFlow gap registry + validation tooling, upstream brief generation, sync log, and release-hardening checklist are in place and test-backed. |
 | M8 | Golden-Driven Visual Quality Program | In Progress | M8A LilyPond golden mapping baseline landed (156 fixtures; v2.24 primary + explicit v2.25 fallback tags). M8B first slice landed: first-measure spacing normalization for `01a` plus deterministic spacing-ratio tooling. |
 | M9 | Engraving Style Fidelity Program | In Progress | New style-focused milestone created with source-linked rulebook, proof-point fixtures, deterministic style-gate plan, and wave-based burndown checklist. |
-| M10 | Pagination + Publishing Layout | In Progress | New milestone opened for first-class pagination API, system/page breaking, title/part-label/page-number support, and golden comparison parity against page-oriented references. |
+| M10 | Pagination + Publishing Layout | In Progress | M10A/M10B baseline landed (paginated default, continuous mode fallback, system/page planning, multi-page SVG output). M10C/M10D quality/fidelity hardening remains active. |
 
 
 
@@ -103,3 +103,21 @@ This file is the current snapshot of planning state. Update this first as milest
   - Implemented M8C initial headless golden comparison runner (`npm run test:golden`, `scripts/run-golden-comparison.mjs`) with fixture-level thresholds, blocking/advisory policy, excerpt crop support, and artifact reports under `artifacts/golden-comparison/`.
   - Added first real-world proof-point golden fixture (`realworld-music21-bach-bwv1-6-8bars`) using `fixtures/images/bwv-1.6-8bars.png`; current advisory failure establishes baseline mismatch evidence prior to pagination/title/label support.
   - Opened pagination/publishing-layout milestone (`docs/planning/milestone-10.md`) to deliver paginated-default rendering, continuous-mode fallback, and page-level score metadata elements (title, instrument labels, page numbers).
+  - Implemented M10 baseline renderer API/layout engine: paginated default mode, horizontal-continuous fallback, deterministic system/page planning, part labels at system starts, and multi-page SVG output.
+  - Added deterministic SVG page background rect injection (`mx-page-background`) to eliminate transparent/black viewer artifacts in headless/browser screenshot workflows.
+  - Added regression assertions for page-background presence in renderer integration tests and revalidated render-quality regression suites.
+  - Added page-window-aware spanner rendering checks so off-window spanners no longer emit false `SPANNER_ANCHOR_NOT_RENDERED` warnings in paginated mode.
+  - Added metadata fallback parsing from centered MusicXML credit words so title/page-number rendering works for real-world files lacking explicit `<work-title>`.
+  - Added parser + renderer support for MusicXML `<print new-system/new-page>` directives and validated forced system/page breaks with new integration tests.
+  - Re-ran Bach proof-point inspection and golden comparison after break/title/spanner updates; render diagnostics are now clean, while advisory mismatch remains (`mismatchRatio=0.129628`, `ssim=0.288110`) and still requires M10D spacing/geometry tuning.
+  - Added geometry-driven proof-point auto-crop support (`autoCropActual.systems`) in the golden runner and switched Bach proof-point config from brittle ratio crop to system-window crop.
+  - Re-ran Bach proof-point with system-window auto-crop baseline (`mismatchRatio=0.214865`, `ssim=0.189070`, advisory fail); next M10D work will focus on alignment/region metrics and spacing calibration rather than manual crop tuning.
+  - Added MusicXML `measure@width` capture + renderer weighted system-column planning from source width hints; Bach spacing ratio improved (`1.173 -> 1.1411`) with clean diagnostics, but proof-point remains advisory fail (`mismatchRatio=0.214798`, `ssim=0.192180`).
+  - Added MusicXML defaults `system-layout/system-margins` parsing + paginated layout usage, improving Bach proof-point mismatch further (`0.214798 -> 0.203193`) while preserving clean render diagnostics.
+  - Added structural mismatch reporting in headless golden comparison output (`report.json`/`report.md`) to separate style/glyph drift from raw pixel mismatch during M10D calibration.
+  - Added parser/model support for MusicXML note-level `default-x` and explicit `<stem>` direction metadata to preserve source engraving intent for later M10D spacing/stem parity work.
+  - Added renderer stem-direction parity path (`stem_direction` mapping + beam generation with maintained stem directions) and associated deterministic parser/unit/integration coverage.
+  - Added parser/model support for authored MusicXML beam markers (`<beam number=\"...\">`) and renderer preference for source beam grouping (level-1 begin/continue/end) before auto-beam fallback.
+  - Added optional centroid-based alignment controls to headless visual diffs (`alignByInkCentroid`, `maxAlignmentShift`, `alignmentAxis`) and wired proof-point normalization support into `test:golden`.
+  - Extended golden proof-point reports with alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for triage, then constrained Bach proof-point alignment to horizontal-only (`alignmentAxis: "x"`).
+  - Fixed beaming regression where flags were still visible on beamed notes by preparing beam groups before `voice.draw()`, then drawing prepared beams post-voice render; added deterministic conformance gate coverage for expected-pass flag/beam overlaps (`expectedPassFlagBeamOverlapCount`).

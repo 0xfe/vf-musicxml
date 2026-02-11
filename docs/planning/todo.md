@@ -53,6 +53,7 @@ Status legend:
   - M7B landed: conformance reports now emit quality summaries and fixture-level metrics (collision severity, spacing floors, overflow/clipping, spanner geometry checks).
   - Added notation-geometry intrusion metrics (`noteheadBarlineIntrusionCount`) and hooked them into `Q6` layout scoring to catch measure bleed regressions automatically.
   - Added explicit regression harness for beam presence and barline intrusion checks (`tests/integration/render-quality-regressions.test.ts`).
+  - Added deterministic flag/beam overlap scoring and expected-pass gate (`expectedPassFlagBeamOverlapCount == 0`) in conformance execution to catch beam-suppression regressions where flags remain visible on beamed notes.
   - Added deterministic measure-spacing summaries (`summarizeMeasureSpacingByBarlines`) and regression ratio checks so first-measure compression bugs are automatically detected.
   - Removed noisy `MEASURE_LAYOUT_OVERFLOW` warnings that produced false positives; geometry containment/intrusion checks now act as the reliable blocking signal.
   - M7C landed: layered evaluation runner (`npm run eval:run`) with split-aware deterministic gates, fail-fast classifier outputs, and optional perceptual/model layers with versioned configs/prompts.
@@ -214,11 +215,20 @@ Status legend:
 
 ### R-020: Missing first-class pagination/page metadata support blocks PDF/image parity
 - Priority: P0
-- Status: OPEN
+- Status: MITIGATING
 - Risk: Without paginated rendering (systems/pages) and publishing metadata (title/instrument labels/page numbers), real-world score comparisons remain low-signal and quality improvements cannot be validated against canonical page-oriented references.
 - Mitigation plan:
-  - Execute M10 (pagination + publishing layout) with paginated default and continuous-mode fallback.
-  - Add proof-point parity gates for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery.
+  - M10 baseline landed: paginated default rendering, continuous-mode fallback, system/page planning, and multi-page output.
+  - M10 baseline landed: part labels and header/footer/title/page-number hooks plus deterministic SVG page background rects for stable screenshot pipelines.
+  - M10 baseline landed: parser + renderer support for MusicXML `<print new-system/new-page>` directives so system/page starts follow source break hints.
+  - M10 baseline landed: paginated spanner pass now suppresses off-window false positives (`SPANNER_ANCHOR_NOT_RENDERED`) in real-world proof-points.
+  - M8C/M10D update: golden proof-point runner now supports deterministic system-window cropping (`autoCropActual.systems`) to reduce manual ratio-crop drift during Bach parity tuning.
+  - M10D update: parser + renderer now consume defaults `system-layout/system-margins`, reducing system-width drift in Bach proof-point.
+  - M10D update: golden reports now include structural mismatch metrics for triage (raw pixel mismatch remains primary configured threshold).
+  - M10D update: parser/model now captures note-level source default-x and explicit stem direction metadata; stem-direction parity is now applied in rendering/beaming.
+  - M10D update: parser/model now captures authored beam markers and renderer prefers source beam-group topology before auto-beam fallback.
+  - M10D update: headless golden comparisons now support optional centroid alignment controls and emit alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for proof-point triage.
+  - Continue proof-point parity tuning for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery (currently advisory fail).
   - Add deterministic checks for header/footer/label collision and page-break stability.
 - Close criteria:
   - Paginated renderer API and publishing metadata elements are implemented and proof-point parity thresholds are met.

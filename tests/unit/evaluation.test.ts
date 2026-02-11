@@ -37,6 +37,8 @@ function makeResult(params: {
         noteheadCount: 10,
         stemCount: 10,
         beamCount: 0,
+        flagCount: 0,
+        flagBeamOverlapCount: 0,
         tieCount: 0,
         textCount: 0,
         minimumNoteheadGap: 8,
@@ -84,7 +86,9 @@ describe('evaluation deterministic split utilities', () => {
         expectedPassDimensionAverages: { Q1: 4, Q2: 4, Q3: 4, Q4: 4, Q5: 4, Q6: 4, Q7: 4 },
         expectedPassCatastrophicFixtureIds: [],
         expectedPassCriticalCollisionFixtureIds: [],
-        expectedPassCriticalCollisionCount: 0
+        expectedPassCriticalCollisionCount: 0,
+        expectedPassFlagBeamOverlapFixtureIds: [],
+        expectedPassFlagBeamOverlapCount: 0
       },
       results: [
         makeResult({ fixtureId: 'a', category: 'smoke', expected: 'pass', observed: 'pass', weightedScore: 4.8 }),

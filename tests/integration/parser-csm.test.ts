@@ -85,6 +85,104 @@ describe('parser CSM transformation', () => {
     expect(measure?.voices[1]?.events[0]?.offsetTicks).toBe(0);
   });
 
+  it('captures MusicXML measure width hints for layout planning', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1" width="120">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+      </note>
+    </measure>
+    <measure number="2" width="360">
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml);
+    const measures = result.score?.parts[0]?.measures;
+
+    expect(measures?.[0]?.sourceWidthTenths).toBe(120);
+    expect(measures?.[1]?.sourceWidthTenths).toBe(360);
+  });
+
+  it('captures MusicXML note default-x hints for source spacing alignment', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note default-x="15">
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <stem>up</stem>
+        <beam number="1">begin</beam>
+      </note>
+      <note default-x="92">
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <stem>down</stem>
+        <beam number="1">end</beam>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+      <note default-x="211">
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml);
+    const events = result.score?.parts[0]?.measures[0]?.voices[0]?.events;
+
+    expect(events?.[0]?.kind).toBe('note');
+    expect(events?.[1]?.kind).toBe('note');
+    expect(events?.[2]?.kind).toBe('note');
+    expect(events?.[3]?.kind).toBe('note');
+
+    if (
+      events?.[0]?.kind === 'note' &&
+      events?.[1]?.kind === 'note' &&
+      events?.[2]?.kind === 'note' &&
+      events?.[3]?.kind === 'note'
+    ) {
+      expect(events[0].sourceDefaultXTenths).toBe(15);
+      expect(events[0].stemDirection).toBe('up');
+      expect(events[0].beams).toEqual([{ number: 1, value: 'begin' }]);
+      expect(events[1].sourceDefaultXTenths).toBe(92);
+      expect(events[1].stemDirection).toBe('down');
+      expect(events[1].beams).toEqual([{ number: 1, value: 'end' }]);
+      expect(events[2].sourceDefaultXTenths).toBeUndefined();
+      expect(events[2].stemDirection).toBeUndefined();
+      expect(events[2].beams).toBeUndefined();
+      expect(events[3].sourceDefaultXTenths).toBe(211);
+    }
+  });
+
   it('normalizes chord notes into notes[] on a single NoteEvent', () => {
     const xml = `
 <score-partwise version="4.0">
@@ -367,6 +465,217 @@ describe('parser CSM transformation', () => {
     expect(p1?.groupPath).toEqual(['1:brace']);
     expect(p2?.groupPath).toEqual(['1:brace']);
     expect(p3?.groupPath).toBeUndefined();
+  });
+
+  it('falls back to centered credit-words for metadata title when work-title is absent', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <credit><credit-words justify="left" font-size="6">Arranger Note</credit-words></credit>
+  <credit><credit-words justify="center" font-size="14" default-y="1200">Credit Title</credit-words></credit>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.metadata?.workTitle).toBe('Credit Title');
+  });
+
+  it('prefers explicit work-title metadata over credit-word fallbacks', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <work><work-title>Explicit Work Title</work-title></work>
+  <credit><credit-words justify="center" font-size="18">Credit Title</credit-words></credit>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.metadata?.workTitle).toBe('Explicit Work Title');
+  });
+
+  it('extracts top-side credit words into metadata header fields', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <credit><credit-words justify="center" font-size="18" default-y="1450">Main Title</credit-words></credit>
+  <credit><credit-words justify="left" font-size="8" default-y="1320">Harmonized by J.S. Bach</credit-words></credit>
+  <credit><credit-words justify="right" font-size="8" default-y="1320">jsbchorales.net</credit-words></credit>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.metadata?.workTitle).toBe('Main Title');
+    expect(result.score?.metadata?.headerLeft).toBe('Harmonized by J.S. Bach');
+    expect(result.score?.metadata?.headerRight).toBe('jsbchorales.net');
+  });
+
+  it('preserves multiline credit words for header metadata fields', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <credit><credit-words justify="center" font-size="18" default-y="1450">Main Title</credit-words></credit>
+  <credit><credit-words justify="right" font-size="8" default-y="1320">PDF ©2004 Margaret Greentree
+www.jsbchorales.net</credit-words></credit>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.metadata?.headerRight).toBe('PDF ©2004 Margaret Greentree\nwww.jsbchorales.net');
+  });
+
+  it('uses credit default-x with defaults page width to classify side headers', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <defaults>
+    <page-layout><page-width>1600</page-width></page-layout>
+  </defaults>
+  <credit><credit-words default-x="800" font-size="16">Main Title</credit-words></credit>
+  <credit><credit-words default-x="180" font-size="8">Left Header</credit-words></credit>
+  <credit><credit-words default-x="1420" font-size="8">Right Header</credit-words></credit>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.metadata?.workTitle).toBe('Main Title');
+    expect(result.score?.metadata?.headerLeft).toBe('Left Header');
+    expect(result.score?.metadata?.headerRight).toBe('Right Header');
+  });
+
+  it('parses MusicXML time signature symbol metadata', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time symbol="common"><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.parts[0]?.measures[0]?.effectiveAttributes.timeSignature?.symbol).toBe('common');
+  });
+
+  it('parses defaults page and spacing layout values for renderer planning', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <defaults>
+    <scaling><millimeters>7</millimeters><tenths>40</tenths></scaling>
+    <page-layout>
+      <page-width>1500</page-width>
+      <page-height>2000</page-height>
+      <page-margins type="both">
+        <left-margin>100</left-margin>
+        <right-margin>80</right-margin>
+        <top-margin>70</top-margin>
+        <bottom-margin>60</bottom-margin>
+      </page-margins>
+    </page-layout>
+    <system-layout>
+      <system-margins><left-margin>12</left-margin><right-margin>4</right-margin></system-margins>
+      <system-distance>140</system-distance>
+      <top-system-distance>130</top-system-distance>
+    </system-layout>
+    <staff-layout><staff-distance>52</staff-distance></staff-layout>
+  </defaults>
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.score?.defaults?.pageWidth).toBe(1500);
+    expect(result.score?.defaults?.pageHeight).toBe(2000);
+    expect(result.score?.defaults?.pageMargins?.left).toBe(100);
+    expect(result.score?.defaults?.pageMargins?.top).toBe(70);
+    expect(result.score?.defaults?.systemMargins?.left).toBe(12);
+    expect(result.score?.defaults?.systemMargins?.right).toBe(4);
+    expect(result.score?.defaults?.systemDistance).toBe(140);
+    expect(result.score?.defaults?.topSystemDistance).toBe(130);
+    expect(result.score?.defaults?.staffDistance).toBe(52);
+  });
+
+  it('parses measure-level print break directives for new systems and pages', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+    <measure number="2">
+      <print new-system="yes">
+        <page-layout>
+          <page-width>720</page-width>
+          <page-height>480</page-height>
+          <page-margins type="both">
+            <left-margin>22</left-margin>
+            <right-margin>18</right-margin>
+            <top-margin>24</top-margin>
+            <bottom-margin>20</bottom-margin>
+          </page-margins>
+        </page-layout>
+      </print>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+    <measure number="3">
+      <print new-page="yes" />
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    const measures = result.score?.parts[0]?.measures ?? [];
+    expect(result.score).toBeDefined();
+    expect(measures[1]?.print?.newSystem).toBe(true);
+    expect(measures[2]?.print?.newPage).toBe(true);
+    expect(measures[1]?.print?.pageWidth).toBe(720);
+    expect(measures[1]?.print?.pageHeight).toBe(480);
+    expect(measures[1]?.print?.pageMargins?.left).toBe(22);
+    expect(measures[1]?.print?.pageMargins?.right).toBe(18);
   });
 
   it('emits a warning for part-group stop markers without matching start markers', () => {

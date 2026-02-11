@@ -124,6 +124,7 @@ This document defines the execution strategy for making LilyPond + selected real
   - direct fixture-vs-golden comparison (not self-generated baselines),
   - per-fixture thresholds and blocking/advisory status,
   - crop support for excerpt-level references,
+  - geometry-driven auto-crop support (`autoCropActual.systems`) to lock comparisons to deterministic system windows instead of brittle fixed ratios,
   - artifact bundle output under `artifacts/golden-comparison/` (`actual`, `expected`, `diff`, JSON/markdown report).
 - Added proof-point manifest (`fixtures/evaluation/golden-proofpoints.json`) with first real-world advisory fixture:
   - `realworld-music21-bach-bwv1-6-8bars` using `fixtures/images/bwv-1.6-8bars.png`.

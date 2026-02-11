@@ -6,9 +6,11 @@ import type {
   EffectiveAttributes,
   HarmonyEvent,
   Measure,
+  MeasurePrint,
   NoteEvent,
   Part,
   PartDefinition,
+  ScorePageMargins,
   Score,
   TimedEvent,
   VoiceTimeline
@@ -36,7 +38,7 @@ import {
 import { normalizeTimewiseToPartwise } from './parse-timewise.js';
 import { buildSpanners } from './parse-spanners.js';
 import { parseXmlToAst, XmlParseError, type XmlNode } from './xml-ast.js';
-import { attribute, childrenOf, firstChild } from './xml-utils.js';
+import { attribute, childrenOf, firstChild, parseOptionalFloat, textOf } from './xml-utils.js';
 
 /** Parser entry options for source naming and strictness mode. */
 export interface ParserOptions {
@@ -77,6 +79,7 @@ export function parseScorePartwise(xmlText: string, options: ParserOptions = {})
     return { diagnostics: ctx.diagnostics };
   }
 
+  const defaults = parseDefaults(rootResult);
   const score: Score = {
     id: options.sourceName ?? 'score-1',
     source: {
@@ -87,8 +90,8 @@ export function parseScorePartwise(xmlText: string, options: ParserOptions = {})
     partList,
     parts,
     spanners,
-    defaults: parseDefaults(rootResult),
-    metadata: parseMetadata(rootResult)
+    defaults,
+    metadata: parseMetadata(rootResult, defaults)
   };
 
   return {
@@ -192,8 +195,10 @@ function parseMeasure(
   const effectiveAttributes = cloneAttributes(inherited);
   let streamCursorTicks = 0;
   let barline: BarlineInfo | undefined;
+  let print: MeasurePrint | undefined;
   let warnedMissingDivisions = false;
   const barlines: BarlineInfo[] = [];
+  const sourceWidthTenths = parseOptionalFloat(attribute(measureNode, 'width'));
 
   // Measure children are read in document order while we maintain
   // a single stream cursor that backup/forward can mutate.
@@ -301,6 +306,10 @@ function parseMeasure(
         barline = mergeBarlineInfo(barline, parsedBarline);
         break;
       }
+      case 'print': {
+        print = mergeMeasurePrint(print, parseMeasurePrint(child));
+        break;
+      }
       case 'harmony': {
         harmonies.push(parseHarmony(child, streamCursorTicks));
         break;
@@ -346,6 +355,8 @@ function parseMeasure(
   return {
     index,
     numberLabel: attribute(measureNode, 'number'),
+    sourceWidthTenths: Number.isFinite(sourceWidthTenths) ? sourceWidthTenths : undefined,
+    print,
     effectiveAttributes,
     attributeChanges,
     voices: voiceTimelines,
@@ -353,6 +364,70 @@ function parseMeasure(
     harmonies,
     barlines: barlines.length > 0 ? barlines : undefined,
     barline
+  };
+}
+
+/** Parse one `<print>` node into normalized measure-level break directives. */
+function parseMeasurePrint(printNode: XmlNode): MeasurePrint {
+  const pageLayoutNode = firstChild(printNode, 'page-layout');
+  const pageWidth = parseOptionalFloat(textOf(firstChild(pageLayoutNode, 'page-width')));
+  const pageHeight = parseOptionalFloat(textOf(firstChild(pageLayoutNode, 'page-height')));
+
+  return {
+    newSystem: attribute(printNode, 'new-system') === 'yes' || undefined,
+    newPage: attribute(printNode, 'new-page') === 'yes' || undefined,
+    pageWidth: Number.isFinite(pageWidth) ? pageWidth : undefined,
+    pageHeight: Number.isFinite(pageHeight) ? pageHeight : undefined,
+    pageMargins: parsePrintPageMargins(pageLayoutNode)
+  };
+}
+
+/** Merge multiple `<print>` nodes within one measure into one summary payload. */
+function mergeMeasurePrint(existing: MeasurePrint | undefined, incoming: MeasurePrint): MeasurePrint {
+  if (!existing) {
+    return incoming;
+  }
+
+  return {
+    newSystem: existing.newSystem || incoming.newSystem || undefined,
+    newPage: existing.newPage || incoming.newPage || undefined,
+    pageWidth: incoming.pageWidth ?? existing.pageWidth,
+    pageHeight: incoming.pageHeight ?? existing.pageHeight,
+    pageMargins: incoming.pageMargins ?? existing.pageMargins
+  };
+}
+
+/** Parse `<print><page-layout><page-margins>` values when present. */
+function parsePrintPageMargins(pageLayoutNode: XmlNode | undefined): ScorePageMargins | undefined {
+  if (!pageLayoutNode) {
+    return undefined;
+  }
+
+  const marginNodes = childrenOf(pageLayoutNode, 'page-margins');
+  if (marginNodes.length === 0) {
+    return undefined;
+  }
+
+  const preferred =
+    marginNodes.find((node) => (attribute(node, 'type') ?? '').toLowerCase() === 'both') ??
+    marginNodes[0];
+  if (!preferred) {
+    return undefined;
+  }
+
+  const left = parseOptionalFloat(textOf(firstChild(preferred, 'left-margin')));
+  const right = parseOptionalFloat(textOf(firstChild(preferred, 'right-margin')));
+  const top = parseOptionalFloat(textOf(firstChild(preferred, 'top-margin')));
+  const bottom = parseOptionalFloat(textOf(firstChild(preferred, 'bottom-margin')));
+  if (left === undefined && right === undefined && top === undefined && bottom === undefined) {
+    return undefined;
+  }
+
+  return {
+    left,
+    right,
+    top,
+    bottom
   };
 }
 

@@ -6,6 +6,7 @@ import {
   renderToSVGPages,
   type Score
 } from '../../src/public/index.js';
+import { collectNotationGeometry } from '../../src/testkit/notation-geometry.js';
 
 const MINIMAL_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -353,6 +354,7 @@ describe('public API renderer placeholder', () => {
     const result = renderToSVGPages(score);
     expect(result.pages.length).toBe(1);
     expect(result.pages[0]).toContain('<svg');
+    expect(result.pages[0]).toContain('class="mx-page-background"');
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 
@@ -451,8 +453,512 @@ describe('public API renderer placeholder', () => {
 
     const result = renderToSVGPages(score);
     expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('class="mx-page-background"');
     expect(result.pages[0]).toContain('width="3"');
     expect(result.diagnostics.some((d) => d.code === 'MULTI_PART_NOT_SUPPORTED_IN_M2')).toBe(false);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('supports paginated headers, page numbers, and system labels via layout options', () => {
+    const measures = Array.from({ length: 4 }, (_, index) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    }));
+
+    const score: Score = {
+      id: 'paginated-layout-stub',
+      ticksPerQuarter: 480,
+      metadata: {
+        workTitle: 'Pagination Test'
+      },
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [
+        {
+          id: 'P1',
+          measures
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 680,
+          height: 240
+        },
+        system: {
+          targetMeasuresPerSystem: 1,
+          minSystemGap: 24
+        },
+        labels: {
+          showPartNames: true,
+          showPartAbbreviations: true,
+          repeatOnSystemBreak: true
+        },
+        headerFooter: {
+          showTitle: true,
+          showPageNumber: true
+        }
+      }
+    });
+
+    expect(result.pages.length).toBeGreaterThan(1);
+    expect(result.pages.every((page) => page.includes('class="mx-page-background"'))).toBe(true);
+    expect(result.pages[0]).toContain('Pagination Test');
+    expect(result.pages[0]).toContain('Music');
+    expect(result.pages[0]).toContain('1 /');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('uses score metadata header fields when explicit header options are omitted', () => {
+    const score: Score = {
+      id: 'metadata-header-defaults',
+      ticksPerQuarter: 480,
+      metadata: {
+        workTitle: 'Metadata Header Title',
+        headerLeft: 'Harmonized by J.S. Bach',
+        headerRight: 'jsbchorales.net'
+      },
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [
+            {
+              index: 0,
+              effectiveAttributes: {
+                staves: 1,
+                clefs: [{ staff: 1, sign: 'G', line: 2 }],
+                timeSignature: { beats: 4, beatType: 4 },
+                keySignature: { fifths: 0 },
+                divisions: 1
+              },
+              attributeChanges: [],
+              directions: [],
+              voices: [
+                {
+                  id: '1',
+                  events: [
+                    {
+                      kind: 'note',
+                      voice: '1',
+                      offsetTicks: 0,
+                      durationTicks: 480,
+                      notes: [{ pitch: { step: 'C', octave: 4 } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 700,
+          height: 260
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('Harmonized by J.S. Bach');
+    expect(result.pages[0]).toContain('jsbchorales.net');
+    expect(result.pages[0]).toContain('Metadata Header Title');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('renders multiline header metadata as separate lines', () => {
+    const score: Score = {
+      id: 'multiline-header-defaults',
+      ticksPerQuarter: 480,
+      metadata: {
+        workTitle: 'Metadata Header Title',
+        headerRight: 'Line One\nLine Two'
+      },
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [
+            {
+              index: 0,
+              effectiveAttributes: {
+                staves: 1,
+                clefs: [{ staff: 1, sign: 'G', line: 2 }],
+                timeSignature: { beats: 4, beatType: 4 },
+                keySignature: { fifths: 0 },
+                divisions: 1
+              },
+              attributeChanges: [],
+              directions: [],
+              voices: [
+                {
+                  id: '1',
+                  events: [
+                    {
+                      kind: 'note',
+                      voice: '1',
+                      offsetTicks: 0,
+                      durationTicks: 480,
+                      notes: [{ pitch: { step: 'C', octave: 4 } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 700,
+          height: 320
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('Line One');
+    expect(result.pages[0]).toContain('Line Two');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('honors MusicXML print new-page directives when planning paginated output', () => {
+    const buildMeasure = (index: number, print?: { newPage?: boolean }) => ({
+      index,
+      print,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'forced-page-break-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music', abbreviation: 'M' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [buildMeasure(0), buildMeasure(1, { newPage: true }), buildMeasure(2)]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 900,
+          height: 700
+        },
+        system: {
+          targetMeasuresPerSystem: 3
+        },
+        labels: {
+          showPartNames: true,
+          showPartAbbreviations: true,
+          repeatOnSystemBreak: true
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(2);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('uses initial print page-layout dimensions when explicit layout page options are absent', () => {
+    const buildMeasure = (index: number, print?: { pageWidth?: number; pageHeight?: number }) => ({
+      index,
+      print,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'print-page-layout-override-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music', abbreviation: 'M' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [buildMeasure(0, { pageWidth: 710, pageHeight: 360 }), buildMeasure(1), buildMeasure(2)]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated'
+      }
+    });
+
+    expect(result.pages.length).toBeGreaterThan(0);
+    expect(result.pages[0]).toContain('width="710"');
+    expect(result.pages[0]).toContain('height="360"');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('respects defaults system margins without shrinking content for label columns', () => {
+    const buildMeasure = (index: number) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'system-margin-layout-stub',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 420,
+        pageMargins: { left: 100, right: 80, top: 40, bottom: 40 },
+        systemMargins: { left: 12, right: 8 }
+      },
+      partList: [{ id: 'P1', name: 'Music', abbreviation: 'M' }],
+      parts: [{ id: 'P1', measures: [buildMeasure(0), buildMeasure(1)] }],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        system: {
+          targetMeasuresPerSystem: 2
+        },
+        labels: {
+          showPartNames: true,
+          showPartAbbreviations: true,
+          repeatOnSystemBreak: true,
+          labelWidth: 120
+        }
+      }
+    });
+
+    const geometry = collectNotationGeometry(result.pages[0] ?? '');
+    const barlineCenters = [...new Set(
+      geometry.barlines
+        .map((barline) => Math.round((barline.bounds.x + barline.bounds.width / 2) * 100) / 100)
+    )].sort((left, right) => left - right);
+
+    expect(barlineCenters.length).toBeGreaterThanOrEqual(2);
+    const contentSpan = (barlineCenters[barlineCenters.length - 1] ?? 0) - (barlineCenters[0] ?? 0);
+    // 900 - 100 - 80 - 12 - 8 = 700 expected content width.
+    expect(contentSpan).toBeGreaterThan(695);
+    expect(contentSpan).toBeLessThan(705);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('uses MusicXML measure width hints to weight paginated system columns', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1" width="120">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2" width="360">
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml);
+    expect(parsed.score).toBeDefined();
+
+    const result = renderToSVGPages(parsed.score as Score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 900,
+          height: 420
+        },
+        system: {
+          targetMeasuresPerSystem: 2
+        }
+      }
+    });
+
+    const geometry = collectNotationGeometry(result.pages[0] ?? '');
+    const barlineCenters = [...new Set(
+      geometry.barlines
+        .map((barline) => Math.round((barline.bounds.x + barline.bounds.width / 2) * 100) / 100)
+    )].sort((left, right) => left - right);
+
+    expect(barlineCenters.length).toBeGreaterThanOrEqual(3);
+    const firstMeasureWidth = (barlineCenters[1] ?? 0) - (barlineCenters[0] ?? 0);
+    const secondMeasureWidth = (barlineCenters[2] ?? 0) - (barlineCenters[1] ?? 0);
+    expect(secondMeasureWidth).toBeGreaterThan(firstMeasureWidth * 1.6);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('honors MusicXML print new-system directives within a page', () => {
+    const buildMeasure = (index: number, print?: { newSystem?: boolean }) => ({
+      index,
+      print,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'forced-system-break-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music', abbreviation: 'M' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [buildMeasure(0), buildMeasure(1, { newSystem: true }), buildMeasure(2)]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        page: {
+          width: 900,
+          height: 700
+        },
+        system: {
+          targetMeasuresPerSystem: 3
+        },
+        labels: {
+          showPartNames: true,
+          showPartAbbreviations: true,
+          repeatOnSystemBreak: true
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('>Music<');
+    expect(result.pages[0]).toContain('>M<');
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 });

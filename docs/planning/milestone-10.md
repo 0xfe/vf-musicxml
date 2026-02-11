@@ -43,8 +43,8 @@ This milestone introduces first-class page layout so rendered output can be comp
 - Document migration path from `paginate` boolean to `layout` object.
 
 Exit checklist:
-- [ ] API spec and option defaults documented.
-- [ ] Compatibility behavior test-backed.
+- [x] API spec and option defaults documented.
+- [x] Compatibility behavior test-backed.
 
 ## Track M10B: Pagination Engine
 - Implement system breaking across measures and parts/staves.
@@ -52,9 +52,9 @@ Exit checklist:
 - Emit multiple SVG pages with deterministic page numbering.
 
 Exit checklist:
-- [ ] Multi-page rendering works on representative real-world fixtures.
-- [ ] Continuous mode still supported and tested.
-- [ ] System/page break behavior deterministic under fixed options.
+- [x] Multi-page rendering works on representative real-world fixtures.
+- [x] Continuous mode still supported and tested.
+- [x] System/page break behavior deterministic under fixed options.
 
 ## Track M10C: Publishing Elements
 - Render page-level title/movement metadata.
@@ -62,8 +62,8 @@ Exit checklist:
 - Render page numbers/header/footer text hooks.
 
 Exit checklist:
-- [ ] Title + movement title + page number support landed.
-- [ ] Part labels and abbreviation repeat policy landed.
+- [x] Title + movement title + page number support landed.
+- [x] Part labels and abbreviation repeat policy landed.
 - [ ] Overflow/collision checks include header/label zones.
 
 ## Track M10D: Quality + Golden Integration
@@ -74,6 +74,40 @@ Exit checklist:
 Exit checklist:
 - [ ] Bach proof-point mismatch reduced to agreed threshold.
 - [ ] At least one additional paginated real-world proof-point added and passing.
+
+## Implementation status snapshot (2026-02-11)
+- Landed:
+  - `layout` render options and compatibility mapping from legacy `paginate`.
+  - Paginated default rendering with explicit page/system planning and multi-page output.
+  - Continuous mode (`horizontal-continuous`) preserved.
+  - Parser/renderer now honor MusicXML `<print new-system/new-page>` directives for forced system/page starts.
+  - Part labels rendered on system starts (name on first system, abbreviation on later systems).
+  - Header/footer/title/page-number hooks are implemented.
+  - Metadata title fallback from centered `<credit><credit-words>` is implemented for files without explicit `<work-title>`.
+  - Explicit SVG page background rect (`mx-page-background`) is injected to stabilize headless/browser screenshots.
+  - Paginated spanner pass now skips off-window anchors, removing false `SPANNER_ANCHOR_NOT_RENDERED` diagnostics.
+- Remaining:
+  - Tune default header/footer/page-number behavior against real-world fixtures and references.
+  - Calibrate system-width/measure-width planning against source print geometry to improve proof-point parity.
+  - Continue reducing proof-point metric noise by combining deterministic system-window auto-crop with stronger alignment/region comparison (current auto-crop baseline: `mismatchRatio=0.214865`, `ssim=0.189070`, advisory fail).
+  - Add deterministic header/label collision zones to geometry/style checks.
+  - Reduce `realworld-music21-bach-bwv1-6-8bars` mismatch (currently advisory fail) to blocking-grade threshold.
+
+## Latest M10D note (2026-02-11, later run)
+- Added parser/model capture of MusicXML `measure@width` (`sourceWidthTenths`) and renderer column-width weighting from those hints (median across parts per column).
+- Result: first-page/system spacing is modestly closer to source geometry (`inspect:score` spacing ratio improved from `1.173` to `1.1411`), but Bach proof-point remains advisory fail (`mismatchRatio=0.214798`, `ssim=0.192180`).
+- Added parser support for MusicXML defaults `system-layout/system-margins` and applied those margins in paginated content-width planning (avoids over-shrinking systems when label columns are enabled and source system margins are present).
+- Result after system-margin alignment + header-including auto-crop tuning: Bach proof-point improved to `mismatchRatio=0.203193` (still advisory fail; `ssim=0.151874`).
+- Golden runner now reports both raw and structural mismatch metrics; current structural mismatch for Bach is high (`0.688990`) and will be used as diagnostic evidence, not blocking criteria, until alignment/scoring calibration is completed.
+- Added parser/model support for note-level `default-x` + explicit stem direction capture from MusicXML so source engraving hints are available for future spacing/stem parity tuning.
+- Added renderer stem-direction mapping (`<stem>up/down` -> VexFlow `stem_direction`) and switched beam generation to preserve authored stem directions during automatic beam grouping.
+- Added parser/model support for authored beam tokens and renderer preference for source beam grouping (currently level-1 begin/continue/end), with deterministic regression tests to avoid beam-shape drift regressions.
+- Fixed a beaming regression where flagged glyphs remained visible on beamed notes by preparing beam objects before voice draw (VexFlow flag suppression timing); added deterministic conformance gating for expected-pass flag/beam overlaps.
+- Added optional centroid-based comparison alignment in headless visual tooling and golden proof-point pipeline:
+  - `normalization.alignByInkCentroid`
+  - `normalization.maxAlignmentShift`
+  - `normalization.alignmentAxis` (`x`, `y`, `both`)
+- Bach proof-point now records alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) and currently runs with horizontal-only alignment (`alignmentAxis: "x"`).
 
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.

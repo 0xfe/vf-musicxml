@@ -239,6 +239,7 @@ function createPitchNote(
     clef,
     keys,
     duration,
+    stem_direction: mapStemDirection(event.stemDirection),
     glyph_font_scale: event.cue ? 30 : undefined
   };
 
@@ -275,9 +276,42 @@ function createPitchNote(
   return note;
 }
 
+/** Translate parser stem tokens into VexFlow stem-direction numbers. */
+function mapStemDirection(direction: NoteEvent['stemDirection']): number | undefined {
+  if (direction === 'up') {
+    return 1;
+  }
+  if (direction === 'down') {
+    return -1;
+  }
+  return undefined;
+}
+
 /** Build stable map keys for one rendered voice event. */
 export function buildVoiceEventKey(voiceId: string, eventIndex: number): string {
   return `${voiceId}:${eventIndex}`;
+}
+
+/**
+ * Parse one `buildVoiceEventKey` payload back into voice/event coordinates.
+ * We split on the last `:` so voice identifiers can safely contain colons.
+ */
+export function parseVoiceEventKey(
+  eventKey: string
+): { voiceId: string; eventIndex: number } | undefined {
+  const separatorIndex = eventKey.lastIndexOf(':');
+  if (separatorIndex <= 0 || separatorIndex >= eventKey.length - 1) {
+    return undefined;
+  }
+
+  const voiceId = eventKey.slice(0, separatorIndex);
+  const eventIndexText = eventKey.slice(separatorIndex + 1);
+  const eventIndex = Number.parseInt(eventIndexText, 10);
+  if (!Number.isFinite(eventIndex) || eventIndex < 0) {
+    return undefined;
+  }
+
+  return { voiceId, eventIndex };
 }
 
 /** Convert pending grace events into a GraceNoteGroup attached to the anchor note. */
@@ -634,6 +668,14 @@ export function mapClef(clef: ClefInfo | undefined, diagnostics: Diagnostic[]): 
 export function mapTimeSignature(timeSignature: TimeSignatureInfo | undefined): string | undefined {
   if (!timeSignature) {
     return undefined;
+  }
+
+  if (timeSignature.symbol === 'common') {
+    return 'C';
+  }
+
+  if (timeSignature.symbol === 'cut') {
+    return 'C|';
   }
 
   return `${timeSignature.beats}/${timeSignature.beatType}`;

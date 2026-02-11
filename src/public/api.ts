@@ -2,6 +2,7 @@ import type { Diagnostic } from '../core/diagnostics.js';
 import type { Score } from '../core/score.js';
 import { extractMusicXmlFromMxl } from '../parser/mxl.js';
 import { parseScorePartwise } from '../parser/parse.js';
+import type { RenderLayoutOptions } from '../vexflow/render-types.js';
 import { renderScoreToElement, renderScoreToSVGPages } from '../vexflow/render.js';
 
 /** Parser configuration shared by sync and async entry points. */
@@ -26,6 +27,7 @@ export interface ParseAsyncInput {
 export interface RenderOptions {
   backend?: 'svg' | 'canvas';
   page?: { width: number; height: number };
+  layout?: RenderLayoutOptions;
   paginate?: boolean;
 }
 

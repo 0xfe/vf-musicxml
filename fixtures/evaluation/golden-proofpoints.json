@@ -9,20 +9,33 @@
       "referenceKind": "realworld-proofpoint",
       "blocking": false,
       "notes": "Representative external reference for first 8 bars while pagination/title/instrument-label features are still in progress.",
-      "cropActual": {
+      "autoCropActual": {
+        "systems": {
+          "stavesPerSystem": 5,
+          "startSystemIndex": 0,
+          "systemCount": 2,
+          "includeFullWidth": true,
+          "headerPadding": 260,
+          "paddingBottom": 14
+        }
+      },
+      "cropReference": {
         "x": 0,
         "y": 0,
-        "width": 0.39,
+        "width": 1,
         "height": 1,
         "unit": "ratio"
       },
-      "cropReference": {
-        "x": 0.06,
-        "y": 0.17,
-        "width": 0.9,
-        "height": 0.78,
-        "unit": "ratio"
-      },
+    "normalization": {
+      "trimWhitespace": true,
+      "trimThreshold": 248,
+      "trimPadding": 10,
+      "resizeActualToReference": true,
+      "resizeMode": "fit",
+      "alignByInkCentroid": true,
+      "maxAlignmentShift": 24,
+      "alignmentAxis": "x"
+    },
       "thresholds": {
         "maxMismatchRatio": 0.08,
         "minSsim": 0.7

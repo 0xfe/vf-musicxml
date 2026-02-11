@@ -2,12 +2,31 @@
 
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`docs/planning/status.md` + `docs/planning/logs.md`).
-- M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos, M9 is active for engraving style-fidelity execution, and M10 is active for pagination/publishing-layout delivery.
+- M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos, M9 is active for engraving style-fidelity execution, and M10 is active with M10A/M10B baseline delivered and M10C/M10D fidelity tuning in progress.
 - M8A baseline landed: full active LilyPond golden-reference mapping (156 fixtures) with cached PNGs and manifest checksums.
 - M8B first slice landed: generalized first-column width compensation fixes opening-measure compression (`lilypond-01a-pitches-pitches`), and deterministic measure-spacing ratio tooling now reports first-vs-rest spacing consistency.
 - `lilypond-01a-pitches-pitches` headless visual baseline has been refreshed post-fix (`tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png`).
 - M8C first slice landed: `npm run test:golden` now compares rendered output to external references using `fixtures/golden/manifest.json` + `fixtures/evaluation/golden-proofpoints.json`.
+- M8C golden runner now supports deterministic system-window proof-point crops (`autoCropActual.systems`) via geometry-derived system bounds.
 - Real-world proof-point `realworld-music21-bach-bwv1-6-8bars` is configured as advisory and currently fails (large mismatch), establishing baseline evidence for pagination/title/part-label gaps.
+- M10 baseline is implemented in renderer:
+  - paginated default with multi-page planning/output,
+  - horizontal-continuous fallback,
+  - page/system label/header/footer hooks.
+- Integration coverage now includes explicit paginated-option assertions (title/page-number/system-label rendering under forced multi-page layout).
+- Deterministic page-background injection is now enforced (`mx-page-background`) so headless/browser screenshots do not render transparent pages as black.
+- Parser now falls back to centered `<credit><credit-words>` for `metadata.workTitle` when explicit `<work><work-title>` is absent.
+- Parser + renderer now honor `<print new-system="yes">` and `<print new-page="yes">` for forced system/page starts.
+- Parser now preserves MusicXML `measure@width` as `sourceWidthTenths`, and renderer uses those hints to weight paginated system column widths.
+- Parser now preserves MusicXML note-level `default-x` (`sourceDefaultXTenths`) and explicit `<stem>` direction (`stemDirection`) metadata for source-parity tuning.
+- Parser now preserves MusicXML note-level beam markers (`beams`) for authored beam-topology reconstruction.
+- Parser now also preserves defaults `system-layout/system-margins`, and paginated renderer uses them in content-width planning (instead of blindly shrinking by label-column width).
+- Renderer now maps explicit source stem direction into VexFlow notes and keeps authored stem directions during automatic beam generation.
+- Renderer now prefers source-authored beam groups (level-1 begin/continue/end) and falls back to automatic beam generation when source grouping is unavailable/incomplete.
+- Renderer now prepares beam groups before `voice.draw()` and renders prepared beams afterward so VexFlow suppresses per-note flags for beamed notes.
+- Paginated spanner drawing now applies a page measure-window filter so off-window anchors do not emit false `SPANNER_ANCHOR_NOT_RENDERED`.
+- Headless visual diffing now supports optional centroid-based alignment (`alignByInkCentroid`, `maxAlignmentShift`, `alignmentAxis`) and emits alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) in golden reports.
+- Latest Bach proof-point metrics with system-window auto-crop + horizontal-only centroid alignment: `mismatchRatio=0.200641`, `ssim=0.172106`, `structuralMismatchRatio=0.635738`, `alignmentShiftX=10`, `alignmentShiftY=0` (advisory fail; still below promotion threshold).
 - M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
 - LilyPond roadmap semantics: `demos/lilypond/manifest.json` `categoryStatus` represents demo seeding only; conformance completion is computed from active fixture counts.
 - Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 6 pages).
@@ -153,9 +172,10 @@
   - `realworld` conformance fixtures: 8 active (`8 expected: pass`).
   - total active conformance fixtures: 176 (`171 expected: pass`, `5 expected: fail`).
 - M7B current quality summary (from latest `artifacts/conformance/conformance-report.json`):
-  - expected-pass weighted mean: `4.8591`
+  - expected-pass weighted mean: `4.8791`
   - expected-pass catastrophic readability fixtures: `0`
   - expected-pass critical collision count: `0`
+  - expected-pass flag/beam overlap count: `0`
   - expected-fail LilyPond fixture: `lilypond-23c-tuplet-display-nonstandard` (explicit malformed-source waiver for undefined entity + `XML_NOT_WELL_FORMED` parse failure).
 - Recently resolved M7A blocker:
   - `lilypond-24a-gracenotes` moved to `status: active`, `expected: pass` after graceful fallback handling for VexFlow grace beaming failures (`GRACE_NOTES_BEAMING_FAILED` warning path).
@@ -183,12 +203,17 @@
   - `npm run test:visual -- --workers=4`
 - Browser-free visual:
   - `npm run test:visual:headless:update`
-  - `npm run test:visual:headless`
-  - `npm run test:golden`
-  - `npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml`
-  - inspect reports now include `spacingSummary.firstToMedianOtherGapRatio` for opening-measure compression triage.
+- `npm run test:visual:headless`
+- `npm run test:golden`
+- golden report now includes `structuralMismatchRatio` in addition to raw mismatch + SSIM.
+- golden report now also includes `alignmentShiftX` / `alignmentShiftY` when centroid alignment is enabled.
+- `npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitches.musicxml`
+- `npm run inspect:score -- --input=fixtures/conformance/realworld/realworld-music21-bach-bwv1-6.mxl`
+- inspect reports now include `spacingSummary.firstToMedianOtherGapRatio` for opening-measure compression triage.
 - Focused renderer-regression checks:
   - `npm run test:integration -- tests/integration/render-quality-regressions.test.ts`
+  - `npm run test:integration -- tests/integration/public-api.test.ts`
+  - `npm run test:integration -- tests/integration/parser-csm.test.ts`
   - `npm run test:unit -- tests/unit/notation-geometry.test.ts`
 - Evaluation + upstream lifecycle:
   - `npm run eval:run`

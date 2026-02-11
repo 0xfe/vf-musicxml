@@ -7,6 +7,12 @@ import { buildVoiceEventKey, type BuildMeasureNotesResult, type RenderedTupletSp
 /** Non-null render context alias used by notation drawing helpers. */
 type VexRenderContext = NonNullable<ReturnType<Stave['getContext']>>;
 
+/** Measure range currently rendered on one page (`endMeasure` is exclusive). */
+export interface RenderMeasureWindow {
+  startMeasure: number;
+  endMeasure: number;
+}
+
 /** Flat event key used for tie/slur/wedge note lookup during rendering. */
 export function buildEventRefLookupKey(ref: EventRef): string {
   return `${ref.partId}|${ref.measureIndex}|${ref.voiceId}|${ref.eventIndex}`;
@@ -248,7 +254,8 @@ export function drawScoreSpanners(
   renderedPartId: string,
   eventNotes: Map<string, StaveNote>,
   diagnostics: Diagnostic[],
-  context: VexRenderContext
+  context: VexRenderContext,
+  renderWindow?: RenderMeasureWindow
 ): void {
   for (const spanner of score.spanners) {
     if (spanner.start.partId !== renderedPartId) {
@@ -261,6 +268,11 @@ export function drawScoreSpanners(
         severity: 'warning',
         message: `Spanner '${spanner.id}' has no end anchor and was not rendered.`
       });
+      continue;
+    }
+
+    if (renderWindow && !spannerIntersectsMeasureWindow(spanner, renderWindow)) {
+      // Spanner is outside this page window, so anchor absence on this page is expected.
       continue;
     }
 
@@ -289,6 +301,23 @@ export function drawScoreSpanners(
         break;
     }
   }
+}
+
+/** Determine whether a spanner's full anchor range is expected on this page window. */
+function spannerIntersectsMeasureWindow(
+  spanner: SpannerRelation,
+  renderWindow: RenderMeasureWindow
+): boolean {
+  if (!spanner.end) {
+    return spanner.start.measureIndex >= renderWindow.startMeasure && spanner.start.measureIndex < renderWindow.endMeasure;
+  }
+
+  return (
+    spanner.start.measureIndex >= renderWindow.startMeasure &&
+    spanner.start.measureIndex < renderWindow.endMeasure &&
+    spanner.end.measureIndex >= renderWindow.startMeasure &&
+    spanner.end.measureIndex < renderWindow.endMeasure
+  );
 }
 
 /** Draw one tie with optional chord-note index routing. */

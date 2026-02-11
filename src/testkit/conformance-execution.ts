@@ -8,7 +8,11 @@ import { parseMusicXMLAsync } from '../public/api.js';
 import { renderScoreToSVGPages } from '../vexflow/render.js';
 import type { ConformanceFixtureRecord } from './conformance.js';
 import { runConformanceCollisionAudit, type ConformanceCollisionAuditReport } from './conformance.js';
-import { collectNotationGeometry, detectNoteheadBarlineIntrusions } from './notation-geometry.js';
+import {
+  collectNotationGeometry,
+  detectFlagBeamOverlaps,
+  detectNoteheadBarlineIntrusions
+} from './notation-geometry.js';
 import { extractSvgElementBounds, type SvgBounds, type SvgElementBounds } from './svg-collision.js';
 
 /** String-keyed histogram helper used by conformance aggregate summaries. */
@@ -68,6 +72,8 @@ export interface ConformanceFixtureQualityMetrics {
   noteheadCount: number;
   stemCount: number;
   beamCount: number;
+  flagCount: number;
+  flagBeamOverlapCount: number;
   tieCount: number;
   textCount: number;
   minimumNoteheadGap: number | null;
@@ -110,6 +116,8 @@ export interface ConformanceQualitySummary {
   expectedPassCatastrophicFixtureIds: string[];
   expectedPassCriticalCollisionFixtureIds: string[];
   expectedPassCriticalCollisionCount: number;
+  expectedPassFlagBeamOverlapFixtureIds: string[];
+  expectedPassFlagBeamOverlapCount: number;
 }
 
 /** Aggregated execution report for all processed fixtures. */
@@ -155,6 +163,7 @@ interface FixtureSvgAnalysis {
   noteheads: SvgElementBounds[];
   stems: SvgElementBounds[];
   beams: SvgElementBounds[];
+  flags: SvgElementBounds[];
   ties: SvgElementBounds[];
   barlines: SvgElementBounds[];
   textElements: SvgElementBounds[];
@@ -403,6 +412,14 @@ function buildQualitySummary(results: ConformanceFixtureExecutionResult[]): Conf
     (sum, result) => sum + result.quality.metrics.effectiveCriticalCollisionCount,
     0
   );
+  const expectedPassFlagBeamOverlapFixtureIds = expectedPassScoredResults
+    .filter((result) => result.quality.metrics.flagBeamOverlapCount > 0)
+    .map((result) => result.fixtureId)
+    .sort((left, right) => left.localeCompare(right));
+  const expectedPassFlagBeamOverlapCount = expectedPassScoredResults.reduce(
+    (sum, result) => sum + result.quality.metrics.flagBeamOverlapCount,
+    0
+  );
 
   return {
     weights: { ...CONFORMANCE_QUALITY_WEIGHTS },
@@ -415,7 +432,9 @@ function buildQualitySummary(results: ConformanceFixtureExecutionResult[]): Conf
     expectedPassDimensionAverages,
     expectedPassCatastrophicFixtureIds,
     expectedPassCriticalCollisionFixtureIds,
-    expectedPassCriticalCollisionCount
+    expectedPassCriticalCollisionCount,
+    expectedPassFlagBeamOverlapFixtureIds,
+    expectedPassFlagBeamOverlapCount
   };
 }
 
@@ -480,6 +499,8 @@ function evaluateFixtureQuality(params: {
         noteheadCount: 0,
         stemCount: 0,
         beamCount: 0,
+        flagCount: 0,
+        flagBeamOverlapCount: 0,
         tieCount: 0,
         textCount: 0,
         minimumNoteheadGap: null,
@@ -520,6 +541,7 @@ function evaluateFixtureQuality(params: {
       noteheads: analysis.noteheads,
       stems: analysis.stems,
       beams: analysis.beams,
+      flags: analysis.flags,
       barlines: analysis.barlines
     },
     {
@@ -527,6 +549,13 @@ function evaluateFixtureQuality(params: {
       minVerticalOverlap: 3
     }
   );
+  const flagBeamOverlaps = detectFlagBeamOverlaps({
+    noteheads: analysis.noteheads,
+    stems: analysis.stems,
+    beams: analysis.beams,
+    flags: analysis.flags,
+    barlines: analysis.barlines
+  });
   const inferredSevereOverlapCount = textToNoteheadOverlaps.critical;
   const minorCollisionCount =
     noteheadSelfOverlaps.minor +
@@ -583,6 +612,7 @@ function evaluateFixtureQuality(params: {
       noteheadCount: analysis.noteheads.length,
       stemCount: analysis.stems.length,
       beamCount: analysis.beams.length,
+      flagBeamOverlapCount: flagBeamOverlaps.length,
       stemBounds: analysis.stems.map((stem) => stem.bounds),
       stemBeamDiagnostics: countDiagnosticsMatching(diagnosticBundle, /(STEM|BEAM|REST)/i)
     }),
@@ -642,6 +672,9 @@ function evaluateFixtureQuality(params: {
   if (noteheadBarlineIntrusions.length > 0) {
     notes.push(`notehead/barline intrusions: ${noteheadBarlineIntrusions.length}`);
   }
+  if (flagBeamOverlaps.length > 0) {
+    notes.push(`flag/beam overlaps: ${flagBeamOverlaps.length}`);
+  }
   if (waivedCatastrophicReadability) {
     notes.push(
       `catastrophic readability waived via '${QUALITY_WAIVER_CATASTROPHIC_READABILITY}' (${criticalDimensionsBelowTwo.join(', ')})`
@@ -655,6 +688,8 @@ function evaluateFixtureQuality(params: {
       noteheadCount: analysis.noteheads.length,
       stemCount: analysis.stems.length,
       beamCount: analysis.beams.length,
+      flagCount: analysis.flags.length,
+      flagBeamOverlapCount: flagBeamOverlaps.length,
       tieCount: analysis.ties.length,
       textCount: analysis.textElements.length,
       minimumNoteheadGap,
@@ -689,6 +724,7 @@ function analyzeFixtureSvg(svgMarkup: string): FixtureSvgAnalysis {
     noteheads: notationGeometry.noteheads,
     stems: notationGeometry.stems,
     beams: notationGeometry.beams,
+    flags: notationGeometry.flags,
     ties: extractSvgElementBounds(svgMarkup, { selector: '.vf-stavetie' }),
     barlines: notationGeometry.barlines,
     textElements: extractSvgElementBounds(svgMarkup, { selector: 'text' }),
@@ -799,6 +835,7 @@ function scoreBeamStemRestQuality(params: {
   noteheadCount: number;
   stemCount: number;
   beamCount: number;
+  flagBeamOverlapCount: number;
   stemBounds: SvgBounds[];
   stemBeamDiagnostics: number;
 }): number {
@@ -819,6 +856,9 @@ function scoreBeamStemRestQuality(params: {
   if (params.beamCount > 0 && params.stemCount === 0) {
     score -= 1.6;
   }
+  // Beamed notes should not also show flags in the same glyph region. This
+  // catches the "beam rendered but flags still visible" regression class.
+  score -= Math.min(2.4, params.flagBeamOverlapCount * 0.8);
 
   score -= Math.min(1.8, params.stemBeamDiagnostics * 0.35);
   return clampScore(score);
@@ -1168,6 +1208,9 @@ function appendQualitySummary(lines: string[], summary: ConformanceQualitySummar
   lines.push(
     `Expected-pass critical collision count: ${summary.expectedPassCriticalCollisionCount}`
   );
+  lines.push(
+    `Expected-pass flag/beam overlap count: ${summary.expectedPassFlagBeamOverlapCount}`
+  );
 
   lines.push('');
   lines.push('### Quality Dimension Averages (Expected-pass)');
@@ -1194,6 +1237,15 @@ function appendQualitySummary(lines: string[], summary: ConformanceQualitySummar
     lines.push('### Critical Collision Fixtures');
     lines.push('');
     for (const fixtureId of summary.expectedPassCriticalCollisionFixtureIds) {
+      lines.push(`- ${fixtureId}`);
+    }
+  }
+
+  if (summary.expectedPassFlagBeamOverlapFixtureIds.length > 0) {
+    lines.push('');
+    lines.push('### Flag/Beam Overlap Fixtures');
+    lines.push('');
+    for (const fixtureId of summary.expectedPassFlagBeamOverlapFixtureIds) {
       lines.push(`- ${fixtureId}`);
     }
   }

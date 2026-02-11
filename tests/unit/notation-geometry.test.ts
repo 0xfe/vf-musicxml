@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectNotationGeometry,
+  detectFlagBeamOverlaps,
+  deriveSystemCropRegion,
   detectNoteheadBarlineIntrusions,
+  estimateSystemVerticalBounds,
   summarizeMeasureSpacingByBarlines,
   summarizeNotationGeometry
 } from '../../src/testkit/notation-geometry.js';
@@ -15,6 +18,7 @@ const SAMPLE_SVG = `
   <g class="vf-notehead"><ellipse cx="60" cy="60" rx="5" ry="3" /></g>
   <g class="vf-stem"><rect x="59" y="30" width="1" height="30" /></g>
   <g class="vf-beam"><rect x="120" y="34" width="20" height="3" /></g>
+  <g class="vf-flag"><path d="M 126 33 L 131 33 L 131 39 Z" /></g>
 </svg>
 `;
 
@@ -37,6 +41,45 @@ const SPACING_SVG = `
 </svg>
 `;
 
+/** Multi-band spacing fixture where two staves have different x-offsets. */
+const MULTI_BAND_SPACING_SVG = `
+<svg width="260" height="220" viewBox="0 0 260 220">
+  <g class="vf-stavebarline"><rect x="10" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="110" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="210" y="20" width="1" height="80" /></g>
+
+  <g class="vf-notehead"><ellipse cx="30" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="60" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="90" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="140" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="170" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="200" cy="60" rx="5" ry="3" /></g>
+
+  <g class="vf-stavebarline"><rect x="20" y="130" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="120" y="130" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="220" y="130" width="1" height="80" /></g>
+
+  <g class="vf-notehead"><ellipse cx="40" cy="170" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="70" cy="170" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="100" cy="170" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="150" cy="170" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="180" cy="170" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="210" cy="170" rx="5" ry="3" /></g>
+</svg>
+`;
+
+/** Multi-system barline layout used to validate system crop-region extraction. */
+const SYSTEM_BOUNDS_SVG = `
+<svg width="240" height="260" viewBox="0 0 240 260">
+  <g class="vf-stavebarline"><rect x="20" y="10" width="1" height="60" /></g>
+  <g class="vf-stavebarline"><rect x="200" y="10" width="1" height="60" /></g>
+  <g class="vf-stavebarline"><rect x="20" y="90" width="1" height="60" /></g>
+  <g class="vf-stavebarline"><rect x="200" y="90" width="1" height="60" /></g>
+  <g class="vf-stavebarline"><rect x="20" y="170" width="1" height="60" /></g>
+  <g class="vf-stavebarline"><rect x="200" y="170" width="1" height="60" /></g>
+</svg>
+`;
+
 describe('notation geometry testkit', () => {
   it('collects core notation classes and reports summary metrics', () => {
     const geometry = collectNotationGeometry(SAMPLE_SVG);
@@ -45,8 +88,19 @@ describe('notation geometry testkit', () => {
     expect(summary.noteheadCount).toBe(2);
     expect(summary.stemCount).toBe(1);
     expect(summary.beamCount).toBe(1);
+    expect(summary.flagCount).toBe(1);
+    expect(summary.flagBeamOverlapCount).toBe(1);
     expect(summary.barlineCount).toBe(1);
     expect(summary.noteheadBarlineIntrusionCount).toBe(1);
+  });
+
+  it('detects flag/beam overlaps for beam-suppression regressions', () => {
+    const geometry = collectNotationGeometry(SAMPLE_SVG);
+    const overlaps = detectFlagBeamOverlaps(geometry);
+
+    expect(overlaps.length).toBe(1);
+    expect(overlaps[0]?.horizontalOverlap).toBeGreaterThan(0);
+    expect(overlaps[0]?.verticalOverlap).toBeGreaterThan(0);
   });
 
   it('supports caller thresholds for intrusion sensitivity', () => {
@@ -62,9 +116,53 @@ describe('notation geometry testkit', () => {
     const geometry = collectNotationGeometry(SPACING_SVG);
     const spacing = summarizeMeasureSpacingByBarlines(geometry);
 
+    expect(spacing.evaluatedBandCount).toBe(1);
+    expect(spacing.bandSummaries.length).toBe(1);
     expect(spacing.samples.length).toBe(2);
     expect(spacing.firstMeasureAverageGap).toBe(20);
     expect(spacing.medianOtherMeasuresAverageGap).toBe(20);
     expect(spacing.firstToMedianOtherGapRatio).toBe(1);
+  });
+
+  it('partitions spacing analysis by vertical staff bands', () => {
+    const geometry = collectNotationGeometry(MULTI_BAND_SPACING_SVG);
+    const spacing = summarizeMeasureSpacingByBarlines(geometry);
+
+    expect(spacing.evaluatedBandCount).toBe(2);
+    expect(spacing.bandSummaries.length).toBe(2);
+    expect(spacing.samples.length).toBe(4);
+    expect(spacing.firstMeasureAverageGap).toBe(30);
+    expect(spacing.medianOtherMeasuresAverageGap).toBe(30);
+    expect(spacing.firstToMedianOtherGapRatio).toBe(1);
+  });
+
+  it('estimates system bounds from grouped staff bands', () => {
+    const geometry = collectNotationGeometry(SYSTEM_BOUNDS_SVG);
+    const systems = estimateSystemVerticalBounds(geometry, 2);
+
+    expect(systems.length).toBe(1);
+    expect(systems[0]?.top).toBe(10);
+    expect(systems[0]?.bottom).toBe(150);
+  });
+
+  it('derives pixel crop regions from selected systems', () => {
+    const geometry = collectNotationGeometry(SYSTEM_BOUNDS_SVG);
+    const crop = deriveSystemCropRegion(geometry, 240, 260, {
+      stavesPerSystem: 2,
+      startSystemIndex: 0,
+      systemCount: 1,
+      includeFullWidth: true,
+      headerPadding: 12,
+      paddingTop: 8,
+      paddingBottom: 10
+    });
+
+    expect(crop).toEqual({
+      x: 0,
+      y: 0,
+      width: 240,
+      height: 160,
+      unit: 'pixels'
+    });
   });
 });

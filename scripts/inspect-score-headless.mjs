@@ -209,11 +209,11 @@ async function runInspection(options) {
   console.log(`SVG: ${svgOutputPath}`);
   console.log(`PNG: ${pngOutputPath}`);
   console.log(
-    `Geometry summary: noteheads=${geometrySummary.noteheadCount}, beams=${geometrySummary.beamCount}, barlineIntrusions=${geometrySummary.noteheadBarlineIntrusionCount}`
+    `Geometry summary: noteheads=${geometrySummary.noteheadCount}, beams=${geometrySummary.beamCount}, flags=${geometrySummary.flagCount}, flagBeamOverlaps=${geometrySummary.flagBeamOverlapCount}, barlineIntrusions=${geometrySummary.noteheadBarlineIntrusionCount}`
   );
   if (spacingSummary.firstToMedianOtherGapRatio !== null) {
     console.log(
-      `Measure spacing ratio (first/median-other): ${spacingSummary.firstToMedianOtherGapRatio}`
+      `Measure spacing ratio (first/median-other): ${spacingSummary.firstToMedianOtherGapRatio} (bands=${spacingSummary.evaluatedBandCount})`
     );
   }
   if (visualDiffSummary) {

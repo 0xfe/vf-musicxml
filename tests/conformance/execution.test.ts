@@ -55,9 +55,11 @@ describe('conformance execution baseline', () => {
     // - expected-pass weighted rubric mean >= 4.2 / 5
     // - no expected-pass fixture with catastrophic readability
     // - expected-pass critical collision count must stay zero (unless waived)
+    // - expected-pass flag/beam overlap count must stay zero
     expect(report.qualitySummary.expectedPassWeightedMean).toBeGreaterThanOrEqual(4.2);
     expect(report.qualitySummary.expectedPassCatastrophicFixtureIds).toHaveLength(0);
     expect(report.qualitySummary.expectedPassCriticalCollisionCount).toBe(0);
+    expect(report.qualitySummary.expectedPassFlagBeamOverlapCount).toBe(0);
 
     const lilyPondCategoryResults = new Map<string, typeof report.results>();
     for (const result of report.results) {

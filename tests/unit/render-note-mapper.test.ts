@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Diagnostic } from '../../src/core/diagnostics.js';
+import type { TimeSignatureInfo } from '../../src/core/score.js';
 import { parseMusicXML } from '../../src/public/index.js';
-import { buildMeasureNotes, mapClef } from '../../src/vexflow/render-note-mapper.js';
+import {
+  buildMeasureNotes,
+  mapClef,
+  mapTimeSignature,
+  parseVoiceEventKey
+} from '../../src/vexflow/render-note-mapper.js';
 
 describe('render note mapper', () => {
   it('attaches supported articulations and warns for unsupported articulation tokens', () => {
@@ -165,5 +171,59 @@ describe('render note mapper', () => {
     expect(firstOrnaments.length).toBe(1);
     expect(diagnostics.some((diagnostic) => diagnostic.code === 'CUE_NOTE_RENDERED')).toBe(true);
     expect(diagnostics.some((diagnostic) => diagnostic.code === 'NON_POSITIVE_DURATION')).toBe(false);
+  });
+
+  it('maps common and cut time symbols to VexFlow glyph tokens', () => {
+    const common: TimeSignatureInfo = { beats: 4, beatType: 4, symbol: 'common' };
+    const cut: TimeSignatureInfo = { beats: 2, beatType: 2, symbol: 'cut' };
+    const numeric: TimeSignatureInfo = { beats: 3, beatType: 8 };
+
+    expect(mapTimeSignature(common)).toBe('C');
+    expect(mapTimeSignature(cut)).toBe('C|');
+    expect(mapTimeSignature(numeric)).toBe('3/8');
+  });
+
+  it('respects explicit MusicXML stem directions for rendered notes', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <stem>up</stem>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <stem>down</stem>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    expect(noteResult.notes).toHaveLength(2);
+    expect(noteResult.notes[0]?.getStemDirection()).toBe(1);
+    expect(noteResult.notes[1]?.getStemDirection()).toBe(-1);
+  });
+
+  it('parses voice-event map keys for downstream render passes', () => {
+    expect(parseVoiceEventKey('1:0')).toEqual({ voiceId: '1', eventIndex: 0 });
+    expect(parseVoiceEventKey('voice:alpha:9')).toEqual({ voiceId: 'voice:alpha', eventIndex: 9 });
+    expect(parseVoiceEventKey('voice-only')).toBeUndefined();
+    expect(parseVoiceEventKey('voice:bad')).toBeUndefined();
   });
 });
