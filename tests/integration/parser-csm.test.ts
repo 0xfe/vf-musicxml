@@ -183,6 +183,34 @@ describe('parser CSM transformation', () => {
     }
   });
 
+  it('parses accidental cautionary/parenthesis metadata for renderer mapping', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <accidental cautionary="yes" parentheses="yes">quarter-flat</accidental>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    const event = result.score?.parts[0]?.measures[0]?.voices[0]?.events[0];
+
+    expect(event?.kind).toBe('note');
+    if (event?.kind === 'note') {
+      expect(event.notes[0]?.accidental?.value).toBe('quarter-flat');
+      expect(event.notes[0]?.accidental?.cautionary).toBe(true);
+      expect(event.notes[0]?.accidental?.parentheses).toBe(true);
+    }
+  });
+
   it('normalizes chord notes into notes[] on a single NoteEvent', () => {
     const xml = `
 <score-partwise version="4.0">
@@ -370,6 +398,46 @@ describe('parser CSM transformation', () => {
     expect(directions[0]?.words).toBe('Allegro');
     expect(directions[0]?.tempo).toBe(120);
     expect(directions[0]?.dynamics).toEqual(['mf']);
+  });
+
+  it('matches slurs by staff to avoid cross-staff anchor collisions', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <staff>1</staff>
+        <notations><slur type="start" number="1" /></notations>
+      </note>
+      <backup><duration>1</duration></backup>
+      <note>
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <staff>2</staff>
+        <notations><slur type="stop" number="1" /></notations>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    const slurs = (result.score?.spanners ?? []).filter((spanner) => spanner.type === 'slur');
+
+    expect(result.score).toBeDefined();
+    expect(slurs).toHaveLength(0);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'UNMATCHED_SLUR_STOP')).toBe(true);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'UNCLOSED_SLUR_START')).toBe(true);
   });
 
   it('treats unclosed slur starts as strict-mode errors', () => {

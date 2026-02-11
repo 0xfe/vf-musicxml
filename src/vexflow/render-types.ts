@@ -47,6 +47,8 @@ export interface RenderHeaderFooterOptions {
 /** Nested layout options used by the renderer planning pass. */
 export interface RenderLayoutOptions {
   mode?: RenderLayoutMode;
+  /** Global render scale applied to notation/text drawing (`1` = current size). */
+  scale?: number;
   page?: RenderPageOptions;
   system?: RenderSystemOptions;
   labels?: RenderLabelOptions;

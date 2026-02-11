@@ -109,6 +109,29 @@ Exit checklist:
   - `normalization.alignmentAxis` (`x`, `y`, `both`)
 - Bach proof-point now records alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) and currently runs with horizontal-only alignment (`alignmentAxis: "x"`).
 
+## Latest M10D note (2026-02-11, current run)
+- Added adaptive inter-part spacing in renderer layout planning:
+  - part-level complexity scoring from dense rhythms/chords/beam/slur activity.
+  - inter-part gap now expands for dense adjacent parts (`resolveInterPartGap`), reducing note/curve overlap pressure between stacked parts.
+- Hardened label rendering under source system margins:
+  - label wrapping width is constrained to the actual left-of-notation lane.
+  - truncation/wrapping now avoids left-edge clipping without shrinking notation content width.
+- Improved slur curve routing for mixed-stem and cross-voice scenarios:
+  - slur side now prefers explicit placement, otherwise chooses the side with lower endpoint skew.
+  - anchor-delta diagnostics now use side-aware endpoint anchors aligned with VexFlow curve positioning.
+  - prior guards for extreme/mixed-stem deltas remain in place.
+- Expanded deterministic curve-anomaly detection in geometry tooling:
+  - supports both absolute (`C`) and relative (`c`) cubic path parsing.
+  - broadens coverage for diagonal cut-through slur regressions in headless quality tests.
+- Added/updated deterministic regression coverage:
+  - `tests/integration/public-api.test.ts` now checks adaptive inter-part gap expansion.
+  - `tests/integration/render-quality-regressions.test.ts` now asserts stable first-measure spacing on `realworld-music21-bach-bwv1-6`.
+  - `tests/unit/notation-geometry.test.ts` now validates relative cubic path detection.
+- Current proof-point snapshot:
+  - `realworld-music21-bach-bwv1-6`: spacing ratio `1.0395`, no beam/flag regressions.
+  - `realworld-music21-beethoven-op133-longform` page 1: `extremeCurveCount=0`.
+  - `realworld-music21-beethoven-op18no1-m1` page 1: `extremeCurveCount=0` (large cut-through slur resolved), but spacing compression remains (`first/median ratio=0.6459`).
+
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.
 - [ ] Horizontal continuous mode remains available and tested.

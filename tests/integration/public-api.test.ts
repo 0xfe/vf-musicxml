@@ -7,6 +7,7 @@ import {
   type Score
 } from '../../src/public/index.js';
 import { collectNotationGeometry } from '../../src/testkit/notation-geometry.js';
+import { extractSvgElementBounds } from '../../src/testkit/svg-collision.js';
 
 const MINIMAL_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -774,6 +775,246 @@ describe('public API renderer placeholder', () => {
     expect(result.pages[0]).toContain('width="710"');
     expect(result.pages[0]).toContain('height="360"');
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('applies adaptive vertical spacing when source staff-distance is very tight', () => {
+    const buildMeasure = (index: number, pitchStep: 'C' | 'D') => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: pitchStep, octave: 5 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'adaptive-spacing-stub',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 500,
+        pageMargins: { left: 60, right: 60, top: 40, bottom: 40 },
+        staffDistance: 48
+      },
+      partList: [
+        { id: 'P1', name: 'Upper Voice' },
+        { id: 'P2', name: 'Lower Voice' }
+      ],
+      parts: [
+        { id: 'P1', measures: [buildMeasure(0, 'C')] },
+        { id: 'P2', measures: [buildMeasure(0, 'D')] }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        scale: 1
+      }
+    });
+
+    const staves = extractSvgElementBounds(result.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+
+    expect(staves.length).toBeGreaterThanOrEqual(2);
+    const first = staves[0];
+    const second = staves[1];
+    const interStaffGap = first && second ? second.y - (first.y + first.height) : 0;
+    expect(interStaffGap).toBeGreaterThanOrEqual(24);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('keeps long part labels inside page bounds when source system margins are present', () => {
+    const buildMeasure = (index: number) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'label-overflow-stub',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 420,
+        pageMargins: { left: 100, right: 80, top: 40, bottom: 40 },
+        systemMargins: { left: 12, right: 8 }
+      },
+      partList: [
+        {
+          id: 'P1',
+          name: 'Extremely Long Instrument Name That Should Not Be Clipped At The Left Edge',
+          abbreviation: 'Ext. Inst.'
+        }
+      ],
+      parts: [{ id: 'P1', measures: [buildMeasure(0), buildMeasure(1)] }],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        labels: {
+          showPartNames: true,
+          showPartAbbreviations: true,
+          repeatOnSystemBreak: true
+        },
+        scale: 1
+      }
+    });
+
+    const texts = extractSvgElementBounds(result.pages[0] ?? '', { selector: 'text' });
+    const minTextX = Math.min(...texts.map((entry) => entry.bounds.x));
+
+    expect(texts.length).toBeGreaterThan(0);
+    expect(minTextX).toBeGreaterThanOrEqual(0);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('expands inter-part gap for dense adjacent parts to reduce cross-part overlap risk', () => {
+    const buildMeasure = (
+      index: number,
+      step: 'C' | 'D' | 'E',
+      noteType: 'quarter' | '16th',
+      withBeamMarkers: boolean
+    ) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 120,
+              noteType,
+              beams: withBeamMarkers ? [{ number: 1 as const, value: 'begin' as const }] : undefined,
+              notes: [{ pitch: { step, octave: 5 }, slurs: [{ type: 'start' as const }] }]
+            },
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 120,
+              durationTicks: 120,
+              noteType,
+              beams: withBeamMarkers ? [{ number: 1 as const, value: 'end' as const }] : undefined,
+              notes: [{ pitch: { step, octave: 5 }, slurs: [{ type: 'stop' as const }] }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const sparseScore: Score = {
+      id: 'inter-part-gap-sparse',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 520,
+        pageMargins: { left: 80, right: 80, top: 40, bottom: 40 }
+      },
+      partList: [
+        { id: 'P1', name: 'Top' },
+        { id: 'P2', name: 'Bottom' }
+      ],
+      parts: [
+        { id: 'P1', measures: [buildMeasure(0, 'C', 'quarter', false)] },
+        { id: 'P2', measures: [buildMeasure(0, 'D', 'quarter', false)] }
+      ],
+      spanners: []
+    };
+
+    const denseScore: Score = {
+      id: 'inter-part-gap-dense',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 520,
+        pageMargins: { left: 80, right: 80, top: 40, bottom: 40 }
+      },
+      partList: [
+        { id: 'P1', name: 'Top Dense' },
+        { id: 'P2', name: 'Bottom Dense' }
+      ],
+      parts: [
+        { id: 'P1', measures: [buildMeasure(0, 'E', '16th', true)] },
+        { id: 'P2', measures: [buildMeasure(0, 'D', '16th', true)] }
+      ],
+      spanners: []
+    };
+
+    const sparse = renderToSVGPages(sparseScore, { layout: { mode: 'paginated', scale: 1 } });
+    const dense = renderToSVGPages(denseScore, { layout: { mode: 'paginated', scale: 1 } });
+
+    const sparseStaves = extractSvgElementBounds(sparse.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+    const denseStaves = extractSvgElementBounds(dense.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+
+    expect(sparseStaves.length).toBeGreaterThanOrEqual(2);
+    expect(denseStaves.length).toBeGreaterThanOrEqual(2);
+
+    const sparseGap =
+      sparseStaves[1] && sparseStaves[0] ? sparseStaves[1].y - (sparseStaves[0].y + sparseStaves[0].height) : 0;
+    const denseGap =
+      denseStaves[1] && denseStaves[0] ? denseStaves[1].y - (denseStaves[0].y + denseStaves[0].height) : 0;
+
+    expect(denseGap).toBeGreaterThan(sparseGap);
+    expect(denseGap).toBeGreaterThanOrEqual(24);
+    expect(dense.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 
   it('respects defaults system margins without shrinking content for label columns', () => {

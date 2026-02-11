@@ -1,3 +1,5 @@
+import { JSDOM } from 'jsdom';
+
 import { extractSvgElementBounds, type SvgElementBounds } from './svg-collision.js';
 
 /** Lightweight geometry snapshot for notation-oriented SVG audits. */
@@ -111,6 +113,24 @@ export interface SystemCropRegionOptions {
   paddingLeft?: number;
 }
 
+/** One detected steep curve path that likely indicates unstable slur routing. */
+export interface ExtremeCurvePath {
+  pathIndex: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  deltaX: number;
+  deltaY: number;
+}
+
+/** Thresholds for steep-curve detection used in headless quality checks. */
+export interface ExtremeCurveDetectionOptions {
+  minVerticalDelta?: number;
+  minHorizontalSpan?: number;
+  minSlopeRatio?: number;
+}
+
 /** Collect geometry for core notation primitives used by renderer-quality checks. */
 export function collectNotationGeometry(svgMarkup: string): NotationGeometrySnapshot {
   return {
@@ -120,6 +140,74 @@ export function collectNotationGeometry(svgMarkup: string): NotationGeometrySnap
     flags: extractSvgElementBounds(svgMarkup, { selector: '.vf-flag' }),
     barlines: extractSvgElementBounds(svgMarkup, { selector: '.vf-stavebarline' })
   };
+}
+
+/**
+ * Detect steep cubic-curve paths likely to be malformed slur routing.
+ * The filter targets unfilled stroked paths with cubic commands so glyph shapes
+ * and filled outlines do not pollute results.
+ */
+export function detectExtremeCurvePaths(
+  svgMarkup: string,
+  options: ExtremeCurveDetectionOptions = {}
+): ExtremeCurvePath[] {
+  const minVerticalDelta = options.minVerticalDelta ?? 80;
+  const minHorizontalSpan = options.minHorizontalSpan ?? 60;
+  const minSlopeRatio = options.minSlopeRatio ?? 0.5;
+  const extremes: ExtremeCurvePath[] = [];
+  const dom = new JSDOM(svgMarkup, { contentType: 'image/svg+xml' });
+  const document = dom.window.document;
+  const candidates = [...document.querySelectorAll('path[d]')];
+
+  for (let pathIndex = 0; pathIndex < candidates.length; pathIndex += 1) {
+    const candidate = candidates[pathIndex];
+    if (!candidate) {
+      continue;
+    }
+
+    const stroke = candidate.getAttribute('stroke');
+    const fill = candidate.getAttribute('fill');
+    if (stroke === null && fill !== 'none') {
+      continue;
+    }
+    if (stroke === 'none' && fill !== 'none') {
+      continue;
+    }
+
+    const d = candidate.getAttribute('d');
+    if (!d || (!d.includes('C') && !d.includes('c'))) {
+      continue;
+    }
+
+    const anchors = parseFirstCubicCurveAnchors(d);
+    if (!anchors) {
+      continue;
+    }
+
+    const deltaX = Math.abs(anchors.endX - anchors.startX);
+    const deltaY = Math.abs(anchors.endY - anchors.startY);
+    if (deltaY < minVerticalDelta || deltaX < minHorizontalSpan) {
+      continue;
+    }
+
+    const slopeRatio = deltaY / Math.max(1, deltaX);
+    if (slopeRatio < minSlopeRatio) {
+      continue;
+    }
+
+    extremes.push({
+      pathIndex,
+      startX: anchors.startX,
+      startY: anchors.startY,
+      endX: anchors.endX,
+      endY: anchors.endY,
+      deltaX,
+      deltaY
+    });
+  }
+
+  dom.window.close();
+  return extremes;
 }
 
 /**
@@ -487,6 +575,87 @@ export function deriveSystemCropRegion(
     height,
     unit: 'pixels'
   };
+}
+
+/** Parse `M ... C ...` anchors from one path payload for steep-curve checks. */
+function parseFirstCubicCurveAnchors(
+  d: string
+): { startX: number; startY: number; endX: number; endY: number } | undefined {
+  const tokens = d.match(/[AaCcHhLlMmQqSsTtVvZz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+  if (!tokens || tokens.length === 0) {
+    return undefined;
+  }
+
+  let command = '';
+  let index = 0;
+  let currentX = 0;
+  let currentY = 0;
+
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (!token) {
+      break;
+    }
+
+    if (/^[A-Za-z]$/.test(token)) {
+      command = token;
+      index += 1;
+      continue;
+    }
+
+    if (command === 'M' || command === 'L') {
+      const x = Number(tokens[index]);
+      const y = Number(tokens[index + 1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return undefined;
+      }
+      currentX = x;
+      currentY = y;
+      index += 2;
+      if (command === 'M') {
+        command = 'L';
+      }
+      continue;
+    }
+
+    if (command === 'm' || command === 'l') {
+      const dx = Number(tokens[index]);
+      const dy = Number(tokens[index + 1]);
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+        return undefined;
+      }
+      currentX += dx;
+      currentY += dy;
+      index += 2;
+      if (command === 'm') {
+        command = 'l';
+      }
+      continue;
+    }
+
+    if (command === 'C' || command === 'c') {
+      const x3 = Number(tokens[index + 4]);
+      const y3 = Number(tokens[index + 5]);
+      if (!Number.isFinite(x3) || !Number.isFinite(y3)) {
+        return undefined;
+      }
+
+      const startX = currentX;
+      const startY = currentY;
+      const endX = command === 'c' ? currentX + x3 : x3;
+      const endY = command === 'c' ? currentY + y3 : y3;
+      if (![startX, startY, endX, endY].every(Number.isFinite)) {
+        return undefined;
+      }
+
+      return { startX, startY, endX, endY };
+    }
+
+    // Skip unsupported command payloads conservatively; we only need the first cubic.
+    index += 1;
+  }
+
+  return undefined;
 }
 
 /**

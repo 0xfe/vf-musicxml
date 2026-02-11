@@ -246,9 +246,9 @@ function createPitchNote(
   const note = new StaveNote(staveNoteData);
 
   event.notes.forEach((noteData, index) => {
-    const accidental = mapAccidental(noteData);
+    const accidental = createAccidentalModifier(noteData, diagnostics);
     if (accidental) {
-      note.addModifier(new Accidental(accidental), index);
+      note.addModifier(accidental, index);
     }
 
     const articulationCode = mapArticulation(noteData, diagnostics);
@@ -367,9 +367,9 @@ function createGraceNote(event: NoteEvent, clef: string, diagnostics: Diagnostic
   });
 
   event.notes.forEach((noteData, index) => {
-    const accidental = mapAccidental(noteData);
+    const accidental = createAccidentalModifier(noteData, diagnostics);
     if (accidental) {
-      grace.addModifier(new Accidental(accidental), index);
+      grace.addModifier(accidental, index);
     }
   });
 
@@ -476,27 +476,157 @@ function noteDataToKey(noteData: NoteData, diagnostics: Diagnostic[]): string | 
   return undefined;
 }
 
-/** Map MusicXML accidental tokens into VexFlow accidental symbols. */
-function mapAccidental(noteData: NoteData): string | undefined {
-  const value = noteData.accidental?.value;
-  if (!value) {
+/** Build one VexFlow accidental modifier from MusicXML accidental metadata. */
+function createAccidentalModifier(noteData: NoteData, diagnostics: Diagnostic[]): Accidental | undefined {
+  const token = mapAccidental(noteData);
+  if (!token) {
+    if (noteData.accidental?.value) {
+      diagnostics.push({
+        code: 'UNSUPPORTED_ACCIDENTAL',
+        severity: 'warning',
+        message: `Unsupported accidental '${noteData.accidental.value}' is not rendered.`
+      });
+    } else if (hasUnsupportedFractionalAlter(noteData.pitch?.alter)) {
+      diagnostics.push({
+        code: 'UNSUPPORTED_MICROTONAL_ALTER',
+        severity: 'warning',
+        message: `Unsupported fractional pitch alter '${noteData.pitch?.alter}' cannot be rendered as a VexFlow accidental.`
+      });
+    }
     return undefined;
   }
 
+  try {
+    const accidental = new Accidental(token);
+    if (noteData.accidental?.cautionary || noteData.accidental?.parentheses || noteData.accidental?.bracket) {
+      accidental.setAsCautionary();
+    }
+    return accidental;
+  } catch {
+    diagnostics.push({
+      code: 'UNSUPPORTED_ACCIDENTAL',
+      severity: 'warning',
+      message: `Unsupported accidental '${noteData.accidental?.value ?? token}' is not rendered.`
+    });
+    return undefined;
+  }
+}
+
+/** Map MusicXML accidental tokens into VexFlow accidental symbols. */
+function mapAccidental(noteData: NoteData): string | undefined {
+  const value = noteData.accidental?.value?.trim();
+  const mappedFromToken = value ? mapAccidentalToken(value) : undefined;
+  if (mappedFromToken) {
+    return mappedFromToken;
+  }
+
+  // Many microtonal fixtures encode quarter-tone accidentals via fractional
+  // `pitch.alter` without an explicit `<accidental>` element. We only infer
+  // fractional tokens here to avoid over-emitting regular key-signature
+  // accidentals when explicit accidental intent is absent.
+  return mapFractionalPitchAlterToAccidental(noteData.pitch?.alter);
+}
+
+/** Map one explicit accidental token string into a VexFlow accidental symbol. */
+function mapAccidentalToken(value: string): string | undefined {
+  const normalized = value.trim().toLowerCase();
   const map: Record<string, string> = {
     sharp: '#',
     flat: 'b',
     natural: 'n',
     'double-sharp': '##',
+    'sharp-sharp': '##',
     'double-flat': 'bb',
+    'flat-flat': 'bb',
+    'triple-sharp': '###',
+    'triple-flat': 'bbb',
+    'natural-sharp': '#',
+    'natural-flat': 'b',
+    'quarter-flat': 'd',
+    'quarter-sharp': '+',
+    'three-quarters-flat': 'db',
+    'three-quarters-sharp': '++',
+    'slash-quarter-sharp': '+',
+    'slash-sharp': '#',
+    'slash-flat': 'b',
+    'double-sharp-up': '##',
+    'double-sharp-down': '##',
+    'double-flat-up': 'bb',
+    'double-flat-down': 'bb',
+    sori: 'o',
+    koron: 'k',
+    'sharp-up': '#',
+    'sharp-down': '#',
+    'flat-up': 'b',
+    'flat-down': 'b',
+    'natural-up': 'n',
+    'natural-down': 'n',
+    sharpup: '#',
+    sharpdown: '#',
+    flatup: 'b',
+    flatdown: 'b',
+    naturalup: 'n',
+    naturaldown: 'n',
     '#': '#',
     b: 'b',
     n: 'n',
     '##': '##',
-    bb: 'bb'
+    bb: 'bb',
+    d: 'd',
+    db: 'db',
+    '+': '+',
+    '++': '++',
+    '+-': '+-',
+    bs: 'bs',
+    bss: 'bss',
+    bbs: 'bbs',
+    ashs: 'ashs',
+    afhf: 'afhf',
+    o: 'o',
+    k: 'k'
   };
 
-  return map[value] ?? undefined;
+  return map[normalized] ?? undefined;
+}
+
+/** Map supported quarter-tone `pitch.alter` values into accidental symbols. */
+function mapFractionalPitchAlterToAccidental(alter: number | undefined): string | undefined {
+  if (!Number.isFinite(alter)) {
+    return undefined;
+  }
+
+  const roundedToHalf = Math.round((alter ?? 0) * 2) / 2;
+  if (Math.abs((alter ?? 0) - roundedToHalf) > 0.001) {
+    return undefined;
+  }
+
+  switch (roundedToHalf) {
+    case 0.5:
+      return '+';
+    case -0.5:
+      return 'd';
+    case 1.5:
+      return '++';
+    case -1.5:
+      return 'db';
+    default:
+      return undefined;
+  }
+}
+
+/** True when pitch alter is fractional but not currently supported by the mapper. */
+function hasUnsupportedFractionalAlter(alter: number | undefined): boolean {
+  if (!Number.isFinite(alter)) {
+    return false;
+  }
+
+  const roundedToHalf = Math.round((alter ?? 0) * 2) / 2;
+  const isFractional = Math.abs(roundedToHalf % 1) > 0.001;
+  if (!isFractional) {
+    return false;
+  }
+
+  return mapFractionalPitchAlterToAccidental(alter) === undefined;
 }
 
 /** Map normalized articulation tokens into VexFlow articulation glyph IDs. */

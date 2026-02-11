@@ -142,7 +142,7 @@ function buildSlurSpanners(
 
           for (const slur of noteData.slurs) {
             const number = slur.number ?? '1';
-            const key = `${voice.id}|${number}`;
+            const key = slurMatchKey(voice.id, event.staff, number);
             if (slur.type === 'stop') {
               const active = activeByKey.get(key);
               if (!active) {
@@ -150,7 +150,7 @@ function buildSlurSpanners(
                   ctx,
                   'UNMATCHED_SLUR_STOP',
                   'warning',
-                  `Slur stop had no matching start in part '${part.id}', voice '${voice.id}', number '${number}'.`
+                  `Slur stop had no matching start in part '${part.id}', voice '${voice.id}', staff '${event.staff ?? 1}', number '${number}'.`
                 );
               } else {
                 spanners.push({
@@ -191,6 +191,11 @@ function buildSlurSpanners(
   }
 
   return spanners;
+}
+
+/** Build deterministic slur matching keys from voice + staff + MusicXML slur number. */
+function slurMatchKey(voiceId: string, staff: number | undefined, number: string): string {
+  return `${voiceId}|${staff ?? 1}|${number}`;
 }
 
 /** Build wedge spanners from direction wedge start/stop tokens. */

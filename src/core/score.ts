@@ -244,6 +244,12 @@ export interface Unpitched {
 /** Accidental token as reported by MusicXML. */
 export interface AccidentalInfo {
   value: string;
+  /** True when MusicXML marks this accidental as cautionary/editorial. */
+  cautionary?: boolean;
+  /** True when MusicXML requests explicit parentheses around the accidental. */
+  parentheses?: boolean;
+  /** True when MusicXML requests bracketed accidental rendering. */
+  bracket?: boolean;
 }
 
 /** Notehead token as reported by MusicXML. */

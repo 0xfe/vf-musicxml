@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectNotationGeometry,
+  detectExtremeCurvePaths,
   detectFlagBeamOverlaps,
   deriveSystemCropRegion,
   detectNoteheadBarlineIntrusions,
@@ -77,6 +78,16 @@ const SYSTEM_BOUNDS_SVG = `
   <g class="vf-stavebarline"><rect x="200" y="90" width="1" height="60" /></g>
   <g class="vf-stavebarline"><rect x="20" y="170" width="1" height="60" /></g>
   <g class="vf-stavebarline"><rect x="200" y="170" width="1" height="60" /></g>
+</svg>
+`;
+
+/** Curve-path fixture for slur-shape anomaly detection checks. */
+const EXTREME_CURVE_SVG = `
+<svg width="300" height="200" viewBox="0 0 300 200">
+  <path stroke-width="1" fill="none" d="M40 150C100 120,160 90,220 40" />
+  <path stroke-width="1" fill="none" d="M40 80C90 75,140 75,190 80" />
+  <path stroke-width="1" fill="black" d="M40 40C70 20,100 20,130 40" />
+  <path stroke="#000" fill="none" d="M20 190c60 -20,120 -40,180 -120" />
 </svg>
 `;
 
@@ -164,5 +175,17 @@ describe('notation geometry testkit', () => {
       height: 160,
       unit: 'pixels'
     });
+  });
+
+  it('detects steep curve paths for slur-routing anomaly checks', () => {
+    const extremes = detectExtremeCurvePaths(EXTREME_CURVE_SVG, {
+      minVerticalDelta: 50,
+      minHorizontalSpan: 80,
+      minSlopeRatio: 0.5
+    });
+
+    expect(extremes.length).toBe(2);
+    expect(extremes[0]?.deltaX).toBeGreaterThan(100);
+    expect(extremes[0]?.deltaY).toBeGreaterThan(100);
   });
 });

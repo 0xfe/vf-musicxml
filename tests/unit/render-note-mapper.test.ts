@@ -220,6 +220,100 @@ describe('render note mapper', () => {
     expect(noteResult.notes[1]?.getStemDirection()).toBe(-1);
   });
 
+  it('renders parenthesized and microtonal accidentals from MusicXML accidental tokens', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <accidental cautionary="yes" parentheses="yes">quarter-flat</accidental>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <accidental>three-quarters-sharp</accidental>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    const firstAccidental = noteResult.notes[0]?.getModifiersByType('Accidental')[0] as
+      | { type?: string; cautionary?: boolean }
+      | undefined;
+    const secondAccidental = noteResult.notes[1]?.getModifiersByType('Accidental')[0] as
+      | { type?: string; cautionary?: boolean }
+      | undefined;
+
+    expect(firstAccidental?.type).toBe('d');
+    expect(firstAccidental?.cautionary).toBe(true);
+    expect(secondAccidental?.type).toBe('++');
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ACCIDENTAL')).toBe(false);
+  });
+
+  it('renders fractional pitch alters as microtonal accidentals when explicit accidental tags are absent', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note>
+        <pitch><step>C</step><alter>0.5</alter><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+      <note>
+        <pitch><step>D</step><alter>-0.5</alter><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+      <note>
+        <pitch><step>E</step><alter>1.5</alter><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+      <note>
+        <pitch><step>F</step><alter>-1.5</alter><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    const accidentalTypes = noteResult.notes.map((note) => {
+      const accidental = note?.getModifiersByType('Accidental')[0] as { type?: string } | undefined;
+      return accidental?.type;
+    });
+
+    expect(accidentalTypes).toEqual(['+', 'd', '++', 'db']);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_MICROTONAL_ALTER')).toBe(false);
+  });
+
   it('parses voice-event map keys for downstream render passes', () => {
     expect(parseVoiceEventKey('1:0')).toEqual({ voiceId: '1', eventIndex: 0 });
     expect(parseVoiceEventKey('voice:alpha:9')).toEqual({ voiceId: 'voice:alpha', eventIndex: 9 });

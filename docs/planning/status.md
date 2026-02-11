@@ -6,7 +6,7 @@ This file is the current snapshot of planning state. Update this first as milest
 
 - Last updated: 2026-02-11 (US)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress.
+- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress; latest M10D slice improved inter-part spacing, slur side-routing stability, and left-label overflow handling.
 - Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
 
 ### Next step when execution continues:
@@ -14,6 +14,7 @@ This file is the current snapshot of planning state. Update this first as milest
   2. Continue M8C: calibrate golden excerpt alignment and thresholds, then expand coverage from proof-points to broader fixture waves.
   3. Execute M9A/M9B: land style rule catalog and wire style diagnostics into deterministic quality gates.
   4. Continue M10C/M10D: improve page-level fidelity (system width calibration + print-geometry alignment), reduce Bach proof-point mismatch, and promote proof-point policy from advisory toward blocking.
+  5. Add dense multi-system spacing quality gates for proof-points where first-system spacing remains compressed (`realworld-music21-beethoven-op18no1-m1` currently `first/median gap ratio ~= 0.6459`).
 
 ## Milestone progress:
 
@@ -100,8 +101,8 @@ This file is the current snapshot of planning state. Update this first as milest
   - Implemented M8A golden sync pipeline (`npm run golden:sync`) and generated `/Users/mo/git/musicxml/fixtures/golden/manifest.json` plus 156 cached reference images under `/Users/mo/git/musicxml/fixtures/golden/lilypond-v2.24/`, with explicit `referenceKind` tagging for v2.24 primary vs v2.25 fallback mappings.
   - Implemented M8B first remediation slice for `lilypond-01a-pitches-pitches`: generalized first-column width compensation to avoid opening-measure over-compression, added deterministic measure-spacing ratio tooling, and removed noisy overflow diagnostics in favor of geometry-based containment checks.
   - Added style-fidelity milestone planning (`docs/planning/milestone-9.md`) with source-linked engraving references, style dimensions (`S1..S6`), proof-point fixtures, deterministic gate strategy, and explicit burndown execution waves.
-  - Implemented M8C initial headless golden comparison runner (`npm run test:golden`, `scripts/run-golden-comparison.mjs`) with fixture-level thresholds, blocking/advisory policy, excerpt crop support, and artifact reports under `artifacts/golden-comparison/`.
-  - Added first real-world proof-point golden fixture (`realworld-music21-bach-bwv1-6-8bars`) using `fixtures/images/bwv-1.6-8bars.png`; current advisory failure establishes baseline mismatch evidence prior to pagination/title/label support.
+- Implemented M8C initial headless golden comparison runner (`npm run test:golden`, `scripts/run-golden-comparison.mjs`) with fixture-level thresholds, blocking/advisory policy, excerpt crop support, and artifact reports under `artifacts/golden-comparison/`.
+- Added first real-world proof-point golden fixture (`realworld-music21-bach-bwv1-6-8bars`) using `fixtures/images/bwv-1.6-8bars.png`; current advisory failure establishes baseline mismatch evidence prior to pagination/title/label support.
   - Opened pagination/publishing-layout milestone (`docs/planning/milestone-10.md`) to deliver paginated-default rendering, continuous-mode fallback, and page-level score metadata elements (title, instrument labels, page numbers).
   - Implemented M10 baseline renderer API/layout engine: paginated default mode, horizontal-continuous fallback, deterministic system/page planning, part labels at system starts, and multi-page SVG output.
   - Added deterministic SVG page background rect injection (`mx-page-background`) to eliminate transparent/black viewer artifacts in headless/browser screenshot workflows.
@@ -118,6 +119,14 @@ This file is the current snapshot of planning state. Update this first as milest
   - Added parser/model support for MusicXML note-level `default-x` and explicit `<stem>` direction metadata to preserve source engraving intent for later M10D spacing/stem parity work.
   - Added renderer stem-direction parity path (`stem_direction` mapping + beam generation with maintained stem directions) and associated deterministic parser/unit/integration coverage.
   - Added parser/model support for authored MusicXML beam markers (`<beam number=\"...\">`) and renderer preference for source beam grouping (level-1 begin/continue/end) before auto-beam fallback.
-  - Added optional centroid-based alignment controls to headless visual diffs (`alignByInkCentroid`, `maxAlignmentShift`, `alignmentAxis`) and wired proof-point normalization support into `test:golden`.
-  - Extended golden proof-point reports with alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for triage, then constrained Bach proof-point alignment to horizontal-only (`alignmentAxis: "x"`).
-  - Fixed beaming regression where flags were still visible on beamed notes by preparing beam groups before `voice.draw()`, then drawing prepared beams post-voice render; added deterministic conformance gate coverage for expected-pass flag/beam overlaps (`expectedPassFlagBeamOverlapCount`).
+- Added optional centroid-based alignment controls to headless visual diffs (`alignByInkCentroid`, `maxAlignmentShift`, `alignmentAxis`) and wired proof-point normalization support into `test:golden`.
+- Extended golden proof-point reports with alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for triage, then constrained Bach proof-point alignment to horizontal-only (`alignmentAxis: "x"`).
+- Fixed beaming regression where flags were still visible on beamed notes by preparing beam groups before `voice.draw()`, then drawing prepared beams post-voice render; added deterministic conformance gate coverage for expected-pass flag/beam overlaps (`expectedPassFlagBeamOverlapCount`).
+- Added adaptive inter-part gap expansion based on adjacent-part notation complexity to reduce cross-part collisions in dense real-world systems.
+- Added robust left-label fit logic under source system margins so label text wraps/truncates safely without stealing notation lane width.
+- Improved slur routing stability by selecting curve side via endpoint skew minimization (with placement override support) and aligning endpoint anchor calculations with rendered curve positions.
+- Expanded headless curve-anomaly detection to parse absolute and relative cubic path commands, improving deterministic detection coverage for diagonal cut-through slur regressions.
+- Re-ran proof-point inspections after these changes:
+  - `realworld-music21-bach-bwv1-6`: `flags=0`, `flagBeamOverlaps=0`, spacing ratio `1.0395`.
+  - `realworld-music21-beethoven-op133-longform`: no cross-page diagonal slur artifacts on inspected page (`extremeCurveCount=0`).
+  - `realworld-music21-beethoven-op18no1-m1`: cut-through slur regression resolved on inspected page (`extremeCurveCount=0`), but spacing ratio remains low (`0.6459`) and stays in active follow-up.

@@ -59,6 +59,12 @@ const MINIMUM_FITTED_MEASURE_WIDTH = 82;
 const DEFAULT_SYSTEM_GAP = 40;
 /** Default label column width for part/staff names. */
 const DEFAULT_LABEL_WIDTH = 86;
+/** Hard cap for auto label width so it cannot consume too much system width. */
+const MAX_LABEL_WIDTH = 180;
+/** Minimum label column width when labels are enabled. */
+const MIN_LABEL_WIDTH = 64;
+/** Default global rendering scale factor (80% of previous size). */
+const DEFAULT_RENDER_SCALE = 0.8;
 /** Approximate character width multiplier for text placement without `measureText`. */
 const TEXT_WIDTH_FACTOR = 0.56;
 /** Damping factor used when compensating first-column width for system-start modifiers. */
@@ -72,6 +78,11 @@ const FIRST_COLUMN_EXTRA_WIDTH_CAP_RATIO = 0.32;
 interface PartLayout {
   part: Part;
   staffCount: number;
+  /**
+   * Relative notation density/complexity score in [0, 1].
+   * Used to adapt vertical spacing between adjacent parts.
+   */
+  complexity: number;
 }
 
 /** First-column stave bounds for one rendered part, used by group connectors. */
@@ -139,6 +150,7 @@ interface LayoutPlanConfig {
   rightHeader?: string;
   leftFooter?: string;
   rightFooter?: string;
+  renderScale: number;
 }
 
 /** Forced line/page break starts collected from parsed MusicXML `<print>` directives. */
@@ -294,6 +306,7 @@ function renderIntoContainer(
       const renderer = new Renderer(hostDiv, Renderer.Backends.SVG);
       renderer.resize(envelope.width, envelope.height);
       const context = renderer.getContext();
+      applyRenderScale(context, config);
       ensurePageBackgroundRect(hostDiv, envelope);
 
       drawPageHeaderFooter(context, score, pagePlan.pageNumber, pagePlans.length, envelope.width, envelope.height, config);
@@ -310,7 +323,11 @@ function renderIntoContainer(
           continue;
         }
 
-        for (const partLayout of partLayouts) {
+        for (let partLayoutIndex = 0; partLayoutIndex < partLayouts.length; partLayoutIndex += 1) {
+          const partLayout = partLayouts[partLayoutIndex];
+          if (!partLayout) {
+            continue;
+          }
           const partEventNotes = eventNotesByPart.get(partLayout.part.id) ?? new Map<string, StaveNote>();
           eventNotesByPart.set(partLayout.part.id, partEventNotes);
 
@@ -431,7 +448,11 @@ function renderIntoContainer(
             );
           }
 
-          partCursorY += partLayout.staffCount * config.staffRowHeight + config.partGap;
+          const nextPartLayout = partLayouts[partLayoutIndex + 1];
+          partCursorY += partLayout.staffCount * config.staffRowHeight;
+          if (nextPartLayout) {
+            partCursorY += resolveInterPartGap(partLayout, nextPartLayout, config);
+          }
         }
 
         const groupConnectorCount = drawPartGroupConnectors(score, partLayouts, partBoundaries, context);
@@ -515,7 +536,8 @@ function resolveClefForStaff(measure: Measure | undefined, staffNumber: number):
 function buildPartLayouts(parts: Part[]): PartLayout[] {
   return parts.map((part) => ({
     part,
-    staffCount: Math.max(1, ...part.measures.map((measure) => Math.max(1, measure.effectiveAttributes.staves)))
+    staffCount: Math.max(1, ...part.measures.map((measure) => Math.max(1, measure.effectiveAttributes.staves))),
+    complexity: estimatePartComplexity(part)
   }));
 }
 
@@ -661,16 +683,25 @@ function resolveLayoutPlanConfig(
   const showPartNames = options.layout?.labels?.showPartNames ?? true;
   const showPartAbbreviations = options.layout?.labels?.showPartAbbreviations ?? true;
   const repeatOnSystemBreak = options.layout?.labels?.repeatOnSystemBreak ?? true;
-  const labelWidth =
-    partLayouts.length > 0 && (showPartNames || showPartAbbreviations)
-      ? options.layout?.labels?.labelWidth ?? DEFAULT_LABEL_WIDTH
-      : 0;
+  const labelsEnabled = partLayouts.length > 0 && (showPartNames || showPartAbbreviations);
+  const labelWidth = labelsEnabled
+    ? clampInt(
+        Math.round(
+          options.layout?.labels?.labelWidth ?? estimateLabelWidth(score.partList, showPartNames, showPartAbbreviations)
+        ),
+        MIN_LABEL_WIDTH,
+        MAX_LABEL_WIDTH
+      )
+    : 0;
   const hasSourceSystemMargins =
     Number.isFinite(defaultSystemMargins?.left) || Number.isFinite(defaultSystemMargins?.right);
-  const reserveLabelColumn = !hasSourceSystemMargins;
   const systemLeftMargin = defaultSystemMargins?.left ?? 0;
   const systemRightMargin = defaultSystemMargins?.right ?? 0;
-  const contentStartX = margins.left + systemLeftMargin + (reserveLabelColumn ? labelWidth : 0);
+  // Source-authored system margins define the notation lane. In that case we
+  // keep notation width intact and rely on wrapped/truncated labels to avoid
+  // left-edge clipping.
+  const reserveLabelColumn = !hasSourceSystemMargins ? labelWidth : 0;
+  const contentStartX = margins.left + systemLeftMargin + reserveLabelColumn;
   const contentRightEdge = pageWidth - margins.right - systemRightMargin;
   const contentWidth = Math.max(MINIMUM_MEASURE_WIDTH, contentRightEdge - contentStartX);
   const userTargetMeasures = options.layout?.system?.targetMeasuresPerSystem;
@@ -691,10 +722,14 @@ function resolveLayoutPlanConfig(
     Boolean(score.metadata?.movementTitle);
 
   const hasDefaultStaffDistance = Number.isFinite(defaultStaffDistance) && (defaultStaffDistance ?? 0) > 0;
-  const staffRowHeight = hasDefaultStaffDistance
-    ? clampInt(Math.round(defaultStaffDistance ?? STAFF_ROW_HEIGHT), 48, 140)
+  const densityPressure = estimateDensityPressure(partLayouts);
+  const baseStaffRowHeight = hasDefaultStaffDistance
+    ? clampInt(Math.round((defaultStaffDistance ?? STAFF_ROW_HEIGHT) * 1.15), 60, 160)
     : STAFF_ROW_HEIGHT;
-  const partGap = hasDefaultStaffDistance ? 0 : PART_GAP;
+  const staffRowHeight = clampInt(Math.round(baseStaffRowHeight + densityPressure * 14), 60, 170);
+  const basePartGap = hasDefaultStaffDistance ? Math.max(18, Math.round(staffRowHeight * 0.24)) : PART_GAP;
+  const partGap = clampInt(Math.round(basePartGap + densityPressure * 10), 18, 72);
+  const renderScale = clampScale(options.layout?.scale ?? DEFAULT_RENDER_SCALE);
 
   return {
     mode,
@@ -719,7 +754,8 @@ function resolveLayoutPlanConfig(
     leftHeader: options.layout?.headerFooter?.leftHeader ?? score.metadata?.headerLeft,
     rightHeader: options.layout?.headerFooter?.rightHeader ?? score.metadata?.headerRight,
     leftFooter: options.layout?.headerFooter?.leftFooter,
-    rightFooter: options.layout?.headerFooter?.rightFooter
+    rightFooter: options.layout?.headerFooter?.rightFooter,
+    renderScale
   };
 }
 
@@ -793,8 +829,9 @@ function estimateSystemHeight(partLayouts: PartLayout[], config: LayoutPlanConfi
       continue;
     }
     height += layout.staffCount * config.staffRowHeight;
-    if (index < partLayouts.length - 1) {
-      height += config.partGap;
+    const nextLayout = partLayouts[index + 1];
+    if (nextLayout) {
+      height += resolveInterPartGap(layout, nextLayout, config);
     }
   }
 
@@ -1247,8 +1284,15 @@ function drawPartLabel(
     return;
   }
 
-  const x = config.contentStartX - config.labelWidth + 6;
-  drawText(context, label, x, y, 12, isFirstSystem ? 'bold' : 'normal');
+  const labelPadding = 6;
+  // Label drawing should never rely on more horizontal room than the actual
+  // gap between page-left and notation start. This avoids left-edge clipping
+  // when source system margins are narrow.
+  const maxLeftSpace = Math.max(20, config.contentStartX - 2 - labelPadding);
+  const availableWidth = Math.max(20, Math.min(config.labelWidth - labelPadding * 2, maxLeftSpace));
+  const lines = wrapTextToWidth(label, availableWidth, 12, 3);
+  const x = Math.max(2, config.contentStartX - availableWidth - labelPadding);
+  drawText(context, lines.join('\n'), x, y, 12, isFirstSystem ? 'bold' : 'normal');
 }
 
 /** Resolve label text for first and repeated system starts. */
@@ -1318,6 +1362,65 @@ function estimateTextWidth(text: string, fontSize: number): number {
     maxWidth = Math.max(maxWidth, Math.ceil(line.length * fontSize * TEXT_WIDTH_FACTOR));
   }
   return maxWidth;
+}
+
+/** Wrap label text to a fixed pixel width with a hard max line count. */
+function wrapTextToWidth(text: string, maxWidth: number, fontSize: number, maxLines: number): string[] {
+  const tokens = text.trim().split(/\s+/).filter((token) => token.length > 0);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [];
+  let current = '';
+  for (const token of tokens) {
+    const candidate = current.length > 0 ? `${current} ${token}` : token;
+    if (estimateTextWidth(candidate, fontSize) <= maxWidth || current.length === 0) {
+      current = candidate;
+      continue;
+    }
+
+    lines.push(current);
+    current = token;
+    if (lines.length >= maxLines - 1) {
+      break;
+    }
+  }
+
+  if (lines.length < maxLines && current.length > 0) {
+    lines.push(current);
+  }
+
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+  }
+
+  const lastIndex = lines.length - 1;
+  const last = lines[lastIndex];
+  if (last && estimateTextWidth(last, fontSize) > maxWidth) {
+    lines[lastIndex] = truncateTextToWidth(last, maxWidth, fontSize);
+  }
+
+  return lines.map((line) => truncateTextToWidth(line, maxWidth, fontSize));
+}
+
+/** Truncate one text line to fit a pixel width, appending ellipsis when needed. */
+function truncateTextToWidth(text: string, maxWidth: number, fontSize: number): string {
+  if (estimateTextWidth(text, fontSize) <= maxWidth) {
+    return text;
+  }
+
+  const ellipsis = '...';
+  const chars = [...text];
+  while (chars.length > 0) {
+    chars.pop();
+    const candidate = `${chars.join('')}${ellipsis}`;
+    if (estimateTextWidth(candidate, fontSize) <= maxWidth) {
+      return candidate;
+    }
+  }
+
+  return ellipsis;
 }
 
 /** Count rendered text lines for multiline-aware header/layout calculations. */
@@ -1692,6 +1795,155 @@ function mapGroupTokenToConnector(token: string): StaveConnectorType | undefined
     default:
       return 'bracket';
   }
+}
+
+/** Estimate label column width from part names/abbreviations when no explicit width is supplied. */
+function estimateLabelWidth(
+  definitions: PartDefinition[],
+  showPartNames: boolean,
+  showPartAbbreviations: boolean
+): number {
+  const candidates: string[] = [];
+  for (const definition of definitions) {
+    if (showPartNames && definition.name) {
+      candidates.push(definition.name);
+    }
+    if (showPartAbbreviations && definition.abbreviation) {
+      candidates.push(definition.abbreviation);
+    }
+  }
+
+  const widest = candidates.reduce((max, text) => Math.max(max, estimateTextWidth(text, 12)), 0);
+  if (widest <= 0) {
+    return DEFAULT_LABEL_WIDTH;
+  }
+
+  return Math.ceil(widest + 12);
+}
+
+/**
+ * Estimate per-part notation complexity for adaptive vertical spacing.
+ * Dense rhythmic content and frequent curved relations need more breathing room.
+ */
+function estimatePartComplexity(part: Part): number {
+  let noteCount = 0;
+  let beamCount = 0;
+  let curvedRelationCount = 0;
+  let chordCount = 0;
+  let denseRhythmCount = 0;
+
+  for (const measure of part.measures) {
+    for (const voice of measure.voices) {
+      for (const event of voice.events) {
+        if (event.kind !== 'note') {
+          continue;
+        }
+
+        noteCount += 1;
+        if (event.beams && event.beams.length > 0) {
+          beamCount += 1;
+        }
+        if (event.notes.length > 1) {
+          chordCount += 1;
+        }
+        if (event.noteType && ['16th', '32nd', '64th'].includes(event.noteType)) {
+          denseRhythmCount += 1;
+        }
+        if (event.notes.some((note) => (note.slurs?.length ?? 0) > 0 || (note.ties?.length ?? 0) > 0)) {
+          curvedRelationCount += 1;
+        }
+      }
+    }
+  }
+
+  if (noteCount === 0) {
+    return 0;
+  }
+
+  const beamRatio = beamCount / noteCount;
+  const curvedRatio = curvedRelationCount / noteCount;
+  const chordRatio = chordCount / noteCount;
+  const denseRatio = denseRhythmCount / noteCount;
+
+  return clamp(0.35 * beamRatio + 0.3 * curvedRatio + 0.2 * chordRatio + 0.15 * denseRatio, 0, 1);
+}
+
+/**
+ * Resolve vertical gap between adjacent parts.
+ * We keep a stable base gap, then expand for dense neighboring parts.
+ */
+function resolveInterPartGap(current: PartLayout, next: PartLayout, config: LayoutPlanConfig): number {
+  const adjacentComplexity = (current.complexity + next.complexity) / 2;
+  const complexityBoost = Math.round(adjacentComplexity * 18);
+  return clampInt(config.partGap + complexityBoost, 18, 84);
+}
+
+/** Estimate score density to tune adaptive vertical spacing heuristics. */
+function estimateDensityPressure(partLayouts: PartLayout[]): number {
+  let noteCount = 0;
+  let pressure = 0;
+
+  for (const layout of partLayouts) {
+    for (const measure of layout.part.measures) {
+      for (const voice of measure.voices) {
+        for (const event of voice.events) {
+          if (event.kind !== 'note') {
+            continue;
+          }
+
+          noteCount += 1;
+          let eventPressure = 0;
+          if (event.notes.length > 1) {
+            eventPressure += 0.35;
+          }
+          if (event.grace) {
+            eventPressure += 0.15;
+          }
+          if (event.beams && event.beams.length > 0) {
+            eventPressure += 0.2;
+          }
+          if (event.tuplets && event.tuplets.length > 0) {
+            eventPressure += 0.25;
+          }
+          if (event.notes.some((note) => (note.slurs?.length ?? 0) > 0 || (note.ties?.length ?? 0) > 0)) {
+            eventPressure += 0.2;
+          }
+          if (event.noteType && ['16th', '32nd', '64th'].includes(event.noteType)) {
+            eventPressure += 0.25;
+          }
+          pressure += eventPressure;
+        }
+      }
+    }
+  }
+
+  if (noteCount === 0) {
+    return 0;
+  }
+
+  return Math.min(1, pressure / (noteCount * 0.75));
+}
+
+/** Clamp render scale into a safe range for layout and text rendering. */
+function clampScale(scale: number): number {
+  if (!Number.isFinite(scale)) {
+    return DEFAULT_RENDER_SCALE;
+  }
+  return Math.max(0.4, Math.min(1.5, scale));
+}
+
+/** Clamp numeric values into a bounded range. */
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+/** Apply global render scaling while preserving a stable top-left margin anchor. */
+function applyRenderScale(context: ReturnType<Renderer['getContext']>, config: LayoutPlanConfig): void {
+  if (config.renderScale === 1) {
+    return;
+  }
+
+  context.scale(config.renderScale, config.renderScale);
 }
 
 /** Clamp nullable/numeric values to deterministic integer bounds. */

@@ -13,6 +13,10 @@
   - paginated default with multi-page planning/output,
   - horizontal-continuous fallback,
   - page/system label/header/footer hooks.
+- Latest M10D hardening:
+  - adaptive inter-part vertical spacing based on adjacent-part complexity (`resolveInterPartGap`),
+  - safer label wrap/truncation under source system margins without shrinking notation width,
+  - slur side selection by endpoint skew minimization when placement is not explicit.
 - Integration coverage now includes explicit paginated-option assertions (title/page-number/system-label rendering under forced multi-page layout).
 - Deterministic page-background injection is now enforced (`mx-page-background`) so headless/browser screenshots do not render transparent pages as black.
 - Parser now falls back to centered `<credit><credit-words>` for `metadata.workTitle` when explicit `<work><work-title>` is absent.
@@ -26,7 +30,12 @@
 - Renderer now prepares beam groups before `voice.draw()` and renders prepared beams afterward so VexFlow suppresses per-note flags for beamed notes.
 - Paginated spanner drawing now applies a page measure-window filter so off-window anchors do not emit false `SPANNER_ANCHOR_NOT_RENDERED`.
 - Headless visual diffing now supports optional centroid-based alignment (`alignByInkCentroid`, `maxAlignmentShift`, `alignmentAxis`) and emits alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) in golden reports.
+- Headless slur-anomaly detection now handles both absolute (`C`) and relative (`c`) cubic path commands, improving deterministic curve-regression detection coverage.
 - Latest Bach proof-point metrics with system-window auto-crop + horizontal-only centroid alignment: `mismatchRatio=0.200641`, `ssim=0.172106`, `structuralMismatchRatio=0.635738`, `alignmentShiftX=10`, `alignmentShiftY=0` (advisory fail; still below promotion threshold).
+- Latest proof-point inspection snapshot (`npm run inspect:score`):
+  - `realworld-music21-bach-bwv1-6`: `flags=0`, `flagBeamOverlaps=0`, first/median spacing ratio `1.0395`.
+  - `realworld-music21-beethoven-op133-longform` (page 1): `extremeCurveCount=0`.
+  - `realworld-music21-beethoven-op18no1-m1` (page 1): `extremeCurveCount=0` (major diagonal cut-through resolved), but spacing ratio remains low (`0.6459`, tracked as `B-003` in planning TODO).
 - M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
 - LilyPond roadmap semantics: `demos/lilypond/manifest.json` `categoryStatus` represents demo seeding only; conformance completion is computed from active fixture counts.
 - Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 6 pages).

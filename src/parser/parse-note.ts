@@ -1,4 +1,5 @@
 import type {
+  AccidentalInfo,
   ArticulationInfo,
   BarlineEndingInfo,
   BarlineInfo,
@@ -285,7 +286,7 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
 
   const pitch = pitchNode ? parsePitch(pitchNode, ctx) : undefined;
   const unpitched = unpitchedNode ? parseUnpitched(unpitchedNode) : undefined;
-  const accidental = textOf(firstChild(noteNode, 'accidental'));
+  const accidental = parseAccidental(noteNode);
   const notehead = textOf(firstChild(noteNode, 'notehead'));
   const ties = parseTies(noteNode);
   const slurs = parseSlurs(noteNode);
@@ -296,7 +297,7 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
   return {
     pitch,
     unpitched,
-    accidental: accidental ? { value: accidental } : undefined,
+    accidental,
     notehead: notehead ? { value: notehead } : undefined,
     ties,
     slurs,
@@ -304,6 +305,32 @@ export function parseNoteData(noteNode: XmlNode, ctx: ParseContext): NoteData {
     ornaments,
     lyrics
   };
+}
+
+/** Parse accidental token and cautionary/parenthesis attributes when present. */
+function parseAccidental(noteNode: XmlNode): AccidentalInfo | undefined {
+  const accidentalNode = firstChild(noteNode, 'accidental');
+  const value = textOf(accidentalNode);
+  if (!accidentalNode || !value) {
+    return undefined;
+  }
+
+  const parentheses = parseYesNoAttribute(accidentalNode, 'parentheses');
+  const bracket = parseYesNoAttribute(accidentalNode, 'bracket');
+  const cautionary = parseYesNoAttribute(accidentalNode, 'cautionary');
+  const editorial = parseYesNoAttribute(accidentalNode, 'editorial');
+
+  return {
+    value,
+    parentheses: parentheses || undefined,
+    bracket: bracket || undefined,
+    cautionary: cautionary || editorial || undefined
+  };
+}
+
+/** Parse MusicXML yes/no attributes into booleans. */
+function parseYesNoAttribute(node: XmlNode, name: string): boolean {
+  return attribute(node, name) === 'yes';
 }
 
 /** Parse and validate `<pitch>` into a normalized pitch object. */
@@ -327,7 +354,10 @@ export function parsePitch(pitchNode: XmlNode, ctx: ParseContext): Pitch | undef
     return undefined;
   }
 
-  const alter = parseOptionalInt(textOf(firstChild(pitchNode, 'alter')));
+  // MusicXML allows fractional alters for microtonal notation (for example
+  // `0.5` quarter-sharp). Keep this as float so render mapping can emit
+  // microtonal accidental glyphs when explicit `<accidental>` tags are absent.
+  const alter = parseOptionalFloat(textOf(firstChild(pitchNode, 'alter')));
 
   return {
     step: step as Pitch['step'],

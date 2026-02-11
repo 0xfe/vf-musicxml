@@ -228,8 +228,12 @@ Status legend:
   - M10D update: parser/model now captures note-level source default-x and explicit stem direction metadata; stem-direction parity is now applied in rendering/beaming.
   - M10D update: parser/model now captures authored beam markers and renderer prefers source beam-group topology before auto-beam fallback.
   - M10D update: headless golden comparisons now support optional centroid alignment controls and emit alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for proof-point triage.
+  - M10D update: adaptive inter-part gap planning is active, with complexity-driven spacing expansion between dense neighboring parts.
+  - M10D update: label rendering under source system margins now wraps/truncates to the true left-of-notation lane (prevents label clipping without reducing notation width).
+  - M10D update: slur routing now uses side-aware endpoint anchors and side selection by endpoint skew minimization; extreme diagonal cut-through slurs are reduced in real-world proof-points.
   - Continue proof-point parity tuning for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery (currently advisory fail).
   - Add deterministic checks for header/footer/label collision and page-break stability.
+  - Add deterministic dense-spacing gate for multi-part proof-points where first-system compression remains (`realworld-music21-beethoven-op18no1-m1`).
 - Close criteria:
   - Paginated renderer API and publishing metadata elements are implemented and proof-point parity thresholds are met.
 
@@ -257,3 +261,4 @@ Status legend:
 
 ## Bug Backlog
 - B-001 (P1, OPEN): Local Playwright browser launch intermittently fails with macOS MachPort/session errors (`bootstrap_check_in ... Permission denied (1100)`), blocking visual snapshot refresh in this environment while headless suites continue to pass.
+- B-003 (P1, OPEN): `realworld-music21-beethoven-op18no1-m1` shows low first/median measure-gap ratio (`~0.6459`) after slur fixes; verify whether this reflects true spacing compression or expected pickup-measure geometry, then calibrate M8/M9 spacing gates accordingly.

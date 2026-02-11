@@ -12,6 +12,7 @@ import {
 } from '../dist/testkit/headless-visual.js';
 import {
   collectNotationGeometry,
+  detectExtremeCurvePaths,
   detectNoteheadBarlineIntrusions,
   summarizeMeasureSpacingByBarlines,
   summarizeNotationGeometry
@@ -151,6 +152,7 @@ async function runInspection(options) {
     minHorizontalOverlap: 0.75,
     minVerticalOverlap: 3
   });
+  const extremeCurves = detectExtremeCurvePaths(svgMarkup);
   const intrusions = detectNoteheadBarlineIntrusions(geometry, {
     minHorizontalOverlap: 0.75,
     minVerticalOverlap: 3
@@ -196,6 +198,7 @@ async function runInspection(options) {
     parseDiagnostics: parsed.diagnostics,
     renderDiagnostics: renderResult.diagnostics,
     geometrySummary,
+    extremeCurveCount: extremeCurves.length,
     spacingSummary,
     intrusionCount: intrusions.length,
     visualDiff: visualDiffSummary
@@ -211,6 +214,7 @@ async function runInspection(options) {
   console.log(
     `Geometry summary: noteheads=${geometrySummary.noteheadCount}, beams=${geometrySummary.beamCount}, flags=${geometrySummary.flagCount}, flagBeamOverlaps=${geometrySummary.flagBeamOverlapCount}, barlineIntrusions=${geometrySummary.noteheadBarlineIntrusionCount}`
   );
+  console.log(`Extreme curve paths: ${extremeCurves.length}`);
   if (spacingSummary.firstToMedianOtherGapRatio !== null) {
     console.log(
       `Measure spacing ratio (first/median-other): ${spacingSummary.firstToMedianOtherGapRatio} (bands=${spacingSummary.evaluatedBandCount})`
