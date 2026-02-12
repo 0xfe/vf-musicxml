@@ -10,7 +10,7 @@ const HARMONY_MIN_HORIZONTAL_GAP = 8;
 /** Minimum x-gap between adjacent lyric syllables on the same line. */
 const LYRIC_MIN_HORIZONTAL_GAP = 6;
 /** Minimum x-gap between adjacent direction-text labels on the same row. */
-const DIRECTION_MIN_HORIZONTAL_GAP = 8;
+const DIRECTION_MIN_HORIZONTAL_GAP = 16;
 /** Hard cap for extra lyric lines added by overlap-avoidance routing. */
 const MAX_ADDITIONAL_LYRIC_LINES = 8;
 /** Fixed row step for stacked harmony labels to prevent vertical text collisions. */
@@ -18,7 +18,7 @@ const HARMONY_ROW_SPACING = 14;
 /** Fixed row step for stacked lyric lines to preserve readability in dense verses. */
 const LYRIC_ROW_SPACING = 14;
 /** Fixed row step for stacked direction labels above the stave. */
-const DIRECTION_ROW_SPACING = 12;
+const DIRECTION_ROW_SPACING = 22;
 /** Shared serif font stack for readable textual score annotations. */
 const SCORE_TEXT_FONT = 'Times New Roman';
 /** Direction text size (words/tempo) for M10 readability baseline. */
@@ -30,7 +30,9 @@ const LYRIC_TEXT_SIZE = 12;
 /** Dynamic glyph point size used when drawing SMuFL dynamics above staves. */
 const DYNAMICS_GLYPH_POINT = 40;
 /** Horizontal gap between direction text and following dynamics glyph run. */
-const DYNAMICS_TEXT_GAP = 6;
+const DYNAMICS_TEXT_GAP = 24;
+/** Extra side bearing reserved for each dynamics glyph to reduce overlap under-estimation. */
+const DYNAMICS_GLYPH_SIDE_BEARING = 3;
 
 /** Supported dynamics glyph map (mirrors VexFlow TextDynamics glyph set). */
 const DYNAMICS_GLYPH_CODE: Record<string, string> = {
@@ -44,12 +46,12 @@ const DYNAMICS_GLYPH_CODE: Record<string, string> = {
 
 /** Approximate per-letter advance widths for dynamics glyph layout. */
 const DYNAMICS_GLYPH_ADVANCE: Record<string, number> = {
-  f: 12,
-  p: 14,
-  m: 17,
-  s: 10,
-  z: 12,
-  r: 12
+  f: 14,
+  p: 15,
+  m: 19,
+  s: 12,
+  z: 13,
+  r: 13
 };
 
 /** Draw direction words/tempo/dynamics above a stave with offset-based x placement. */
@@ -75,6 +77,8 @@ export function drawMeasureDirections(
 
   const measureTicks = estimateMeasureTicks(measure, ticksPerQuarter);
   const availableWidth = Math.max(32, stave.getWidth() - 36);
+  const staveLeft = stave.getX() + 12;
+  const staveRight = stave.getX() + stave.getWidth() - 12;
   const rowRightEdges = new Map<number, number>();
   let maxRow = 0;
 
@@ -88,7 +92,7 @@ export function drawMeasureDirections(
     }
     const dynamicSequence = normalizeDynamicsSequence(direction.dynamics);
     const text = chunks.join('  ');
-    const textWidth = text.length > 0 ? estimateTextWidth(text, DIRECTION_TEXT_SIZE) : 0;
+    const textWidth = text.length > 0 ? measureDirectionTextWidth(text, context) : 0;
     const dynamicsWidth = dynamicSequence ? estimateDynamicsSequenceWidth(dynamicSequence) : 0;
     const totalWidth = textWidth + (textWidth > 0 && dynamicsWidth > 0 ? DYNAMICS_TEXT_GAP : 0) + dynamicsWidth;
 
@@ -97,7 +101,8 @@ export function drawMeasureDirections(
     }
 
     const ratio = measureTicks > 0 ? clamp(direction.offsetTicks / measureTicks, 0, 1) : 0;
-    const x = stave.getX() + 16 + availableWidth * ratio;
+    const offsetX = stave.getX() + 16 + availableWidth * ratio;
+    const x = clamp(offsetX, staveLeft, Math.max(staveLeft, staveRight - totalWidth));
     const left = x;
     const right = x + totalWidth;
     const row = resolveTextRowWithoutOverlap(
@@ -140,6 +145,18 @@ export function drawMeasureDirections(
       message: `Measure ${measure.index + 1} drew ${maxRow + 1} direction-text rows.`
     });
   }
+}
+
+/** Measure direction-word width using the exact font/style used during draw. */
+function measureDirectionTextWidth(
+  text: string,
+  context: NonNullable<ReturnType<Stave['getContext']>>
+): number {
+  context.save();
+  context.setFont(SCORE_TEXT_FONT, DIRECTION_TEXT_SIZE, '');
+  const width = estimateTextWidth(text, DIRECTION_TEXT_SIZE, context);
+  context.restore();
+  return width;
 }
 
 /** Draw measure-level harmony symbols above the stave with note-anchor fallback. */
@@ -305,8 +322,63 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Deterministic text-width estimate for headless contexts lacking SVG `getBBox`. */
-function estimateTextWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * 0.6;
+function estimateTextWidth(
+  text: string,
+  fontSize: number,
+  context?: NonNullable<ReturnType<Stave['getContext']>>
+): number {
+  if (text.length === 0) {
+    return 0;
+  }
+
+  // Prefer renderer-native width metrics when available so row packing follows
+  // the same glyph widths that VexFlow actually draws into the SVG context.
+  if (context && typeof context.measureText === 'function') {
+    try {
+      context.save();
+      context.setFont(SCORE_TEXT_FONT, fontSize, '');
+      const measured = context.measureText(text);
+      context.restore();
+      if (Number.isFinite(measured?.width) && (measured?.width ?? 0) > 0) {
+        return Math.ceil(measured?.width ?? 0);
+      }
+    } catch {
+      // Fallback below keeps deterministic behavior when a backend does not
+      // support text metrics APIs.
+    }
+  }
+
+  let width = 0;
+  for (const character of text) {
+    width += estimateCharacterWidthScale(character) * fontSize;
+  }
+  return Math.ceil(width);
+}
+
+/** Approximate per-character width scale used when renderer metrics are unavailable. */
+function estimateCharacterWidthScale(character: string): number {
+  if (character === ' ') {
+    return 0.34;
+  }
+  if (character === '\t') {
+    return 0.68;
+  }
+  if (/[A-Z]/.test(character)) {
+    return 0.64;
+  }
+  if (/[0-9]/.test(character)) {
+    return 0.58;
+  }
+  if (/[.,:;'"!]/.test(character)) {
+    return 0.28;
+  }
+  if (/[(){}[\]/\\|]/.test(character)) {
+    return 0.35;
+  }
+  if (/[#♭♯𝄪𝄫]/u.test(character)) {
+    return 0.62;
+  }
+  return 0.56;
 }
 
 /** Format one harmony event into display text used by baseline rendering. */
@@ -454,12 +526,12 @@ function estimateDynamicsSequenceWidth(sequence: string): number {
   let width = 0;
   for (const character of sequence) {
     if (character === ' ') {
-      width += 6;
+      width += 8;
       continue;
     }
-    width += DYNAMICS_GLYPH_ADVANCE[character] ?? 12;
+    width += (DYNAMICS_GLYPH_ADVANCE[character] ?? 12) + DYNAMICS_GLYPH_SIDE_BEARING;
   }
-  return width;
+  return Math.max(0, width - DYNAMICS_GLYPH_SIDE_BEARING);
 }
 
 /** Draw one dynamics sequence using SMuFL glyphs instead of plain text. */
@@ -473,7 +545,7 @@ function drawDynamicsSequence(
   context.openGroup('vf-dynamics-text');
   for (const character of sequence) {
     if (character === ' ') {
-      cursor += 6;
+      cursor += 8;
       continue;
     }
 
@@ -485,7 +557,7 @@ function drawDynamicsSequence(
     Glyph.renderGlyph(context, cursor, y, DYNAMICS_GLYPH_POINT, code, {
       category: 'textNote'
     });
-    cursor += DYNAMICS_GLYPH_ADVANCE[character] ?? 12;
+    cursor += (DYNAMICS_GLYPH_ADVANCE[character] ?? 12) + DYNAMICS_GLYPH_SIDE_BEARING;
   }
   context.closeGroup();
 }

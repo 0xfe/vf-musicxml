@@ -4,20 +4,17 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ## Status
 
-- Last updated: 2026-02-12 (US, 13:28 EST)
+- Last updated: 2026-02-12 (US, 16:22 EST)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M0-M7 are completed. M8 is active (M8A done, M8B/M8C incremental slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress; latest slices added richer category-31/32 notation mapping (articulations/ornaments/vibrato/strokes/technical tokens), workspace-portable gap-registry validation, denser horizontal planning for rhythm-heavy measures, stronger intra-staff spacing heuristics for grand-staff writing, smarter demo-page bounds trimming, deterministic category-31/32 text-overlap gates with reduced overlap pressure (`31a: 13 -> 7`, `32a: 21 -> 4`), non-behavioral modularization across `src/vexflow`, `src/parser`, and `src/testkit`, and a regression-fix pass for first-column spacing/collision pressure, tie/slur routing stability, and dynamic glyph rendering (`vf-dynamics-text`) with full-suite green validation. Demo scale is now `0.7` for generated demo pages. M11 planning is opened for auto-format/layout optimization follow-on work.
-- Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
+- Current state: M0-M7 are completed. M8/M9/M10 remain active, but execution has been re-baselined to a linear closeout order to prevent regression churn: finish M10D blocking layout defects first, then finish M8 deterministic/golden gates, then finish M9 style gates. M11 remains planning-only. New milestone `M12` is opened for structural notation-completeness work (multi-voice, ottava, pedal, rehearsal/coda/segno, inline clef changes, and related quality-model updates) after M10/M8/M9 close.
+- Review integration: Feedback items `F-001` through `F-039` are accepted and tracked in planning (`feedback/feedback-R1-R2.md`, `feedback/feedback-R3.md`, `todo.md`, `milestone-12.md`).
 
 ### Next step when execution continues:
-  1. Continue M8B: extend geometry rule packs beyond current spacing/intrusion tooling (presence + justification + text clearances).
-  2. Continue M8C: calibrate golden excerpt alignment and thresholds, then expand coverage from proof-points to broader fixture waves.
-  3. Execute M9A/M9B: land style rule catalog and wire style diagnostics into deterministic quality gates.
-  4. Continue M10C/M10D: improve page-level fidelity (system width calibration + print-geometry alignment), reduce Bach proof-point mismatch, and promote proof-point policy from advisory toward blocking.
-  5. Continue Schumann/Beethoven residual vertical-collision tuning (tie/slur + cross-staff spacing) and promote deterministic staff-gap gates.
-  6. Resolve B-003 spacing calibration for `realworld-music21-beethoven-op18no1-m1` and promote the resulting rule into M8/M9 spacing gates.
-  7. Close remaining category-32 `NON_ARPEGGIATE_UNSUPPORTED` gap with a generalized rendering strategy (or explicit VexFlow patch) and wire it into upstream gap tracking.
-  8. Keep M11 in planning-only state until M8/M9/M10 current slices are closed, then begin M11A telemetry/objective work.
+  1. M10D blocker wave: close remaining dynamic-glyph lane collisions (`B-012`) with deterministic overlap gates for `f/sf/...` direction lanes.
+  2. M10D closeout: resolve residual dense-spacing/tie proximity issues in `B-003` and `B-007` and make the proof-point set blocking.
+  3. M8B/M8C closeout: expand deterministic rule packs (presence + justification + text clearances), then calibrate and promote golden comparison thresholds.
+  4. M9 closeout: land style rule catalog + diagnostics and tighten text/dynamics/chord-name overlap budgets.
+  5. Start M12 after M10/M8/M9 are completed, beginning with multi-voice renderer architecture (`F-025`) and content-fidelity scoring (`F-031`).
 
 ## Milestone progress:
 
@@ -39,11 +36,16 @@ This file is the current snapshot of planning state. Update this first as milest
 | M9 | Engraving Style Fidelity Program | In Progress | New style-focused milestone created with source-linked rulebook, proof-point fixtures, deterministic style-gate plan, and wave-based burndown checklist. |
 | M10 | Pagination + Publishing Layout | In Progress | M10A/M10B baseline landed (paginated default, continuous mode fallback, system/page planning, multi-page SVG output). M10C/M10D quality/fidelity hardening remains active. |
 | M11 | Auto-Formatting + Layout Optimization | Planned | Planning doc created; implementation deferred until current M8/M9/M10 active slices are closed. |
+| M12 | Polyphonic + Notation Completeness | Planned | New structural milestone for multi-voice rendering, completeness-aware quality scoring, and missing navigation/pedal/ottava/inline-clef notation coverage. |
 
 
 
 ### Completed in this phase
 
+  - Landed generalized first-column spacing hardening in `src/vexflow/render.ts` so justify-path shrink respects minimum widths; proof-point inspections now show no opening-band compression/intrusions on `realworld-music21-mozart-k458-m1` and `realworld-music21-bach-bwv244-10`.
+  - Tightened demo SVG whitespace trimming (`scripts/build-demos.mjs`) by narrowing text inclusion windows and rebuilt the static demo site to reduce right-side blank regions on sparse pages.
+  - Revalidated targeted blockers/gates after these changes: `tests/integration/render-quality-regressions.test.ts`, `tests/integration/vexflow-gap-registry.test.ts`, `npm run demos:build`, and headless inspection runs for `k458`, `bwv244-10`, `03a`, and Schumann fixtures.
+  - Processed Review-3 feedback (`F-025`..`F-039`) with accepted disposition and milestone/todo mapping; opened `milestone-12.md` and re-baselined execution to linear closeout (M10D blockers -> M8 -> M9 -> M12).
   - Reviewed VexFlow build/test model and integration constraints.
   - Reviewed official MusicXML references (spec/tutorials/examples/XSD links).
   - Reviewed LilyPond collated MusicXML regression corpus and test-suite resources.

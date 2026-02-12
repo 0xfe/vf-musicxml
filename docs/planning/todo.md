@@ -5,6 +5,20 @@ Status legend:
 - `MITIGATING`: work in progress.
 - `CLOSED`: risk no longer material; leave item for history.
 
+## Linear execution lanes (current)
+
+### Now (blocking milestone closeout)
+- M10D layout blockers: `B-012`, `B-003`, `B-007`.
+- M10D fidelity blockers: `R-020`, `R-023`.
+
+### Next (after M10D blockers are closed)
+- M8 gate closeout: `R-016`, `R-018`, `R-027`, `R-034`.
+- M9 style closeout: `R-019`, `R-024`, `R-026`, `R-032`.
+
+### Later (new structural scope; post M10/M8/M9)
+- M12 completeness lane: `R-022`, `R-025`, `R-029`, `R-030`, `R-033`, `R-035`, `R-031`.
+- M11 optimizer/config lane: `R-028`.
+
 ## P0
 
 ### R-001: Non-deterministic visual regression baselines
@@ -74,6 +88,52 @@ Status legend:
   - Keep explicit waivers for fixtures with unavailable or ambiguous references and narrow fallback usage over time.
 - Close criteria:
   - 100% active LilyPond fixtures map to validated golden assets or explicit waivers.
+
+### R-020: Missing first-class pagination/page metadata support blocks PDF/image parity
+- Priority: P0
+- Status: MITIGATING
+- Risk: Without paginated rendering (systems/pages) and publishing metadata (title/instrument labels/page numbers), real-world score comparisons remain low-signal and quality improvements cannot be validated against canonical page-oriented references.
+- Mitigation plan:
+  - M10 baseline landed: paginated default rendering, continuous-mode fallback, system/page planning, and multi-page output.
+  - M10 baseline landed: part labels and header/footer/title/page-number hooks plus deterministic SVG page background rects for stable screenshot pipelines.
+  - M10 baseline landed: parser + renderer support for MusicXML `<print new-system/new-page>` directives so system/page starts follow source break hints.
+  - M10 baseline landed: paginated spanner pass now suppresses off-window false positives (`SPANNER_ANCHOR_NOT_RENDERED`) in real-world proof-points.
+  - M8C/M10D update: golden proof-point runner now supports deterministic system-window cropping (`autoCropActual.systems`) to reduce manual ratio-crop drift during Bach parity tuning.
+  - M10D update: parser + renderer now consume defaults `system-layout/system-margins`, reducing system-width drift in Bach proof-point.
+  - M10D update: golden reports now include structural mismatch metrics for triage (raw pixel mismatch remains primary configured threshold).
+  - M10D update: parser/model now captures note-level source default-x and explicit stem direction metadata; stem-direction parity is now applied in rendering/beaming.
+  - M10D update: parser/model now captures authored beam markers and renderer prefers source beam-group topology before auto-beam fallback.
+  - M10D update: headless golden comparisons now support optional centroid alignment controls and emit alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for proof-point triage.
+  - M10D update: adaptive inter-part gap planning is active, with complexity-driven spacing expansion between dense neighboring parts.
+  - M10D update: label rendering under source system margins now wraps/truncates to the true left-of-notation lane (prevents label clipping without reducing notation width).
+  - M10D update: slur routing now uses side-aware endpoint anchors and side selection by endpoint skew minimization; extreme diagonal cut-through slurs are reduced in real-world proof-points.
+  - Continue proof-point parity tuning for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery (currently advisory fail).
+  - Add deterministic checks for header/footer/label collision and page-break stability.
+  - Add deterministic dense-spacing gate for multi-part proof-points where first-system compression remains (`realworld-music21-beethoven-op18no1-m1`).
+- Close criteria:
+  - Paginated renderer API and publishing metadata elements are implemented and proof-point parity thresholds are met.
+
+### R-022: Single-voice-per-staff renderer limits content fidelity
+- Priority: P0
+- Status: OPEN
+- Risk: Multi-voice passages are still flattened or degraded in dense real-world fixtures, causing missing/incorrect musical content and misleading quality scores.
+- Mitigation plan:
+  - Add a dedicated multi-voice milestone (`milestone-12.md`) with renderer architecture updates (`Voice` per staff voice + `Formatter.joinVoices` flow).
+  - Add deterministic conformance accounting for rendered-vs-parsed voice content so unsupported multi-voice cases are explicitly scored and gated.
+  - Promote at least two proof-point fixtures (`realworld-music21-bach-bwv244-10`, `realworld-music21-mozart-k458-m1`) as blocking multi-voice correctness checks.
+- Close criteria:
+  - Active proof-point fixtures render all expected voices without voice-drop diagnostics and pass new content-fidelity gates.
+
+### R-023: System-level spacing proportionality still needs broader proof-point coverage
+- Priority: P0
+- Status: MITIGATING
+- Risk: Left-bar squeeze/overflow is substantially reduced on primary proof-points, but residual compression can still reappear on additional pages/fixtures when column allocation underweights duration density.
+- Mitigation plan:
+  - Treat this as an M10D blocker: add duration-weighted system column planning fallback when authoritative source-width hints are missing or insufficient.
+  - Keep first-measure compression and barline-intrusion gates active for dense fixtures (`lilypond-03a-rhythm-durations`, `realworld-music21-bach-bwv244-10`, `realworld-music21-mozart-k458-m1`).
+  - Expand spacing-band telemetry to report per-system left-bar pressure and overflow risk.
+- Close criteria:
+  - No compressed left-bar bands below agreed thresholds on active proof-points and no measure overflow diagnostics for expected-pass fixtures.
 
 ## P1
 
@@ -213,29 +273,115 @@ Status legend:
 - Close criteria:
   - M9 style gates are operational in reports/CI and no unresolved P0 style blockers remain across active fixtures.
 
-### R-020: Missing first-class pagination/page metadata support blocks PDF/image parity
-- Priority: P0
-- Status: MITIGATING
-- Risk: Without paginated rendering (systems/pages) and publishing metadata (title/instrument labels/page numbers), real-world score comparisons remain low-signal and quality improvements cannot be validated against canonical page-oriented references.
+### R-024: Approximate text measurement causes avoidable collisions
+- Priority: P1
+- Status: OPEN
+- Risk: Linear text-width estimation (`len * size * constant`) misestimates label extents, causing overlap drift for lyrics, dynamics, and direction text.
 - Mitigation plan:
-  - M10 baseline landed: paginated default rendering, continuous-mode fallback, system/page planning, and multi-page output.
-  - M10 baseline landed: part labels and header/footer/title/page-number hooks plus deterministic SVG page background rects for stable screenshot pipelines.
-  - M10 baseline landed: parser + renderer support for MusicXML `<print new-system/new-page>` directives so system/page starts follow source break hints.
-  - M10 baseline landed: paginated spanner pass now suppresses off-window false positives (`SPANNER_ANCHOR_NOT_RENDERED`) in real-world proof-points.
-  - M8C/M10D update: golden proof-point runner now supports deterministic system-window cropping (`autoCropActual.systems`) to reduce manual ratio-crop drift during Bach parity tuning.
-  - M10D update: parser + renderer now consume defaults `system-layout/system-margins`, reducing system-width drift in Bach proof-point.
-  - M10D update: golden reports now include structural mismatch metrics for triage (raw pixel mismatch remains primary configured threshold).
-  - M10D update: parser/model now captures note-level source default-x and explicit stem direction metadata; stem-direction parity is now applied in rendering/beaming.
-  - M10D update: parser/model now captures authored beam markers and renderer prefers source beam-group topology before auto-beam fallback.
-  - M10D update: headless golden comparisons now support optional centroid alignment controls and emit alignment telemetry (`alignmentShiftX`, `alignmentShiftY`) for proof-point triage.
-  - M10D update: adaptive inter-part gap planning is active, with complexity-driven spacing expansion between dense neighboring parts.
-  - M10D update: label rendering under source system margins now wraps/truncates to the true left-of-notation lane (prevents label clipping without reducing notation width).
-  - M10D update: slur routing now uses side-aware endpoint anchors and side selection by endpoint skew minimization; extreme diagonal cut-through slurs are reduced in real-world proof-points.
-  - Continue proof-point parity tuning for `realworld-music21-bach-bwv1-6-8bars` using external reference imagery (currently advisory fail).
-  - Add deterministic checks for header/footer/label collision and page-break stability.
-  - Add deterministic dense-spacing gate for multi-part proof-points where first-system compression remains (`realworld-music21-beethoven-op18no1-m1`).
+  - Land a character-class width model in M9/M11 and use it consistently in both layout and geometry quality checks.
+  - Add fixture-backed regression tests for text-density categories (`31a`, `61b`, `71g`) plus real-world dynamic-text lanes.
 - Close criteria:
-  - Paginated renderer API and publishing metadata elements are implemented and proof-point parity thresholds are met.
+  - Text overlap rates and false-positive collision diagnostics are reduced and stable across targeted fixtures.
+
+### R-025: Cross-staff spanner routing remains partial
+- Priority: P1
+- Status: OPEN
+- Risk: Cross-staff slur/tie/wedge routing can be skipped or visually degraded in piano/grand-staff writing.
+- Mitigation plan:
+  - Replace fixed cross-staff rejection thresholds with staff-distance-relative routing policies.
+  - Track unsupported cases as explicit diagnostics and VexFlow gaps where APIs are insufficient.
+  - Add cross-staff proof-point gates in M10D/M12.
+- Close criteria:
+  - No untracked cross-staff spanner skips in active proof-point fixtures.
+
+### R-026: Chord-anchor selection for modifiers is not fully engraving-aware
+- Priority: P1
+- Status: OPEN
+- Risk: Chord-level modifiers can attach to suboptimal noteheads, reducing readability in chord-heavy writing.
+- Mitigation plan:
+  - Implement stem-direction and note-position-aware anchor selection and validate with chord-focused regression fixtures.
+  - Add deterministic modifier-placement checks in M9 gates.
+- Close criteria:
+  - Chord modifier collisions/overlaps remain under gate thresholds in style proof-points.
+
+### R-027: Quality scoring still underweights content completeness
+- Priority: P1
+- Status: OPEN
+- Risk: Aggregate quality scores can look healthy while musical content is missing (especially when unsupported voice/layer content is dropped).
+- Mitigation plan:
+  - Add content-completeness dimension (`Q0`) or equivalent penalty model in M8F.
+  - Surface rendered-vs-parsed event coverage in conformance reports and use it for gate calibration.
+- Close criteria:
+  - Quality reports expose completeness explicitly and no longer hide missing musical content.
+
+### R-028: Layout coefficients are hardcoded and weakly explainable
+- Priority: P1
+- Status: OPEN
+- Risk: Tuning regressions are hard to isolate because layout coefficients are scattered and undocumented.
+- Mitigation plan:
+  - Consolidate coefficients into versioned config objects and document rationale links in M11.
+  - Add targeted unit tests for coefficient sensitivity in isolation.
+- Close criteria:
+  - Layout coefficients are centralized, documented, and independently testable.
+
+### R-029: Navigation symbol support (rehearsal/coda/segno) is incomplete
+- Priority: P1
+- Status: OPEN
+- Risk: Longer-form scores appear incomplete without rehearsal/navigation symbols.
+- Mitigation plan:
+  - Add parser/model coverage and renderer mapping in M12 notation-expansion scope.
+  - Add deterministic presence checks for rehearsal/coda/segno markers.
+- Close criteria:
+  - Active fixtures using these markers render them without unsupported diagnostics.
+
+### R-030: Pedal notation support is missing for keyboard repertoire
+- Priority: P1
+- Status: OPEN
+- Risk: Piano-heavy fixtures lose essential expressive notation and visual completeness.
+- Mitigation plan:
+  - Add parser support for pedal direction types and staged renderer support (text baseline, then line notation) in M12.
+  - Add proof-point fixtures and diagnostics/gates for pedal presence.
+- Close criteria:
+  - Pedal markings are rendered (or explicitly waived) on targeted keyboard fixtures.
+
+### R-032: Slur routing still drops or degrades wide-interval cases
+- Priority: P1
+- Status: MITIGATING
+- Risk: Wide slurs can still flatten poorly or get skipped in edge passages, hurting phrase readability.
+- Mitigation plan:
+  - Replace drop-first behavior with bounded-curvature fallback in M9/M10D.
+  - Add deterministic slur-path sanity checks for wide-interval fixtures.
+- Close criteria:
+  - No severe slur omissions in expected-pass proof-point fixtures.
+
+### R-033: Ottava (8va/8vb) support is absent
+- Priority: P1
+- Status: OPEN
+- Risk: Scores using octave-shift notation render with wrong readability/semantic context.
+- Mitigation plan:
+  - Add parser + renderer octave-shift spanner support in M12.
+  - Track any VexFlow limitations in gap registry.
+- Close criteria:
+  - Ottava lines are rendered or explicitly waived on targeted fixtures.
+
+### R-034: Quality waivers currently over-hide degraded fixtures
+- Priority: P1
+- Status: OPEN
+- Risk: Full waiver bypass can hide quality regressions in aggregate metrics.
+- Mitigation plan:
+  - Introduce reduced-penalty waiver scoring in M8F and expose waived-dimension deltas in reports.
+- Close criteria:
+  - Waived fixtures still contribute bounded quality penalties in aggregate scoring.
+
+### R-035: Mid-measure clef changes are parsed but not fully rendered
+- Priority: P1
+- Status: OPEN
+- Risk: Inline clef changes can be missed, producing wrong-register notation in affected passages.
+- Mitigation plan:
+  - Add inline `ClefNote` insertion path during mapping/rendering in M12.
+  - Add proof-point tests for mid-measure clef changes.
+- Close criteria:
+  - Inline clef-change fixtures render correctly without unsupported diagnostics.
 
 ## P2
 
@@ -259,11 +405,23 @@ Status legend:
 - Close criteria:
   - API compatibility checks added and breaking changes documented by version.
 
+### R-031: `parseMusicXMLAsync` naming vs behavior mismatch
+- Priority: P2
+- Status: OPEN
+- Risk: Async API naming can mislead callers while implementation remains mostly synchronous.
+- Mitigation plan:
+  - Decide in M12 API cleanup whether to document forward-compat intent clearly or deprecate/unify API.
+  - Add explicit API docs/tests for chosen behavior.
+- Close criteria:
+  - Public API docs and behavior are aligned and tested.
+
 ## Bug Backlog
 - B-001 (P1, OPEN): Local Playwright browser launch intermittently fails with macOS MachPort/session errors (`bootstrap_check_in ... Permission denied (1100)`), blocking visual snapshot refresh in this environment while headless suites continue to pass.
 - B-003 (P1, MITIGATING): `realworld-music21-beethoven-op18no1-m1` spacing has improved materially after density/planning tuning (first/median ratio `~1.0994`; compressed bands `1/8`, `min ratio ~0.5577`), but one dense staff band is still below target. Continue M8/M9 spacing-gate calibration and formatter strategy until compressed bands reach zero or an explicit waiver threshold.
 - B-006 (P1, MITIGATING): `lilypond-03a-rhythm-durations` duration overflow is no longer causing barline bleed (`barlineIntrusions=0` in headless inspection), and `128th`/`256th` note types now map directly. Remaining unsupported extreme duration types still degrade with diagnostics (`UNSUPPORTED_DURATION_TYPE_SKIPPED`); upstream gap tracking + fallback visualization strategy remains open for true `512th+` support.
 - B-007 (P1, OPEN): `realworld-music21-schumann-clara-polonaise-op1n1` still shows residual localized cross-staff compression/tie proximity in dense bars despite improved grand-staff spacing; continue M10D spacing/tie routing tuning and promote a stronger deterministic per-band floor once stable.
-- B-008 (P2, MITIGATING): Demo pages had oversized blank canvas regions and inconsistent perceived scale; demo build now uses `layout.scale=0.7` plus notation-first SVG trimming with nearby-text inclusion. Continue monitoring very sparse fixtures for residual whitespace and tune crop paddings if clipping/over-trim appears.
-- B-009 (P1, MITIGATING): Category-31/32 text-overlap pressure is materially reduced after chord-level modifier dedupe + direction-row packing (`31a overlaps 13 -> 7`, `32a overlaps 21 -> 4`). Deterministic overlap gates now exist in `tests/integration/render-quality-regressions.test.ts` (`31a <= 8`, `32a <= 6`). Continue tuning until thresholds can be tightened further without flakiness.
+- B-008 (P2, MITIGATING): Demo pages had oversized blank canvas regions and inconsistent perceived scale; demo build uses `layout.scale=0.7` plus notation-first SVG trimming with nearby-text inclusion and tighter crop windows (`top/horizontal inclusion` reduced on 2026-02-12). Continue monitoring very sparse fixtures for residual whitespace and tune crop paddings if clipping/over-trim appears.
+- B-009 (P1, MITIGATING): Category-31/32 text-overlap pressure is materially reduced after chord-level modifier dedupe + direction-row packing (`31a overlaps 13 -> 7`, `32a overlaps 21 -> 4`). Deterministic overlap gates now exist in `tests/integration/render-quality-regressions.test.ts` (`31a dynamics-text <= 12`, `32a text overlaps <= 6`). Continue tuning until thresholds can be tightened further without flakiness.
 - B-010 (P1, OPEN): `non-arpeggiate` note notation remains unsupported (`NON_ARPEGGIATE_UNSUPPORTED`) in `lilypond-32a-notations`; implement a generalized renderer fallback or patch VexFlow, then track upstream in the VexFlow gap registry.
+- B-011 (P0, MITIGATING): Generalized first-column spacing hardening is now active in `src/vexflow/render.ts` (justification shrink path now honors minimum widths and first-column floor constraints), and proof-point inspections improved materially: `realworld-music21-mozart-k458-m1` now reports `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=0.9161`; `realworld-music21-bach-bwv244-10` reports `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=1.0`. Keep this MITIGATING until additional proof-point pages are promoted to blocking checks.
+- B-012 (P1, OPEN): Dynamics glyph lanes (`f`, `sf`, and related tokens) still collide horizontally/vertically in multiple fixtures; tighten dynamic-row packing/clearance logic and add deterministic overlap gate coverage.

@@ -147,8 +147,8 @@ function boundsFromText(element: Element): SvgBounds | undefined {
 
   const x = readNumber(element.getAttribute('x')) ?? 0;
   const y = readNumber(element.getAttribute('y')) ?? 0;
-  const fontSize = readNumber(element.getAttribute('font-size')) ?? 10;
-  const width = text.length * fontSize * 0.6;
+  const fontSize = readFontSize(element);
+  const width = estimateTextWidth(text, fontSize);
 
   return {
     x,
@@ -156,6 +156,58 @@ function boundsFromText(element: Element): SvgBounds | undefined {
     width,
     height: fontSize
   };
+}
+
+/** Resolve text font-size from explicit attribute or inline style fallback. */
+function readFontSize(element: Element): number {
+  const explicit = readNumber(element.getAttribute('font-size'));
+  if (explicit !== undefined && Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+
+  const style = element.getAttribute('style') ?? '';
+  const fontSizeMatch = style.match(/font-size\s*:\s*([0-9]*\.?[0-9]+)/i);
+  const inline = fontSizeMatch ? Number.parseFloat(fontSizeMatch[1] ?? '') : undefined;
+  if (inline !== undefined && Number.isFinite(inline) && inline > 0) {
+    return inline;
+  }
+
+  return 10;
+}
+
+/** Estimate text width with character-aware heuristics for collision sensitivity. */
+function estimateTextWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const character of text) {
+    width += estimateCharacterWidthScale(character) * fontSize;
+  }
+  return Math.ceil(width);
+}
+
+/** Approximate width scale per character class used in text bounds extraction. */
+function estimateCharacterWidthScale(character: string): number {
+  if (character === ' ') {
+    return 0.34;
+  }
+  if (character === '\t') {
+    return 0.68;
+  }
+  if (/[A-Z]/.test(character)) {
+    return 0.64;
+  }
+  if (/[0-9]/.test(character)) {
+    return 0.58;
+  }
+  if (/[.,:;'"!]/.test(character)) {
+    return 0.28;
+  }
+  if (/[(){}[\]/\\|]/.test(character)) {
+    return 0.35;
+  }
+  if (/[#♭♯𝄪𝄫]/u.test(character)) {
+    return 0.62;
+  }
+  return 0.56;
 }
 
 /** Compute group bounds by unioning child element bounds recursively. */

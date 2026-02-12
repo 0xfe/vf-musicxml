@@ -7,6 +7,30 @@
 
 ---
 
+## Disposition — Review 3 (2026-02-12)
+
+All items from `F-025` through `F-039` are **ACCEPTED** and are now tracked in active planning/todo artifacts.
+
+| ID | Status | Tracking |
+|---|---|---|
+| F-025 | ACCEPTED | P0 risk in `todo.md` (`R-022`), milestone track `milestone-12.md` (multi-voice renderer + gates). |
+| F-026 | ACCEPTED | P0 risk in `todo.md` (`R-023`), M10D now explicitly includes duration-proportional spacing hardening. |
+| F-027 | ACCEPTED | P1 bug in `todo.md` (`B-012`) for residual dynamic-glyph collisions; M9 style gates own closure. |
+| F-028 | ACCEPTED | P1 risk in `todo.md` (`R-024`), planned in M9/M11 text measurement work. |
+| F-029 | ACCEPTED | P1 risk in `todo.md` (`R-025`), tracked under M10D/M12 cross-staff routing work. |
+| F-030 | ACCEPTED | P1 risk in `todo.md` (`R-026`), parser/mapper follow-up in M9 polish wave. |
+| F-031 | ACCEPTED | P1 risk in `todo.md` (`R-027`), quality model update in M8F/M12 gates. |
+| F-032 | ACCEPTED | P1 risk in `todo.md` (`R-028`), staged extraction in M11 planning. |
+| F-033 | ACCEPTED | P1 risk in `todo.md` (`R-029`), notation-expansion scope staged in M12. |
+| F-034 | ACCEPTED | P1 risk in `todo.md` (`R-030`), notation-expansion scope staged in M12. |
+| F-035 | ACCEPTED | P2 risk in `todo.md` (`R-031`), API clarification/update queued in M12 API cleanup slice. |
+| F-036 | ACCEPTED | P1 risk in `todo.md` (`R-032`), slur-side/curve policy staged in M9 + M10D. |
+| F-037 | ACCEPTED | P1 risk in `todo.md` (`R-033`), octave-shift support staged in M12. |
+| F-038 | ACCEPTED | P1 risk in `todo.md` (`R-034`), quality-waiver scoring policy staged in M8F. |
+| F-039 | ACCEPTED | P1 risk in `todo.md` (`R-035`), mid-measure clef changes staged in M12. |
+
+---
+
 ## Overall Assessment
 
 The project has made remarkable progress from M0 through M10. The planning is thorough, the conformance framework is sophisticated, and the quality measurement infrastructure (Q1-Q7 rubric, golden comparisons, geometry analysis) is well ahead of most notation projects at this stage. The parser is clean, well-typed, and handles real-world MusicXML robustly. The diagnostic system is excellent.

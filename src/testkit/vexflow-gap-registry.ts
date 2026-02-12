@@ -192,10 +192,22 @@ function resolveWorkspacePath(inputPath: string, workspaceRoot: string): string 
 
   const legacyRootMarker = `${path.sep}musicxml${path.sep}`;
   const markerIndex = inputPath.lastIndexOf(legacyRootMarker);
-  if (markerIndex < 0) {
-    return inputPath;
+  if (markerIndex >= 0) {
+    const legacyRelativeSuffix = inputPath.slice(markerIndex + legacyRootMarker.length);
+    return path.resolve(workspaceRoot, legacyRelativeSuffix);
   }
 
-  const legacyRelativeSuffix = inputPath.slice(markerIndex + legacyRootMarker.length);
-  return path.resolve(workspaceRoot, legacyRelativeSuffix);
+  // Some historical registry entries were written with machine-specific absolute
+  // roots outside `/.../musicxml/...`. Recover portability by re-rooting from a
+  // stable workspace segment when present.
+  for (const portableMarker of [`${path.sep}tests${path.sep}`, `${path.sep}fixtures${path.sep}`, `${path.sep}src${path.sep}`, `${path.sep}docs${path.sep}`]) {
+    const portableIndex = inputPath.lastIndexOf(portableMarker);
+    if (portableIndex < 0) {
+      continue;
+    }
+    const portableSuffix = inputPath.slice(portableIndex + 1);
+    return path.resolve(workspaceRoot, portableSuffix);
+  }
+
+  return inputPath;
 }

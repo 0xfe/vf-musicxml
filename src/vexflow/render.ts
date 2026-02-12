@@ -83,6 +83,22 @@ const FIRST_COLUMN_EXTRA_WIDTH_DAMPING = 0.78;
 const FIRST_COLUMN_EXTRA_IGNORE_RATIO = 0.08;
 /** Clamp first-column compensation so opening measures are not over-expanded. */
 const FIRST_COLUMN_EXTRA_WIDTH_CAP_RATIO = 0.48;
+/** Retain partial first-column compensation even when source-width hints are strongly biased. */
+const FIRST_COLUMN_STRONG_BIAS_EXTRA_DAMPING = 0.55;
+/** Baseline first-column floor ratio against median width of later columns. */
+const FIRST_COLUMN_FLOOR_RATIO = 0.5;
+/** Higher floor ratio used when source-width hints strongly underweight system starts. */
+const FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO = 0.58;
+/** Additional first-column floor ratio contributed by first-measure density pressure. */
+const FIRST_COLUMN_DENSITY_FLOOR_BOOST = 0.16;
+/** Upper bound for density-added first-column floor ratio. */
+const FIRST_COLUMN_DENSITY_FLOOR_BOOST_CAP = 0.22;
+/** Maximum first-column floor ratio in normal source-width conditions. */
+const FIRST_COLUMN_FLOOR_RATIO_CAP = 0.76;
+/** Maximum first-column floor ratio under strong source-width bias. */
+const FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO_CAP = 0.82;
+/** Hard cap for first-column floor width as fraction of the system's available width. */
+const FIRST_COLUMN_FLOOR_MAX_AVAILABLE_RATIO = 0.36;
 
 /** Stable layout metadata for one score part across all systems/pages. */
 interface PartLayout {
@@ -1041,20 +1057,46 @@ function buildMeasureColumnLayoutForSystem(
     : MINIMUM_MEASURE_WIDTH;
   const firstBaseWidth = Math.max(defaultFirstWidth, columnWidths[0] ?? defaultFirstWidth);
   let firstExtra = estimateSystemStartExtraWidth(score, partLayouts, system.startMeasure, firstBaseWidth, diagnostics);
+  const strongSourceWidthBias = hasStrongSourceWidthBias(sourceWidthHints);
   // When source width hints strongly prefer wider later measures, keep first-
-  // column compensation bounded so authored proportional widths still dominate.
-  if (hasStrongSourceWidthBias(sourceWidthHints)) {
-    firstExtra = 0;
+  // column compensation bounded (instead of disabling it) so authored
+  // proportional widths still dominate without collapsing opening readability.
+  if (strongSourceWidthBias) {
+    firstExtra = Math.ceil(firstExtra * FIRST_COLUMN_STRONG_BIAS_EXTRA_DAMPING);
   }
-  columnWidths[0] = firstBaseWidth + firstExtra;
+  const firstReadabilityFloor = resolveFirstColumnReadabilityFloor(
+    columnWidths,
+    densityHints,
+    availableWidth,
+    strongSourceWidthBias
+  );
+  const firstTargetWidth = Math.max(
+    firstBaseWidth + firstExtra,
+    firstReadabilityFloor ?? 0
+  );
+  columnWidths[0] = firstTargetWidth;
   // Preserve explicit system-start reservation (clef/key/time modifiers) when
   // we later shrink non-final systems to fit. Without this floor, dense or
   // multi-digit signatures can regress into first-column note collisions.
-  minimumWidths[0] = Math.max(minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH, firstBaseWidth + firstExtra);
+  minimumWidths[0] = Math.max(
+    minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH,
+    firstTargetWidth
+  );
 
   if (fitToWidth) {
     if (justifySystem) {
-      expandColumnWidthsToFit(columnWidths, availableWidth);
+      const evenSplitWidth = Math.max(MINIMUM_FITTED_MEASURE_WIDTH, Math.floor(availableWidth / measureCount));
+      const firstJustificationFloor = clampInt(
+        minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH,
+        MINIMUM_FITTED_MEASURE_WIDTH,
+        evenSplitWidth + 64
+      );
+      const justificationMinimumWidths = columnWidths.map((_, columnIndex) =>
+        columnIndex === 0
+          ? firstJustificationFloor
+          : MINIMUM_FITTED_MEASURE_WIDTH
+      );
+      expandColumnWidthsToFit(columnWidths, availableWidth, justificationMinimumWidths);
     } else {
       shrinkColumnWidthsToFit(columnWidths, availableWidth, minimumWidths);
     }
@@ -1072,6 +1114,54 @@ function buildMeasureColumnLayoutForSystem(
     columnWidths,
     totalWidth: cursor - contentStartX
   };
+}
+
+/**
+ * Compute a lower bound for the first system column using relative-width and
+ * density signals. This protects opening measures from source-hint collapse in
+ * complex systems while still preserving authored proportion intent.
+ */
+function resolveFirstColumnReadabilityFloor(
+  columnWidths: number[],
+  densityHints: number[],
+  availableWidth: number,
+  strongSourceWidthBias: boolean
+): number | undefined {
+  if (columnWidths.length < 2) {
+    return undefined;
+  }
+
+  const laterWidths = columnWidths
+    .slice(1)
+    .filter((width): width is number => Number.isFinite(width) && (width ?? 0) > 0);
+  if (laterWidths.length === 0) {
+    return undefined;
+  }
+
+  const medianLaterWidth = medianNumber(laterWidths);
+  if (!Number.isFinite(medianLaterWidth) || medianLaterWidth <= 0) {
+    return undefined;
+  }
+
+  const firstDensity = Number.isFinite(densityHints[0]) ? Math.max(1, densityHints[0] ?? 1) : 1;
+  const baseRatio = strongSourceWidthBias ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO : FIRST_COLUMN_FLOOR_RATIO;
+  const ratioCap = strongSourceWidthBias ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO_CAP : FIRST_COLUMN_FLOOR_RATIO_CAP;
+  const densityBoost = Math.min(
+    FIRST_COLUMN_DENSITY_FLOOR_BOOST_CAP,
+    Math.max(0, firstDensity - 1) * FIRST_COLUMN_DENSITY_FLOOR_BOOST
+  );
+  const floorRatio = clamp(baseRatio + densityBoost, baseRatio, ratioCap);
+  const uncappedFloorWidth = Math.round(medianLaterWidth * floorRatio);
+
+  // Keep the floor bounded so one oversized opening measure cannot starve
+  // later columns in systems that must tightly fit within page width.
+  const evenSplitWidth = Math.floor(availableWidth / columnWidths.length);
+  const maxFloorWidth = Math.max(
+    MINIMUM_FITTED_MEASURE_WIDTH,
+    Math.floor(availableWidth * FIRST_COLUMN_FLOOR_MAX_AVAILABLE_RATIO),
+    evenSplitWidth + 72
+  );
+  return clampInt(uncappedFloorWidth, MINIMUM_FITTED_MEASURE_WIDTH, maxFloorWidth);
 }
 
 /** True when system width hints strongly bias later columns over the first one. */
@@ -1317,14 +1407,14 @@ function estimateSystemStartExtraWidth(
  * Expand measure widths to consume available system width.
  * This improves justification consistency for non-final systems.
  */
-function expandColumnWidthsToFit(widths: number[], targetWidth: number): void {
+function expandColumnWidthsToFit(widths: number[], targetWidth: number, minimumWidths?: number[]): void {
   if (widths.length === 0) {
     return;
   }
 
   const total = widths.reduce((sum, width) => sum + width, 0);
   if (total >= targetWidth) {
-    shrinkColumnWidthsToFit(widths, targetWidth);
+    shrinkColumnWidthsToFit(widths, targetWidth, minimumWidths);
     return;
   }
 

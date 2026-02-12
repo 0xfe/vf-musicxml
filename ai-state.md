@@ -3,6 +3,10 @@
 ## Repo intent
 - Build staged MusicXML parser + VexFlow renderer with strict milestone discipline (`docs/planning/status.md` + `docs/planning/logs.md`).
 - M0-M7 completed; M8 is active for golden-driven visual quality hardening across all LilyPond + selected real-world demos, M9 is active for engraving style-fidelity execution, and M10 is active with M10A/M10B baseline delivered and M10C/M10D fidelity tuning in progress.
+- Planning was re-baselined to a linear execution order to reduce regression churn: finish M10D blockers first, then close M8, then close M9; M11 stays planning-only.
+- New structural follow-on milestone `docs/planning/milestone-12.md` was opened for Review-3 completeness items (multi-voice rendering, completeness-aware quality scoring, navigation/pedal/ottava/inline-clef notation coverage, cross-staff robustness, and layout-coefficient/API cleanup).
+- Review integration is now tracked through `F-039` (`docs/planning/feedback/feedback-R3.md` disposition section).
+- Active highest-priority bugs now include `B-011` (left-bar squeeze/overflow on `realworld-music21-bach-bwv244-10` and `realworld-music21-mozart-k458-m1`) and `B-012` (dynamic-glyph lane collisions).
 - M8A baseline landed: full active LilyPond golden-reference mapping (156 fixtures) with cached PNGs and manifest checksums.
 - M8B first slice landed: generalized first-column width compensation fixes opening-measure compression (`lilypond-01a-pitches-pitches`), and deterministic measure-spacing ratio tooling now reports first-vs-rest spacing consistency.
 - `lilypond-01a-pitches-pitches` headless visual baseline has been refreshed post-fix (`tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png`).
@@ -108,6 +112,7 @@
   - `/Users/mo/git/musicxml/docs/planning/milestone-9.md`
 - `/Users/mo/git/musicxml/docs/planning/milestone-10.md`
 - `/Users/mo/git/musicxml/docs/planning/milestone-11.md`
+- `/Users/mo/git/musicxml/docs/planning/milestone-12.md`
 - Corpus/demo M7A:
   - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
   - `/Users/mo/git/musicxml/fixtures/corpus/real-world-samples.json`
@@ -235,6 +240,13 @@
   - expected-fail LilyPond fixture: `lilypond-23c-tuplet-display-nonstandard` (explicit malformed-source waiver for undefined entity + `XML_NOT_WELL_FORMED` parse failure).
 - Recently resolved M7A blocker:
   - `lilypond-24a-gracenotes` moved to `status: active`, `expected: pass` after graceful fallback handling for VexFlow grace beaming failures (`GRACE_NOTES_BEAMING_FAILED` warning path).
+- Latest M10D spacing remediation status (2026-02-12):
+  - Generalized first-column layout hardening landed in `src/vexflow/render.ts` (justify-path shrink now honors minimum widths; first-column floor is bounded against even-split width).
+  - Proof-point inspection metrics after this change:
+    - `realworld-music21-mozart-k458-m1`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=0.9161`.
+    - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=1.0`.
+    - `lilypond-03a-rhythm-durations`: `barlineIntrusions=0`, `compressed bands=0/2`.
+  - Remaining active visual-layout issues are now concentrated in dynamic/text lane collisions (`B-012`) and residual Schumann dense-band spacing/tie proximity (`B-007`).
 
 ## Diagnostics to know
 - XML/root: `XML_NOT_WELL_FORMED`, `UNSUPPORTED_ROOT`

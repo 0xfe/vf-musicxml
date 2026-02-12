@@ -258,7 +258,8 @@ This document defines the execution strategy for making LilyPond + selected real
 - `npm run triage:fixture -- --id=<fixture-id>`
 
 ## Immediate first execution steps
-1. Implement M8A golden-manifest and sync tooling for LilyPond v2.24 references.
-2. Land M8B v1 geometry rule pack (collision + barline intrusion + beam/dot/ornament presence + spacing floors).
-3. Integrate M8C golden comparison runner with per-fixture artifact output and fail codes.
-4. Start Wave 1 fixture remediation and close the highest-impact visual blockers first.
+1. Complete current M10D blocker wave first (`B-011`, `B-012`) so M8 gates calibrate against stable pagination/layout behavior.
+2. Continue M8B rule-pack expansion (presence + justification + text clearances + dynamic-lane overlap signals).
+3. Continue M8C threshold/alignment calibration and promote selected proof-points from advisory to blocking.
+4. Add M8F completeness-aware reporting hooks (`Q0`/equivalent) and reduced-penalty waiver behavior so quality metrics do not hide missing content.
+5. Resume M8E wave execution with updated blocking gate policy and close P0 visual blockers before declaring M8 complete.

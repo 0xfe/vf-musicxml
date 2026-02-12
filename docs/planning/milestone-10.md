@@ -70,10 +70,14 @@ Exit checklist:
 - Extend `npm run test:golden` proof-points for paginated comparisons.
 - Promote `realworld-music21-bach-bwv1-6-8bars` from advisory to blocking once pagination + labels are implemented.
 - Add per-system excerpt comparison helpers for page-oriented references.
+- Resolve active left-bar squeeze/overflow regressions on dense real-world fixtures via generalized spacing logic (no fixture-specific patches).
+- Resolve dynamic-glyph lane collisions (`f/sf/...`) with deterministic overlap gates.
 
 Exit checklist:
 - [ ] Bach proof-point mismatch reduced to agreed threshold.
 - [ ] At least one additional paginated real-world proof-point added and passing.
+- [x] `realworld-music21-bach-bwv244-10` and `realworld-music21-mozart-k458-m1` pass left-bar compression/overflow gates.
+- [ ] Dynamic-glyph lanes pass deterministic collision thresholds on style proof-points.
 
 ## Implementation status snapshot (2026-02-11)
 - Landed:
@@ -167,10 +171,21 @@ Exit checklist:
 - Current inspection deltas:
   - `31a-Directions` text overlaps reduced from `13` to `7`.
   - `32a-Notations` text overlaps reduced from `21` to `4`.
-  - Remaining explicit unsupported notation in category 32: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as VexFlow gap `VF-GAP-002`).
+- Remaining explicit unsupported notation in category 32: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as VexFlow gap `VF-GAP-002`).
+
+## Latest M10D note (2026-02-12, current run)
+- Closed the main left-bar squeeze regression path with a generalized layout fix (no fixture conditionals):
+  - `expandColumnWidthsToFit(...)` now receives minimum-width constraints and preserves first-column floor protections during justify-path shrink.
+  - first-column justification floor is bounded against even-split width so opening bars stay readable without starving later bars.
+- Proof-point telemetry after the fix:
+  - `realworld-music21-mozart-k458-m1`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=0.9161`.
+  - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=1.0`.
+  - `lilypond-03a-rhythm-durations`: still overflow-clean (`barlineIntrusions=0`, `compressed bands=0/2`).
+- Remaining M10D blocker focus is now dynamic/text lane collisions (`B-012`) plus residual Schumann dense-band/tie spacing (`B-007`).
 
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.
 - [ ] Horizontal continuous mode remains available and tested.
 - [ ] Core publishing metadata (title/labels/page numbers) is available in public options.
+- [ ] M10D blocker bugs (`B-003`, `B-007`, `B-011`, `B-012`) are closed or explicitly waived with rationale.
 - [ ] M10 doc renamed to `milestone-10.completed.md` with all references updated.

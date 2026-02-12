@@ -67,4 +67,5 @@ Exit checklist:
 - `lilypond-71g-multiplechordnames`
 
 ## Current status
-- `OPEN` (planning only; implementation deferred until current M8/M9/M10 active slices are closed).
+- `OPEN` (planning only; implementation deferred until current M10/M8/M9 closeout blockers are resolved).
+- Review-3 linkage: this milestone now owns coefficient-governance/configurability work (`R-028`) and text-metrics optimization follow-up (`R-024`) after M10/M8/M9 and before broader M12 polish waves are finalized.

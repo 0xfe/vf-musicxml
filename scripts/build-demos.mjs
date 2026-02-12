@@ -52,11 +52,11 @@ const DEMO_TEXT_BOUNDS_SELECTOR = 'text';
 const DEMO_SVG_TRIM_PADDING = 20;
 /** Vertical reach above/below notation where text still counts as musical content. */
 const DEMO_TEXT_VERTICAL_INCLUSION_PADDING = {
-  top: 72,
+  top: 40,
   bottom: 132
 };
 /** Horizontal reach around notation bounds where text still counts as musical content. */
-const DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING = 56;
+const DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING = 40;
 
 /**
  * @typedef {{

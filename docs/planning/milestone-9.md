@@ -54,7 +54,8 @@ This milestone formalizes notation style quality so outputs are not only correct
 - Deterministic checks:
   - lyric-to-staff clearance floors,
   - chord-symbol stacking overlap checks,
-  - text-notehead collision counters.
+  - text-notehead collision counters,
+  - dynamics-lane overlap counters (`f`, `sf`, `pp`, etc.) with dedicated thresholds.
 
 ### S6. System balance and justification
 - Goal: each system should look balanced and avoid visually awkward crowding/raggedness.
@@ -81,7 +82,8 @@ Exit checklist:
 - Extend geometry tooling and conformance scoring with style-specific metrics:
   - measure-spacing consistency,
   - beam/stem quality outliers,
-  - text-clearance and collision severity.
+  - text-clearance and collision severity,
+  - improved text-width estimation calibration (character-class weighting baseline).
 - Add fixture-level style diagnostics with stable codes and evidence payloads.
 - Integrate style gates into conformance/eval reports as non-optional quality checks.
 
@@ -114,7 +116,7 @@ Exit checklist:
 ### Burndown board (ordered by readability impact)
 1. Horizontal spacing anomalies (compressed/uneven measures).
 2. Missing/incorrect beam grouping and stem outliers.
-3. Critical collisions (note/text/symbol collisions).
+3. Critical collisions (note/text/symbol collisions), including dynamics-lane collisions.
 4. Text placement readability (lyrics/chord symbols/directions).
 5. System justification and page-balance polish.
 

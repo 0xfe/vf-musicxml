@@ -415,6 +415,76 @@ describe('renderer quality regressions', () => {
     expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.65);
   });
 
+  it('bounds first-system left-bar compression in realworld-music21-mozart-k458-m1', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/realworld/realworld-music21-mozart-k458-m1.mxl');
+    const archive = await readFile(fixturePath);
+
+    const parsed = await parseMusicXMLAsync(
+      {
+        data: new Uint8Array(archive),
+        format: 'mxl'
+      },
+      {
+        sourceName: 'fixtures/conformance/realworld/realworld-music21-mozart-k458-m1.mxl',
+        mode: 'lenient'
+      }
+    );
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
+    const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
+    const intrusions = detectNoteheadBarlineIntrusions(firstPageGeometry, {
+      minHorizontalOverlap: 0.75,
+      minVerticalOverlap: 3
+    });
+    const evaluatedBandRatios = spacingSummary.bandSummaries
+      .map((band) => band.firstToMedianOtherGapRatio)
+      .filter((ratio): ratio is number => ratio !== null);
+    const compressedBandCount = evaluatedBandRatios.filter((ratio) => ratio < 0.75).length;
+
+    // Keep left-edge pressure bounded on this dense proof-point until full M11
+    // column optimizer work lands. We allow known edge-touch intrusions but
+    // guard against broader compression spread.
+    expect(intrusions.length).toBeLessThanOrEqual(8);
+    expect(evaluatedBandRatios.length).toBeGreaterThan(0);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.16);
+    expect(compressedBandCount).toBeLessThanOrEqual(4);
+  });
+
+  it('keeps first-system opening spacing readable in realworld-music21-bach-bwv244-10', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/realworld/realworld-music21-bach-bwv244-10.mxl');
+    const archive = await readFile(fixturePath);
+
+    const parsed = await parseMusicXMLAsync(
+      {
+        data: new Uint8Array(archive),
+        format: 'mxl'
+      },
+      {
+        sourceName: 'fixtures/conformance/realworld/realworld-music21-bach-bwv244-10.mxl',
+        mode: 'lenient'
+      }
+    );
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
+    const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
+    const evaluatedBandRatios = spacingSummary.bandSummaries
+      .map((band) => band.firstToMedianOtherGapRatio)
+      .filter((ratio): ratio is number => ratio !== null);
+
+    expect(evaluatedBandRatios.length).toBeGreaterThan(0);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.6);
+  });
+
   it('keeps chord-name labels non-overlapping in lilypond-71g-multiplechordnames', async () => {
     const fixturePath = path.resolve('fixtures/conformance/lilypond/71g-multiplechordnames.musicxml');
     const xml = await readFile(fixturePath, 'utf8');
@@ -458,6 +528,36 @@ describe('renderer quality regressions', () => {
     // Category 31 intentionally packs dense labels; keep overlaps bounded so
     // symbols/labels remain readable while we continue M11 layout work.
     expect(overlaps.length).toBeLessThanOrEqual(8);
+  });
+
+  it('keeps category-31 dynamics glyph runs separated from nearby text labels', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/31a-Directions.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/31a-Directions.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const dynamicsBounds = extractSvgElementBounds(svg, { selector: 'g[class*="dynamics-text"]' });
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const combinedOverlaps = detectSvgOverlaps([...dynamicsBounds, ...textBounds], { minOverlapArea: 4 });
+    const dynamicsToTextOverlaps = combinedOverlaps.filter((overlap) => {
+      const leftIsDynamics = overlap.left.className?.includes('vf-dynamics-text') ?? false;
+      const rightIsDynamics = overlap.right.className?.includes('vf-dynamics-text') ?? false;
+      return leftIsDynamics !== rightIsDynamics;
+    });
+
+    expect(dynamicsBounds.length).toBeGreaterThanOrEqual(8);
+    // Category 31 intentionally layers many nearby direction labels; keep
+    // collisions bounded while B-012 tracks further dynamics-lane polish.
+    expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(12);
   });
 
   it('keeps category-32 notation labels bounded and maps unsupported symbols explicitly', async () => {
