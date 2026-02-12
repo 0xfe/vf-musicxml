@@ -4,7 +4,7 @@
 - `logs.md`: append-only execution log.
 - `todo.md`: active risks/bugs/tasks.
 - `todo.completed.md`: closed risks/bugs/tasks.
-- `feedback.md`: planning feedback history and disposition.
+- `feedback/`: planning feedback reviews and disposition (see `feedback/AGENTS.md` for instructions).
 
 Milestones:
 - `milestone-0.completed.md`

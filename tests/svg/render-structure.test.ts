@@ -60,7 +60,7 @@ describe('SVG rendering structure', () => {
     expect(rendered.pages.length).toBe(1);
     expect(svg).toContain('Allegro');
     expect(svg).toContain('q = 120');
-    expect(svg).toContain('mf');
+    expect(svg).toContain('vf-dynamics-text');
     expect(noteheadCount).toBeGreaterThanOrEqual(2);
     expect(rendered.diagnostics.some((d) => d.code === 'WEDGE_DIRECTION_TEXT_FALLBACK')).toBe(true);
     expect(rendered.diagnostics.some((d) => d.code === 'TIE_RENDER_FAILED')).toBe(false);

@@ -19,6 +19,15 @@
   - renderer clef lookup avoids cross-staff fallback leakage and draws small mid-system clef changes,
   - parser now aggregates repeated `<notations>` blocks and preserves richer ornament payload tokens (`accidental-mark:*`, `tremolo:*`),
   - renderer category-32 mapping now attaches broader VexFlow modifiers (`Articulation`, `Ornament`, `Vibrato`, `Stroke`, `FretHandFinger`, `Tremolo`) with text fallbacks for unsupported technical tokens.
+- Latest maintainability refactor:
+  - split long parser modules into focused units (`parse-note-data`, `parse-note-notations`, `parse-direction-events`, `parse-measure-events`) while keeping `parse-note.ts` as the compatibility surface used by `parse.ts`,
+  - split long renderer modules into focused units (`render-drawing`, `render-notations-core`, `render-notations-text`, `render-notations-spanners`, `render-note-mapper-mappings`) while keeping existing public orchestration entry points stable,
+  - split conformance/eval plumbing into focused testkit modules (`conformance-types`, `conformance-report`, `conformance-quality`, `conformance-quality-geometry`, `conformance-quality-scoring`) and preserved prior report/execution interfaces via re-exports.
+- Latest post-refactor regression hardening:
+  - first-column spacing reservation was retuned to avoid system-start collisions while preserving MusicXML measure-width weighting behavior in source-hinted systems,
+  - inter-part and intra-part vertical spacing now includes explicit ledger-heavy pitch spread pressure for better cross-staff readability in dense real-world fixtures,
+  - tie/slur routing now applies stronger anchor-delta guardrails and more stable curve depth/tie-side defaults to reduce cut-through/collision artifacts,
+  - direction dynamics are now rendered as SMuFL glyphs (group class `vf-dynamics-text`) instead of plain text so `f/p/mf/ffz/...` styling matches notation glyph expectations.
 - Latest category-31/32 readability hardening:
   - chord-shared articulation/ornament modifiers are deduplicated before VexFlow attachment to avoid stacked duplicate symbols on chord noteheads,
   - note-specific technical text/fingering markers keep per-note anchors but compact multi-token clusters to avoid in-place label pileups,

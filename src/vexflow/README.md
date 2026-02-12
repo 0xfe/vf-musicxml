@@ -1,9 +1,14 @@
 # VexFlow Adapter
 
-Current baseline implementation is in:
-- `src/vexflow/render.ts` (orchestration/layout)
-- `src/vexflow/render-note-mapper.ts` (event-to-note mapping)
-- `src/vexflow/render-notations.ts` (direction and spanner rendering)
+Current baseline implementation is split into focused modules:
+- `src/vexflow/render.ts`: top-level orchestration and system/page planning.
+- `src/vexflow/render-drawing.ts`: page text, part labels, beam preparation, and connector/barline drawing helpers.
+- `src/vexflow/render-note-mapper.ts`: note/rest/grace/tuplet mapping orchestration for one measure+staff.
+- `src/vexflow/render-note-mapper-mappings.ts`: duration/accidental/articulation/ornament mapping tables and helpers.
+- `src/vexflow/render-notations-core.ts`: event-note lookup registration helpers shared by notation passes.
+- `src/vexflow/render-notations-text.ts`: direction, harmony, and lyric text rendering.
+- `src/vexflow/render-notations-spanners.ts`: tuplet, tie, slur, and wedge drawing.
+- `src/vexflow/render-notations.ts`: stable public re-export surface for notation helpers.
 
 Supported in current M6 baseline:
 - Multi-part rendering with vertical part stacking.
