@@ -1,4 +1,5 @@
 import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 /** Lifecycle stages used for VexFlow gap tracking from detection through de-patch. */
 export type VexflowGapLifecycleStage =
@@ -132,7 +133,8 @@ export async function validateVexflowGapRegistry(
       issues.push({ entryId, message: 'tests must contain at least one test path' });
     } else {
       for (const testPath of entry.tests) {
-        if (!(await pathExists(testPath))) {
+        const resolvedTestPath = resolveWorkspacePath(testPath, options.workspaceRoot);
+        if (!(await pathExists(resolvedTestPath))) {
           issues.push({ entryId, message: `test path does not exist: ${testPath}` });
         }
       }
@@ -144,7 +146,7 @@ export async function validateVexflowGapRegistry(
       const patchPath = entry.local_patch.patch_file;
       if (!patchPath) {
         issues.push({ entryId, message: "local_patch.patch_file is required for 'patch-package' type" });
-      } else if (!(await pathExists(patchPath))) {
+      } else if (!(await pathExists(resolveWorkspacePath(patchPath, options.workspaceRoot)))) {
         issues.push({ entryId, message: `patch file does not exist: ${patchPath}` });
       }
     }
@@ -171,4 +173,29 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Resolve registry paths against the current workspace root.
+ * The registry now stores portable relative paths, but this resolver also keeps
+ * backward compatibility for older absolute paths that were authored under a
+ * `/.../musicxml/...` root on another machine.
+ */
+function resolveWorkspacePath(inputPath: string, workspaceRoot: string): string {
+  if (!path.isAbsolute(inputPath)) {
+    return path.resolve(workspaceRoot, inputPath);
+  }
+
+  if (inputPath.startsWith(`${workspaceRoot}${path.sep}`) || inputPath === workspaceRoot) {
+    return inputPath;
+  }
+
+  const legacyRootMarker = `${path.sep}musicxml${path.sep}`;
+  const markerIndex = inputPath.lastIndexOf(legacyRootMarker);
+  if (markerIndex < 0) {
+    return inputPath;
+  }
+
+  const legacyRelativeSuffix = inputPath.slice(markerIndex + legacyRootMarker.length);
+  return path.resolve(workspaceRoot, legacyRelativeSuffix);
 }

@@ -118,6 +118,67 @@ describe('parser CSM transformation', () => {
     expect(measures?.[1]?.sourceWidthTenths).toBe(360);
   });
 
+  it('merges partial clef updates by staff and preserves unchanged staves', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <backup><duration>1</duration></backup>
+      <note>
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>1</duration>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+    </measure>
+    <measure number="2">
+      <attributes>
+        <clef number="2"><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <backup><duration>1</duration></backup>
+      <note>
+        <pitch><step>D</step><octave>3</octave></pitch>
+        <duration>1</duration>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    const firstMeasureClefs = result.score?.parts[0]?.measures[0]?.effectiveAttributes.clefs;
+    const secondMeasureClefs = result.score?.parts[0]?.measures[1]?.effectiveAttributes.clefs;
+
+    expect(firstMeasureClefs).toEqual([
+      { staff: 1, sign: 'G', line: 2 },
+      { staff: 2, sign: 'F', line: 4 }
+    ]);
+    expect(secondMeasureClefs).toEqual([
+      { staff: 1, sign: 'G', line: 2 },
+      { staff: 2, sign: 'G', line: 2 }
+    ]);
+  });
+
   it('captures MusicXML note default-x hints for source spacing alignment', () => {
     const xml = `
 <score-partwise version="4.0">
@@ -438,6 +499,45 @@ describe('parser CSM transformation', () => {
     expect(slurs).toHaveLength(0);
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'UNMATCHED_SLUR_STOP')).toBe(true);
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'UNCLOSED_SLUR_START')).toBe(true);
+  });
+
+  it('parses clef staff numbers from clef@number even when clef order is not staff order', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Keyboard</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <staves>2</staves>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <backup><duration>4</duration></backup>
+      <note>
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    const measure = result.score?.parts[0]?.measures[0];
+    const clefs = measure?.effectiveAttributes.clefs ?? [];
+
+    expect(result.score).toBeDefined();
+    expect(clefs).toHaveLength(2);
+    expect(clefs.find((clef) => clef.staff === 1)?.sign).toBe('G');
+    expect(clefs.find((clef) => clef.staff === 2)?.sign).toBe('F');
   });
 
   it('treats unclosed slur starts as strict-mode errors', () => {
@@ -860,6 +960,65 @@ www.jsbchorales.net</credit-words></credit>
     expect(leftEnding?.type).toBe('start');
     expect(rightRepeat?.direction).toBe('backward');
     expect(rightEnding?.type).toBe('stop');
+  });
+
+  it('collects ornaments/articulations across multiple notation and direction-type nodes', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Advanced</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <direction placement="above">
+        <direction-type><words>dolce</words></direction-type>
+        <direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>88</per-minute></metronome></direction-type>
+      </direction>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <notations><articulations><staccato/></articulations></notations>
+        <notations><technical><fingering>2</fingering></technical><fermata type="inverted"/></notations>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <notations><ornaments><trill-mark/></ornaments></notations>
+        <notations><ornaments><wavy-line type="start"/></ornaments><arpeggiate direction="down"/></notations>
+      </note>
+      <note><rest/><duration>2</duration><voice>1</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const result = parseMusicXML(xml, { mode: 'lenient' });
+    expect(result.score).toBeDefined();
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const measure = result.score?.parts[0]?.measures[0];
+    const firstNote = measure?.voices[0]?.events[0];
+    const secondNote = measure?.voices[0]?.events[1];
+    const direction = measure?.directions[0];
+
+    expect(direction?.words).toContain('dolce');
+    expect(direction?.words).toContain('quarter=88');
+
+    expect(firstNote?.kind).toBe('note');
+    if (firstNote?.kind === 'note') {
+      const articulationTypes = firstNote.notes[0]?.articulations?.map((articulation) => articulation.type) ?? [];
+      expect(articulationTypes).toContain('staccato');
+      expect(articulationTypes).toContain('fingering:2');
+      expect(articulationTypes).toContain('fermata-inverted');
+    }
+
+    expect(secondNote?.kind).toBe('note');
+    if (secondNote?.kind === 'note') {
+      const ornamentTypes = secondNote.notes[0]?.ornaments?.map((ornament) => ornament.type) ?? [];
+      expect(ornamentTypes).toContain('trill-mark');
+      expect(ornamentTypes).toContain('wavy-line-start');
+      expect(ornamentTypes).toContain('arpeggiate-down');
+    }
   });
 
   it('conserves randomized backup/forward timing invariants across voices', () => {

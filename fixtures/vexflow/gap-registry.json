@@ -18,17 +18,44 @@
       "local_patch": {
         "type": "wrapper",
         "scope": "musicxml-renderer",
-        "path": "/Users/mo/git/musicxml/src/vexflow/render-notations.ts"
+        "path": "src/vexflow/render-notations.ts"
       },
       "upstream": {
         "status": "planned",
         "target_branch": "codex/vexflow-grace-beaming-fallback"
       },
       "tests": [
-        "/Users/mo/git/musicxml/tests/integration/grace-render-regression.test.ts",
-        "/Users/mo/git/musicxml/tests/conformance/execution.test.ts"
+        "tests/integration/grace-render-regression.test.ts",
+        "tests/conformance/execution.test.ts"
       ],
       "updated_at": "2026-02-11"
+    },
+    {
+      "id": "VF-GAP-002",
+      "title": "Non-arpeggiate chord notation lacks direct VexFlow rendering primitive",
+      "lifecycle_stage": "reproduced",
+      "severity": "medium",
+      "owner": "musicxml-core",
+      "musicxml_fixture_ids": [
+        "lilypond-32a-notations"
+      ],
+      "diagnostic_codes": [
+        "NON_ARPEGGIATE_UNSUPPORTED"
+      ],
+      "workaround_summary": "Parser preserves non-arpeggiate semantics and renderer emits explicit diagnostics; visual fallback/patch strategy still pending.",
+      "local_patch": {
+        "type": "none",
+        "scope": "pending",
+        "path": "src/vexflow/render-note-mapper.ts"
+      },
+      "upstream": {
+        "status": "planned",
+        "target_branch": "codex/vexflow-non-arpeggiate-support"
+      },
+      "tests": [
+        "tests/integration/render-quality-regressions.test.ts"
+      ],
+      "updated_at": "2026-02-12"
     }
   ]
 }

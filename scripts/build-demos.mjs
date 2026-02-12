@@ -4,8 +4,11 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { JSDOM } from 'jsdom';
+
 import { parseMusicXMLAsync, renderToSVGPages } from '../dist/public/index.js';
 import { loadConformanceFixtures } from '../dist/testkit/index.js';
+import { extractSvgElementBounds } from '../dist/testkit/svg-collision.js';
 
 /** Absolute repository root path resolved from this script location. */
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,6 +20,43 @@ const LILYPOND_MANIFEST_PATH = path.join(ROOT_DIR, 'demos', 'lilypond', 'manifes
 const REALWORLD_CORPUS_PATH = path.join(ROOT_DIR, 'fixtures', 'corpus', 'real-world-samples.json');
 /** Conformance fixture root used for roadmap alignment reporting. */
 const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
+/** Demo pages use the same default scale as the library renderer. */
+const DEMO_RENDER_SCALE = 0.7;
+/** Render wide first, then trim SVG viewBox to notation bounds for dense/short scores. */
+const DEMO_PAGE_WIDTH = 1320;
+/** Extra vertical room keeps long systems intact before post-render crop. */
+const DEMO_PAGE_HEIGHT = 1800;
+/** Selector set used to estimate visible notation bounds for dynamic demo canvas sizing. */
+const DEMO_NOTATION_BOUNDS_SELECTOR = [
+  '.vf-stavenote',
+  '.vf-notehead',
+  '.vf-stem',
+  '.vf-beam',
+  '.vf-flag',
+  '.vf-staveline',
+  '.vf-clef',
+  '.vf-modifiers',
+  '.vf-keysignature',
+  '.vf-timesignature',
+  '.vf-stroke',
+  '.vf-annotation',
+  '.vf-ornament',
+  '.vf-articulation',
+  '.vf-stavetext',
+  '.vf-staverepetition',
+  '.vf-stavetempo',
+].join(', ');
+/** Text selector used for optional lyric/chord inclusion after notation bounds are known. */
+const DEMO_TEXT_BOUNDS_SELECTOR = 'text';
+/** Padding applied around trimmed notation bounds to avoid clipping tall glyphs. */
+const DEMO_SVG_TRIM_PADDING = 20;
+/** Vertical reach above/below notation where text still counts as musical content. */
+const DEMO_TEXT_VERTICAL_INCLUSION_PADDING = {
+  top: 72,
+  bottom: 132
+};
+/** Horizontal reach around notation bounds where text still counts as musical content. */
+const DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING = 56;
 
 /**
  * @typedef {{
@@ -85,6 +125,7 @@ const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
  *   expected: 'pass' | 'fail';
  *   parseMode: 'strict' | 'lenient';
  *   category: string;
+ *   categoryLabel?: string;
  *   collection: 'lilypond' | 'realworld';
  * }} DemoDefinition
  */
@@ -215,10 +256,16 @@ function buildDemoPageHtml(demo, renderOutcome) {
         font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
         color: var(--fg);
         background: linear-gradient(180deg, #ffffff 0%, var(--bg) 70%);
+        overflow-x: hidden;
+      }
+
+      html {
+        overflow-x: hidden;
       }
 
       main {
-        max-width: 1100px;
+        max-width: 1520px;
+        width: min(1520px, 98vw);
         margin: 0 auto;
         padding: 24px;
       }
@@ -239,6 +286,15 @@ function buildDemoPageHtml(demo, renderOutcome) {
         padding: 16px;
         margin-bottom: 16px;
         overflow-x: auto;
+        max-width: 100%;
+      }
+
+      .surface svg {
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        margin: 0 auto;
       }
 
       .diag-ok {
@@ -261,7 +317,7 @@ function buildDemoPageHtml(demo, renderOutcome) {
       <a href="./index.html">Back to demos</a>
       <h1>${escapeHtml(demo.title)}</h1>
       <p>${escapeHtml(demo.description)}</p>
-      <p><strong>Category:</strong> ${escapeHtml(demo.category)} | <strong>Collection:</strong> ${escapeHtml(
+      <p><strong>Category:</strong> ${escapeHtml(demo.categoryLabel ?? demo.category)} | <strong>Collection:</strong> ${escapeHtml(
         demo.collection
       )}</p>
       <p><strong>Expected outcome:</strong> ${escapeHtml(demo.expected)} | <strong>Observed outcome:</strong> <span style="color:${statusTone};">${escapeHtml(
@@ -301,10 +357,13 @@ function renderDemoTableRow(demo) {
 }
 
 /** Build one per-category details block for full LilyPond suite navigation. */
-function renderLilyPondCategorySection(categoryId, demosInCategory) {
+function renderLilyPondCategorySection(categoryId, categoryTitle, demosInCategory) {
   const rows = demosInCategory.map((demo) => renderDemoTableRow(demo)).join('\n');
+  const labeledCategory = categoryTitle
+    ? `Category ${escapeHtml(categoryId)} - ${escapeHtml(categoryTitle)}`
+    : `Category ${escapeHtml(categoryId)}`;
   return `<details class="category-details">
-  <summary>Category ${escapeHtml(categoryId)} (${demosInCategory.length} demos)</summary>
+  <summary>${labeledCategory} (${demosInCategory.length} demos)</summary>
   <table>
     <thead>
       <tr>
@@ -328,6 +387,7 @@ function buildIndexPageHtml(
   lilypondSuiteDemos,
   complexScoreDemos,
   lilypondManifest,
+  lilyPondCategoryTitleById,
   conformanceSummary
 ) {
   const featuredRows = featuredDemos.map((demo) => renderDemoTableRow(demo)).join('\n');
@@ -344,6 +404,7 @@ function buildIndexPageHtml(
     .map(([categoryId, demosInCategory]) =>
       renderLilyPondCategorySection(
         categoryId,
+        lilyPondCategoryTitleById.get(categoryId),
         [...demosInCategory].sort((left, right) => left.id.localeCompare(right.id))
       )
     )
@@ -622,6 +683,162 @@ function assertSeedDemoCorpusAlignment(manifest, corpusManifest) {
   }
 }
 
+/**
+ * Trim SVG page whitespace by cropping viewBox to notation geometry bounds.
+ * This keeps demos compact across short fixtures while preserving deterministic
+ * layout pixels inside the cropped region.
+ */
+function trimSvgMarkupToNotationBounds(svgMarkup) {
+  const notationBounds = extractSvgElementBounds(svgMarkup, {
+    selector: DEMO_NOTATION_BOUNDS_SELECTOR
+  });
+  if (notationBounds.length === 0) {
+    return svgMarkup;
+  }
+
+  const textBounds = extractSvgElementBounds(svgMarkup, {
+    selector: DEMO_TEXT_BOUNDS_SELECTOR
+  });
+  const bounds = mergeNotationAndNearbyTextBounds(notationBounds, textBounds);
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const entry of bounds) {
+    const left = entry.bounds.x;
+    const top = entry.bounds.y;
+    const right = entry.bounds.x + entry.bounds.width;
+    const bottom = entry.bounds.y + entry.bounds.height;
+    if (!Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(right) || !Number.isFinite(bottom)) {
+      continue;
+    }
+    minX = Math.min(minX, left);
+    minY = Math.min(minY, top);
+    maxX = Math.max(maxX, right);
+    maxY = Math.max(maxY, bottom);
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return svgMarkup;
+  }
+
+  const dom = new JSDOM(svgMarkup, { contentType: 'image/svg+xml' });
+  const svg = dom.window.document.querySelector('svg');
+  if (!svg) {
+    dom.window.close();
+    return svgMarkup;
+  }
+
+  const viewport = resolveSvgViewport(svg);
+  const cropX = clamp(minX - DEMO_SVG_TRIM_PADDING, viewport.x, viewport.x + viewport.width);
+  const cropY = clamp(minY - DEMO_SVG_TRIM_PADDING, viewport.y, viewport.y + viewport.height);
+  const cropRight = clamp(maxX + DEMO_SVG_TRIM_PADDING, viewport.x, viewport.x + viewport.width);
+  const cropBottom = clamp(maxY + DEMO_SVG_TRIM_PADDING, viewport.y, viewport.y + viewport.height);
+  const cropWidth = Math.max(1, cropRight - cropX);
+  const cropHeight = Math.max(1, cropBottom - cropY);
+
+  svg.setAttribute('viewBox', `${cropX.toFixed(2)} ${cropY.toFixed(2)} ${cropWidth.toFixed(2)} ${cropHeight.toFixed(2)}`);
+  svg.setAttribute('width', `${Math.ceil(cropWidth)}`);
+  svg.setAttribute('height', `${Math.ceil(cropHeight)}`);
+
+  const trimmed = svg.outerHTML;
+  dom.window.close();
+  return trimmed;
+}
+
+/** Merge core notation bounds with nearby text (lyrics/chords) while excluding far headers/footers. */
+function mergeNotationAndNearbyTextBounds(notationBounds, textBounds) {
+  let notationMinX = Number.POSITIVE_INFINITY;
+  let notationMinY = Number.POSITIVE_INFINITY;
+  let notationMaxX = Number.NEGATIVE_INFINITY;
+  let notationMaxY = Number.NEGATIVE_INFINITY;
+
+  for (const entry of notationBounds) {
+    notationMinX = Math.min(notationMinX, entry.bounds.x);
+    notationMinY = Math.min(notationMinY, entry.bounds.y);
+    notationMaxX = Math.max(notationMaxX, entry.bounds.x + entry.bounds.width);
+    notationMaxY = Math.max(notationMaxY, entry.bounds.y + entry.bounds.height);
+  }
+
+  if (
+    !Number.isFinite(notationMinX) ||
+    !Number.isFinite(notationMinY) ||
+    !Number.isFinite(notationMaxX) ||
+    !Number.isFinite(notationMaxY)
+  ) {
+    return notationBounds;
+  }
+
+  const mergedBounds = [...notationBounds];
+  for (const textEntry of textBounds) {
+    const left = textEntry.bounds.x;
+    const top = textEntry.bounds.y;
+    const right = textEntry.bounds.x + textEntry.bounds.width;
+    const bottom = textEntry.bounds.y + textEntry.bounds.height;
+
+    const overlapsHorizontalWindow =
+      right >= notationMinX - DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING &&
+      left <= notationMaxX + DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING;
+    const overlapsVerticalWindow =
+      bottom >= notationMinY - DEMO_TEXT_VERTICAL_INCLUSION_PADDING.top &&
+      top <= notationMaxY + DEMO_TEXT_VERTICAL_INCLUSION_PADDING.bottom;
+
+    if (overlapsHorizontalWindow && overlapsVerticalWindow) {
+      mergedBounds.push(textEntry);
+    }
+  }
+
+  return mergedBounds;
+}
+
+/** Resolve SVG viewport rectangle from `viewBox` or width/height attributes. */
+function resolveSvgViewport(svgElement) {
+  const viewBoxRaw = svgElement.getAttribute('viewBox');
+  if (viewBoxRaw) {
+    const parts = viewBoxRaw
+      .trim()
+      .split(/\s+/)
+      .map((part) => Number.parseFloat(part));
+    if (
+      parts.length === 4 &&
+      Number.isFinite(parts[0]) &&
+      Number.isFinite(parts[1]) &&
+      Number.isFinite(parts[2]) &&
+      Number.isFinite(parts[3])
+    ) {
+      return {
+        x: parts[0],
+        y: parts[1],
+        width: Math.max(1, parts[2]),
+        height: Math.max(1, parts[3])
+      };
+    }
+  }
+
+  const width = parseSvgDimension(svgElement.getAttribute('width')) ?? DEMO_PAGE_WIDTH;
+  const height = parseSvgDimension(svgElement.getAttribute('height')) ?? DEMO_PAGE_HEIGHT;
+  return {
+    x: 0,
+    y: 0,
+    width: Math.max(1, width),
+    height: Math.max(1, height)
+  };
+}
+
+/** Parse one SVG dimension token (`980`, `980px`) into a finite number. */
+function parseSvgDimension(value) {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Clamp a number into a closed interval. */
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
 /** Parse/render one demo fixture and classify observed outcome for page generation. */
 async function renderDemoFixture(demoDefinition) {
   const sourceData = await readFile(demoDefinition.scorePath);
@@ -644,7 +861,21 @@ async function renderDemoFixture(demoDefinition) {
     });
   }
 
-  const rendered = renderToSVGPages(parsed.score);
+  const rendered = renderToSVGPages(parsed.score, {
+    layout: {
+      scale: DEMO_RENDER_SCALE,
+      page: {
+        width: DEMO_PAGE_WIDTH,
+        height: DEMO_PAGE_HEIGHT,
+        margins: {
+          top: 28,
+          right: 28,
+          bottom: 28,
+          left: 28
+        }
+      }
+    }
+  });
   const renderErrors = rendered.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (rendered.pages.length === 0 || renderErrors.length > 0) {
     return /** @type {DemoRenderOutcome} */ ({
@@ -656,13 +887,14 @@ async function renderDemoFixture(demoDefinition) {
 
   return /** @type {DemoRenderOutcome} */ ({
     observedOutcome: 'pass',
-    svgMarkup: rendered.pages[0],
+    svgMarkup: trimSvgMarkupToNotationBounds(rendered.pages[0]),
     diagnostics: [...parsed.diagnostics, ...rendered.diagnostics]
   });
 }
 
 /** Build the LilyPond roadmap page with category status and conformance alignment. */
 function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtures) {
+  const titleByCategoryId = new Map(corpusManifest.categories.map((category) => [category.id, category.title]));
   const activeConformanceByCategoryId = new Map();
   for (const fixture of conformanceFixtures) {
     if (fixture.meta.status !== 'active') {
@@ -681,9 +913,13 @@ function buildLilyPondRoadmapPageHtml(manifest, corpusManifest, conformanceFixtu
       const title = escapeHtml(seed.title);
       const sourceName = escapeHtml(seed.sourceName);
       const sourceUrl = escapeHtml(seed.sourceUrl);
+      const categoryTitle = titleByCategoryId.get(seed.categoryId);
+      const categoryLabel = categoryTitle
+        ? `${escapeHtml(seed.categoryId)} - ${escapeHtml(categoryTitle)}`
+        : escapeHtml(seed.categoryId);
       return `<tr>
   <td>${title}</td>
-  <td>${escapeHtml(seed.categoryId)}</td>
+  <td>${categoryLabel}</td>
   <td><code>${localPath}</code></td>
   <td><a href="./${escapeHtml(seed.id)}.html">Rendered demo</a></td>
   <td><a href="${sourceUrl}" target="_blank" rel="noreferrer">${sourceName}</a></td>
@@ -866,7 +1102,19 @@ async function buildDemos() {
   const realWorldCorpusManifest = await loadRealWorldCorpusManifest();
   assertSeedDemoCorpusAlignment(lilypondManifest, lilypondCorpusManifest);
   const conformanceFixtures = await loadConformanceFixtures(CONFORMANCE_FIXTURES_DIR);
-  const lilyPondSuiteDemoDefinitions = buildLilyPondDemoDefinitions(lilypondManifest, conformanceFixtures);
+  const lilyPondCategoryTitleById = new Map(
+    lilypondCorpusManifest.categories.map((category) => [category.id, category.title])
+  );
+  const lilyPondSuiteDemoDefinitions = buildLilyPondDemoDefinitions(lilypondManifest, conformanceFixtures).map(
+    (demoDefinition) => {
+      const categoryId = demoDefinition.category.replace('lilypond-', '');
+      const categoryTitle = lilyPondCategoryTitleById.get(categoryId);
+      return {
+        ...demoDefinition,
+        categoryLabel: categoryTitle ? `${categoryId} - ${categoryTitle}` : categoryId
+      };
+    }
+  );
   const complexScoreDemoDefinitions = buildComplexRealWorldDemoDefinitions(
     conformanceFixtures,
     realWorldCorpusManifest
@@ -920,6 +1168,7 @@ async function buildDemos() {
       lilyPondSuiteDemoDefinitions,
       complexScoreDemoDefinitions,
       lilypondManifest,
+      lilyPondCategoryTitleById,
       conformanceSummary
     ),
     'utf8'

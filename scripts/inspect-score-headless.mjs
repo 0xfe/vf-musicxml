@@ -17,6 +17,7 @@ import {
   summarizeMeasureSpacingByBarlines,
   summarizeNotationGeometry
 } from '../dist/testkit/notation-geometry.js';
+import { detectSvgOverlaps, extractSvgElementBounds } from '../dist/testkit/svg-collision.js';
 
 /** Default output root for one-score inspection artifacts. */
 const DEFAULT_OUTPUT_ROOT = path.resolve('artifacts/score-inspection');
@@ -158,6 +159,8 @@ async function runInspection(options) {
     minVerticalOverlap: 3
   });
   const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
+  const textBounds = extractSvgElementBounds(svgMarkup, { selector: 'text' });
+  const textOverlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
   const svgOutputPath = path.join(options.outputDir, `${options.id}.page-${options.pageIndex + 1}.svg`);
   const pngOutputPath = path.join(options.outputDir, `${options.id}.page-${options.pageIndex + 1}.png`);
@@ -200,6 +203,10 @@ async function runInspection(options) {
     geometrySummary,
     extremeCurveCount: extremeCurves.length,
     spacingSummary,
+    textSummary: {
+      textCount: textBounds.length,
+      overlapCount: textOverlaps.length
+    },
     intrusionCount: intrusions.length,
     visualDiff: visualDiffSummary
   };
@@ -220,6 +227,19 @@ async function runInspection(options) {
       `Measure spacing ratio (first/median-other): ${spacingSummary.firstToMedianOtherGapRatio} (bands=${spacingSummary.evaluatedBandCount})`
     );
   }
+  const perBandRatios = spacingSummary.bandSummaries
+    .map((summary) => summary.firstToMedianOtherGapRatio)
+    .filter((ratio) => typeof ratio === 'number' && Number.isFinite(ratio))
+    .sort((left, right) => left - right);
+  if (perBandRatios.length > 0) {
+    const weakest = perBandRatios[0] ?? null;
+    const strongest = perBandRatios[perBandRatios.length - 1] ?? null;
+    const compressedBandCount = perBandRatios.filter((ratio) => ratio < 0.75).length;
+    console.log(
+      `Spacing bands: min=${weakest}, max=${strongest}, compressed(<0.75)=${compressedBandCount}/${perBandRatios.length}`
+    );
+  }
+  console.log(`Text summary: count=${textBounds.length}, overlaps=${textOverlaps.length}`);
   if (visualDiffSummary) {
     console.log(
       `Visual diff vs reference: mismatchRatio=${visualDiffSummary.mismatchRatio}, ssim=${visualDiffSummary.ssim}`

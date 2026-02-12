@@ -11,6 +11,20 @@ type VexRenderContext = NonNullable<ReturnType<Stave['getContext']>>;
 const MAX_MIXED_STEM_SLUR_ANCHOR_DELTA = 48;
 /** Any slur with extreme anchor spread becomes visually unstable in current baseline. */
 const MAX_SLUR_ANCHOR_DELTA = 68;
+/** Minimum x-gap between adjacent harmony symbols on the same row. */
+const HARMONY_MIN_HORIZONTAL_GAP = 8;
+/** Minimum x-gap between adjacent lyric syllables on the same line. */
+const LYRIC_MIN_HORIZONTAL_GAP = 6;
+/** Minimum x-gap between adjacent direction-text labels on the same row. */
+const DIRECTION_MIN_HORIZONTAL_GAP = 8;
+/** Hard cap for extra lyric lines added by overlap-avoidance routing. */
+const MAX_ADDITIONAL_LYRIC_LINES = 8;
+/** Fixed row step for stacked harmony labels to prevent vertical text collisions. */
+const HARMONY_ROW_SPACING = 14;
+/** Fixed row step for stacked lyric lines to preserve readability in dense verses. */
+const LYRIC_ROW_SPACING = 14;
+/** Fixed row step for stacked direction labels above the stave. */
+const DIRECTION_ROW_SPACING = 12;
 
 /** Measure range currently rendered on one page (`endMeasure` is exclusive). */
 export interface RenderMeasureWindow {
@@ -76,7 +90,8 @@ export function drawMeasureDirections(
 
   const measureTicks = estimateMeasureTicks(measure, ticksPerQuarter);
   const availableWidth = Math.max(32, stave.getWidth() - 36);
-  let textRow = 0;
+  const rowRightEdges = new Map<number, number>();
+  let maxRow = 0;
 
   for (const direction of measure.directions) {
     const chunks: string[] = [];
@@ -96,14 +111,27 @@ export function drawMeasureDirections(
 
     const ratio = measureTicks > 0 ? clamp(direction.offsetTicks / measureTicks, 0, 1) : 0;
     const x = stave.getX() + 16 + availableWidth * ratio;
-    const y = stave.getY() - 18 - textRow * 12;
+    const text = chunks.join('  ');
+    const width = estimateTextWidth(text, 11);
+    const left = x;
+    const right = x + width;
+    const row = resolveTextRowWithoutOverlap(
+      rowRightEdges,
+      0,
+      left,
+      right,
+      DIRECTION_MIN_HORIZONTAL_GAP,
+      10
+    );
+    const y = stave.getY() - 18 - row * DIRECTION_ROW_SPACING;
 
     // Render lightweight direction text without introducing additional VexFlow tickables.
     context.save();
     context.setFont('Serif', 11, '');
-    context.fillText(chunks.join('  '), x, y);
+    context.fillText(text, x, y);
     context.restore();
-    textRow += 1;
+    rowRightEdges.set(row, right);
+    maxRow = Math.max(maxRow, row);
 
     if (direction.wedge) {
       diagnostics.push({
@@ -112,6 +140,14 @@ export function drawMeasureDirections(
         message: `Direction wedge '${direction.wedge.type}' parsed; rendered via hairpin spanners when anchors resolve.`
       });
     }
+  }
+
+  if (maxRow >= 2) {
+    diagnostics.push({
+      code: 'DIRECTION_TEXT_STACK_HIGH',
+      severity: 'info',
+      message: `Measure ${measure.index + 1} drew ${maxRow + 1} direction-text rows.`
+    });
   }
 }
 
@@ -133,7 +169,9 @@ export function drawMeasureHarmonies(
     return;
   }
 
-  let row = 0;
+  const rowRightEdges = new Map<number, number>();
+  const harmonyBaseY = stave.getYForTopText(2);
+  let maxRow = 0;
   for (const harmony of measure.harmonies) {
     if (harmony.staff !== undefined && harmony.staff !== staffNumber) {
       continue;
@@ -144,21 +182,33 @@ export function drawMeasureHarmonies(
       continue;
     }
 
-    const x = resolveHarmonyX(measure, harmony.offsetTicks, stave, ticksPerQuarter, staffNumber, noteByEventKey);
-    const y = stave.getYForTopText(2 + row);
+    const anchorX = resolveHarmonyX(measure, harmony.offsetTicks, stave, ticksPerQuarter, staffNumber, noteByEventKey);
+    const width = estimateTextWidth(label, 12);
+    const staveLeft = stave.getX() + 4;
+    const staveRight = stave.getX() + stave.getWidth() - 4;
+    const x = clamp(anchorX - width / 2, staveLeft, Math.max(staveLeft, staveRight - width));
+    const row = resolveTextRowWithoutOverlap(
+      rowRightEdges,
+      0,
+      x,
+      x + width,
+      HARMONY_MIN_HORIZONTAL_GAP
+    );
+    const y = harmonyBaseY - row * HARMONY_ROW_SPACING;
 
     context.save();
-    context.setFont('Serif', 11, '');
+    context.setFont('Times New Roman', 12, 'italic');
     context.fillText(label, x, y);
     context.restore();
-    row += 1;
+    rowRightEdges.set(row, x + width);
+    maxRow = Math.max(maxRow, row);
   }
 
-  if (row > 2) {
+  if (maxRow >= 2) {
     diagnostics.push({
       code: 'HARMONY_TEXT_STACK_HIGH',
       severity: 'info',
-      message: `Measure ${measure.index + 1} drew ${row} harmony rows on staff ${staffNumber}.`
+      message: `Measure ${measure.index + 1} drew ${maxRow + 1} harmony rows on staff ${staffNumber}.`
     });
   }
 }
@@ -176,7 +226,10 @@ export function drawMeasureLyrics(
     return;
   }
 
+  const lineRightEdges = new Map<number, number>();
+  const lyricBaseY = stave.getYForBottomText(2);
   let renderedCount = 0;
+  let maxLineIndex = 0;
   for (const voice of measure.voices) {
     for (let eventIndex = 0; eventIndex < voice.events.length; eventIndex += 1) {
       const event = voice.events[eventIndex];
@@ -195,14 +248,27 @@ export function drawMeasureLyrics(
           continue;
         }
 
-        const lyricLine = Number.parseInt(lyric.number ?? '1', 10);
-        const y = stave.getYForBottomText(2 + (Number.isFinite(lyricLine) ? Math.max(0, lyricLine - 1) : 0));
+        const parsedLine = Number.parseInt(lyric.number ?? '1', 10);
+        const preferredLine = Number.isFinite(parsedLine) ? Math.max(0, parsedLine - 1) : 0;
         const width = estimateTextWidth(text, 11);
+        const left = note.getAbsoluteX() - width / 2;
+        const right = note.getAbsoluteX() + width / 2;
+        const lineIndex = resolveTextRowWithoutOverlap(
+          lineRightEdges,
+          preferredLine,
+          left,
+          right,
+          LYRIC_MIN_HORIZONTAL_GAP,
+          MAX_ADDITIONAL_LYRIC_LINES
+        );
+        const y = lyricBaseY + lineIndex * LYRIC_ROW_SPACING;
 
         context.save();
-        context.setFont('Serif', 11, '');
-        context.fillText(text, note.getAbsoluteX() - width / 2, y);
+        context.setFont('Times New Roman', 11, '');
+        context.fillText(text, left, y);
         context.restore();
+        lineRightEdges.set(lineIndex, right);
+        maxLineIndex = Math.max(maxLineIndex, lineIndex);
         renderedCount += 1;
       }
     }
@@ -213,6 +279,14 @@ export function drawMeasureLyrics(
       code: 'LYRIC_TEXT_RENDERED',
       severity: 'info',
       message: `Rendered ${renderedCount} lyric token(s) in measure ${measure.index + 1} on staff ${staffNumber}.`
+    });
+  }
+
+  if (maxLineIndex >= 3) {
+    diagnostics.push({
+      code: 'LYRIC_TEXT_STACK_HIGH',
+      severity: 'info',
+      message: `Measure ${measure.index + 1} drew ${maxLineIndex + 1} lyric lines on staff ${staffNumber}.`
     });
   }
 }
@@ -690,4 +764,30 @@ function collectEventLyrics(event: NoteEvent): Array<{ number?: string; text?: s
   }
 
   return lyrics;
+}
+
+/**
+ * Pick a non-overlapping text row using left-to-right packing.
+ * This keeps harmony/lyric labels readable without introducing browser-specific
+ * text-measurement or force-directed layout behavior.
+ */
+function resolveTextRowWithoutOverlap(
+  rowRightEdges: Map<number, number>,
+  preferredRow: number,
+  left: number,
+  right: number,
+  minGap: number,
+  maxAdditionalRows = 6
+): number {
+  let row = Math.max(0, preferredRow);
+  const maxRow = row + Math.max(0, maxAdditionalRows);
+  while (row <= maxRow) {
+    const previousRight = rowRightEdges.get(row);
+    if (previousRight === undefined || left >= previousRight + minGap) {
+      return row;
+    }
+    row += 1;
+  }
+
+  return maxRow;
 }

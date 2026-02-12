@@ -11,6 +11,7 @@ import {
   type NotationGeometrySnapshot,
   summarizeMeasureSpacingByBarlines
 } from '../../src/testkit/notation-geometry.js';
+import { detectSvgOverlaps, extractSvgElementBounds } from '../../src/testkit/svg-collision.js';
 
 /** Trim wrapper markup and return the first SVG payload for geometry audits. */
 function extractSvg(pageMarkup: string): string {
@@ -314,8 +315,178 @@ describe('renderer quality regressions', () => {
       minHorizontalSpan: 70,
       minSlopeRatio: 0.5
     });
+    const spacingSummary = summarizeMeasureSpacingByBarlines(collectNotationGeometry(svg));
+    const evaluatedBandRatios = spacingSummary.bandSummaries
+      .map((band) => band.firstToMedianOtherGapRatio)
+      .filter((ratio): ratio is number => ratio !== null);
 
     expect(extremes.length).toBe(0);
+    expect(evaluatedBandRatios.length).toBeGreaterThan(0);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.5);
+  });
+
+  it('avoids lyric-text overlaps in lilypond-61b-multiplelyrics', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/61b-multiplelyrics.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/61b-multiplelyrics.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'LYRIC_TEXT_RENDERED')).toBe(true);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+    expect(textBounds.length).toBeGreaterThan(10);
+    expect(overlaps.length).toBe(0);
+  });
+
+  it('emits unsupported-duration skip diagnostics for lilypond-03a-rhythm-durations', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/03a-rhythm-durations.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/03a-rhythm-durations.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+    expect(
+      rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_DURATION_TYPE_SKIPPED')
+    ).toBe(true);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_DURATION')).toBe(false);
+
+    const geometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
+    const intrusions = detectNoteheadBarlineIntrusions(geometry, {
+      minHorizontalOverlap: 0.75,
+      minVerticalOverlap: 3
+    });
+    const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
+    expect(intrusions.length).toBe(0);
+    expect(spacingSummary.bandSummaries.length).toBeGreaterThan(0);
+    for (const band of spacingSummary.bandSummaries) {
+      if (band.firstToMedianOtherGapRatio === null) {
+        continue;
+      }
+      expect(band.firstToMedianOtherGapRatio).toBeGreaterThan(0.75);
+    }
+  });
+
+  it('keeps Schumann proof-point staff-band spacing above compression threshold', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/realworld/realworld-music21-schumann-clara-polonaise-op1n1.mxl');
+    const archive = await readFile(fixturePath);
+
+    const parsed = await parseMusicXMLAsync(
+      {
+        data: new Uint8Array(archive),
+        format: 'mxl'
+      },
+      {
+        sourceName: 'fixtures/conformance/realworld/realworld-music21-schumann-clara-polonaise-op1n1.mxl',
+        mode: 'lenient'
+      }
+    );
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
+    const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
+    const evaluatedBandRatios = spacingSummary.bandSummaries
+      .map((band) => band.firstToMedianOtherGapRatio)
+      .filter((ratio): ratio is number => ratio !== null);
+
+    expect(evaluatedBandRatios.length).toBeGreaterThan(0);
+    // Schumann proof-point still contains mixed-density systems where one
+    // opening measure can be intentionally narrower than later local bands.
+    // We guard against catastrophic compression while allowing moderate
+    // variance until M11 optimizer work lands.
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.65);
+  });
+
+  it('keeps chord-name labels non-overlapping in lilypond-71g-multiplechordnames', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/71g-multiplechordnames.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/71g-multiplechordnames.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 6 });
+    expect(textBounds.length).toBeGreaterThanOrEqual(3);
+    expect(overlaps.length).toBe(0);
+  });
+
+  it('keeps category-31 direction text readable without heavy overlap', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/31a-Directions.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/31a-Directions.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+
+    expect(textBounds.length).toBeGreaterThan(40);
+    // Category 31 intentionally packs dense labels; keep overlaps bounded so
+    // symbols/labels remain readable while we continue M11 layout work.
+    expect(overlaps.length).toBeLessThanOrEqual(8);
+  });
+
+  it('keeps category-32 notation labels bounded and maps unsupported symbols explicitly', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/32a-Notations.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/32a-Notations.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ARTICULATION')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ORNAMENT')).toBe(false);
+
+    const nonArpeggiateDiagnostics = rendered.diagnostics.filter(
+      (diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_UNSUPPORTED'
+    );
+    expect(nonArpeggiateDiagnostics.length).toBeGreaterThan(0);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+
+    expect(textBounds.length).toBeGreaterThan(80);
+    expect(overlaps.length).toBeLessThanOrEqual(6);
   });
 
 });

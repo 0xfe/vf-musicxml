@@ -6,9 +6,9 @@ import path from 'node:path';
 import { loadVexflowGapRegistry } from '../dist/testkit/index.js';
 
 /** Default VexFlow gap registry path. */
-const DEFAULT_REGISTRY_PATH = '/Users/mo/git/musicxml/fixtures/vexflow/gap-registry.json';
+const DEFAULT_REGISTRY_PATH = path.resolve('fixtures/vexflow/gap-registry.json');
 /** Default output directory for generated upstream brief artifacts. */
-const DEFAULT_OUT_DIR = '/Users/mo/git/musicxml/artifacts/vexflow-upstream';
+const DEFAULT_OUT_DIR = path.resolve('artifacts/vexflow-upstream');
 
 /** Build markdown guidance per gap entry for issue/PR creation workflows. */
 function formatBriefMarkdown(registry) {

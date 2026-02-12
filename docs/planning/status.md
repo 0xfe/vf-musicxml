@@ -4,9 +4,9 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ## Status
 
-- Last updated: 2026-02-11 (US)
+- Last updated: 2026-02-12 (US, 11:40 EST)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
-- Current state: M0-M7 are completed. M8 is active (M8A done, M8B and M8C initial slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress; latest M10D slice improved inter-part spacing, slur side-routing stability, and left-label overflow handling.
+- Current state: M0-M7 are completed. M8 is active (M8A done, M8B/M8C incremental slices landed). M9 is active for style-fidelity planning/execution in parallel with M8 remediation. M10 is active with M10A/M10B implementation in place and M10C/M10D quality hardening in progress; latest slices added richer category-31/32 notation mapping (articulations/ornaments/vibrato/strokes/technical tokens), workspace-portable gap-registry validation, denser horizontal planning for rhythm-heavy measures, stronger intra-staff spacing heuristics for grand-staff writing, smarter demo-page bounds trimming, and deterministic category-31/32 text-overlap gates with reduced overlap pressure (`31a: 13 -> 7`, `32a: 21 -> 4`). Demo scale is now `0.7` for generated demo pages. M11 planning is opened for auto-format/layout optimization follow-on work.
 - Review integration: Feedback items `F-001` through `F-024` are accepted and incorporated across the planning docs.
 
 ### Next step when execution continues:
@@ -14,7 +14,10 @@ This file is the current snapshot of planning state. Update this first as milest
   2. Continue M8C: calibrate golden excerpt alignment and thresholds, then expand coverage from proof-points to broader fixture waves.
   3. Execute M9A/M9B: land style rule catalog and wire style diagnostics into deterministic quality gates.
   4. Continue M10C/M10D: improve page-level fidelity (system width calibration + print-geometry alignment), reduce Bach proof-point mismatch, and promote proof-point policy from advisory toward blocking.
-  5. Add dense multi-system spacing quality gates for proof-points where first-system spacing remains compressed (`realworld-music21-beethoven-op18no1-m1` currently `first/median gap ratio ~= 0.6459`).
+  5. Continue Schumann/Beethoven residual vertical-collision tuning (tie/slur + cross-staff spacing) and promote deterministic staff-gap gates.
+  6. Resolve B-003 spacing calibration for `realworld-music21-beethoven-op18no1-m1` and promote the resulting rule into M8/M9 spacing gates.
+  7. Close remaining category-32 `NON_ARPEGGIATE_UNSUPPORTED` gap with a generalized rendering strategy (or explicit VexFlow patch) and wire it into upstream gap tracking.
+  8. Keep M11 in planning-only state until M8/M9/M10 current slices are closed, then begin M11A telemetry/objective work.
 
 ## Milestone progress:
 
@@ -35,6 +38,7 @@ This file is the current snapshot of planning state. Update this first as milest
 | M8 | Golden-Driven Visual Quality Program | In Progress | M8A LilyPond golden mapping baseline landed (156 fixtures; v2.24 primary + explicit v2.25 fallback tags). M8B first slice landed: first-measure spacing normalization for `01a` plus deterministic spacing-ratio tooling. |
 | M9 | Engraving Style Fidelity Program | In Progress | New style-focused milestone created with source-linked rulebook, proof-point fixtures, deterministic style-gate plan, and wave-based burndown checklist. |
 | M10 | Pagination + Publishing Layout | In Progress | M10A/M10B baseline landed (paginated default, continuous mode fallback, system/page planning, multi-page SVG output). M10C/M10D quality/fidelity hardening remains active. |
+| M11 | Auto-Formatting + Layout Optimization | Planned | Planning doc created; implementation deferred until current M8/M9/M10 active slices are closed. |
 
 
 
@@ -130,3 +134,10 @@ This file is the current snapshot of planning state. Update this first as milest
   - `realworld-music21-bach-bwv1-6`: `flags=0`, `flagBeamOverlaps=0`, spacing ratio `1.0395`.
   - `realworld-music21-beethoven-op133-longform`: no cross-page diagonal slur artifacts on inspected page (`extremeCurveCount=0`).
   - `realworld-music21-beethoven-op18no1-m1`: cut-through slur regression resolved on inspected page (`extremeCurveCount=0`), but spacing ratio remains low (`0.6459`) and stays in active follow-up.
+- Hardened dense-measure auto layout by increasing density-aware minimum fitted widths and adding peak-local dense-rhythm pressure to measures-per-system planning; `lilypond-03a-rhythm-durations` now renders without barline overflow on headless inspection (`barlineIntrusions=0`, `compressed(<0.75)=0/2`).
+- Tuned grand-staff intra-part spacing heuristics (center-register + curved-relation weighting) to reduce residual cross-staff collisions in dense piano fixtures, while keeping deterministic spacing telemetry inside non-catastrophic ranges.
+- Retuned demo build rendering geometry for browser readability/fill (`layout.scale=1.1`, demo page `980x1400` with tighter margins, larger site container) to reduce "tiny score + large right blank area" behavior in generated demo pages.
+- Added deterministic regression checks for `lilypond-03a-rhythm-durations` spacing-band compression and a Schumann proof-point floor guard to prevent severe spacing regressions.
+- Re-ran `B-003` proof-point after dense-layout tuning; `realworld-music21-beethoven-op18no1-m1` moved from severe to partial compression (`compressed bands 6/8 -> 1/8`, min ratio `0.2753 -> 0.5577`) and remains in mitigation until the remaining dense band is resolved.
+- Applied a follow-up layout pass blending density with source width hints and increasing grand-staff spacing ceilings; regression suites remain green, `03a` remains clean, and `B-003` stays at partial compression (`1/8` compressed bands) while Schumann residual compression persists (`min band ratio ~0.671`).
+- Demo scale was reset to `0.8` (matching library default) as requested, and demos were rebuilt.

@@ -13,6 +13,42 @@
   - paginated default with multi-page planning/output,
   - horizontal-continuous fallback,
   - page/system label/header/footer hooks.
+- Latest parser/renderer regression hardening:
+  - clef updates now merge by staff across measures (partial `<attributes><clef>` no longer replaces full staff-clef state),
+  - clef parsing honors `clef@number` and uses source-order fallback for multiple unnumbered clefs,
+  - renderer clef lookup avoids cross-staff fallback leakage and draws small mid-system clef changes,
+  - parser now aggregates repeated `<notations>` blocks and preserves richer ornament payload tokens (`accidental-mark:*`, `tremolo:*`),
+  - renderer category-32 mapping now attaches broader VexFlow modifiers (`Articulation`, `Ornament`, `Vibrato`, `Stroke`, `FretHandFinger`, `Tremolo`) with text fallbacks for unsupported technical tokens.
+- Latest category-31/32 readability hardening:
+  - chord-shared articulation/ornament modifiers are deduplicated before VexFlow attachment to avoid stacked duplicate symbols on chord noteheads,
+  - note-specific technical text/fingering markers keep per-note anchors but compact multi-token clusters to avoid in-place label pileups,
+  - direction text now uses overlap-aware row packing.
+- Latest category-31/32 inspection deltas:
+  - `31a-Directions` text overlaps: `13 -> 7`,
+  - `32a-Notations` text overlaps: `21 -> 4`,
+  - remaining warning: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as `VF-GAP-002`).
+- Latest quality-fallback hardening:
+  - unsupported explicit duration types are skipped with diagnostics (`UNSUPPORTED_DURATION_TYPE_SKIPPED`) instead of quarter-note coercion,
+  - chord-name and lyric text placement use overlap-aware row packing (zero text-overlap in current `61b`/`71g` headless checks).
+- Latest dense-layout hardening:
+  - dense-column minimum fitted widths were increased and a peak-local dense-rhythm pressure signal now feeds auto measures-per-system planning,
+  - `lilypond-03a-rhythm-durations` now renders without barline bleed on headless inspection (`barlineIntrusions=0`, spacing bands not compressed).
+- Latest grand-staff spacing hardening:
+  - intra-staff gap estimation now uses stronger center-register + curved-relation weighting to reduce treble/bass collision risk in dense piano writing (Schumann-class fixtures).
+- Demo page overflow hardening:
+  - generated demo pages now force `overflow-x: hidden` (document + surface) to reduce horizontal blank-scroll artifacts.
+- Demo viewport/readability tuning:
+  - demo build path now renders with `scale=0.7` and fixed demo geometry (`1320x1800` pre-trim), then trims SVG viewports to notation-first bounds with nearby-text inclusion.
+  - category labels in demo UX now include both numeric ID and title (`Category 31 - Dynamics and other single symbols`, etc.).
+- CI portability hardening:
+  - VexFlow gap-registry paths are now workspace-relative and validator/scripts resolve paths from current workspace (`path.resolve`), so GitHub Actions no longer depends on `/Users/mo/...` host paths.
+- Headless spacing triage enhancement:
+  - `npm run inspect:score` now prints per-band spacing compression telemetry (`min/max` first-vs-median ratio + compressed-band count under `<0.75`) for faster dense-layout debugging.
+- Latest B-003 state (`realworld-music21-beethoven-op18no1-m1`):
+  - after dense-layout tuning, spacing improved from severe to partial compression (`compressed bands 6/8 -> 1/8`, min band ratio `0.2753 -> 0.5577`, first/median ratio `~1.0994`), but one dense band is still below target.
+- Latest follow-up spacing pass:
+  - added grand-staff pressure into auto-wrap planning and blended density into source-width hint allocation,
+  - no new regressions, but residual compression remains in Schumann (`min band ratio ~0.671`) and op18 (`compressed bands 1/8`), so both stay active M10D/M11 candidates.
 - Latest M10D hardening:
   - adaptive inter-part vertical spacing based on adjacent-part complexity (`resolveInterPartGap`),
   - safer label wrap/truncation under source system margins without shrinking notation width,
@@ -38,7 +74,7 @@
   - `realworld-music21-beethoven-op18no1-m1` (page 1): `extremeCurveCount=0` (major diagonal cut-through resolved), but spacing ratio remains low (`0.6459`, tracked as `B-003` in planning TODO).
 - M7A baseline landed: LilyPond collated-suite corpus manifest + sync script + expanded seeded demos + roadmap/corpus alignment tests.
 - LilyPond roadmap semantics: `demos/lilypond/manifest.json` `categoryStatus` represents demo seeding only; conformance completion is computed from active fixture counts.
-- Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 6 pages).
+- Demo site now renders one page per active LilyPond conformance fixture (156 pages) plus selected complex real-world demos (currently 9 pages).
 - M7B baseline landed: deterministic quality rubric (`Q1..Q7`) and gate enforcement integrated into conformance execution/reporting.
 - Post-M7 renderer hardening landed for two high-signal defects:
   - stave-aware measure formatting (`Formatter.formatToStave`) replaced fixed-width formatting to prevent notehead/barline bleed.
@@ -61,7 +97,8 @@
   - `/Users/mo/git/musicxml/docs/planning/milestone-7D.completed.md`
   - `/Users/mo/git/musicxml/docs/planning/milestone-8.md`
   - `/Users/mo/git/musicxml/docs/planning/milestone-9.md`
-  - `/Users/mo/git/musicxml/docs/planning/milestone-10.md`
+- `/Users/mo/git/musicxml/docs/planning/milestone-10.md`
+- `/Users/mo/git/musicxml/docs/planning/milestone-11.md`
 - Corpus/demo M7A:
   - `/Users/mo/git/musicxml/fixtures/corpus/lilypond-collated-v2.25.json`
   - `/Users/mo/git/musicxml/fixtures/corpus/real-world-samples.json`
@@ -127,6 +164,7 @@
   - completed: split/gate config, layered runner (`npm run eval:run`), fail-fast classifier summaries, and artifact/report pipeline under `artifacts/evaluation/`.
 - `M7D` VexFlow upstream loop:
   - completed: gap registry, validation command, upstream-brief generator, sync log, and release-hardening checklist.
+  - current registry entries: `VF-GAP-001` (grace-note beaming fallback) and `VF-GAP-002` (non-arpeggiate support gap).
 - `M8` golden-driven visual quality program:
   - active: deterministic geometry rule expansion, headless golden diffing, and wave-based fixture remediation.
   - completed baseline: LilyPond golden ingestion/mapping with v2.24 primary references and explicit v2.25 fallback tags where v2.24 lacks corresponding fixtures.
@@ -178,8 +216,8 @@
   - `lilypond-90`, `lilypond-99`
 - M7A current coverage summary:
   - `lilypond` conformance fixtures: 156 active (`155 expected: pass`, `1 expected: fail`).
-  - `realworld` conformance fixtures: 8 active (`8 expected: pass`).
-  - total active conformance fixtures: 176 (`171 expected: pass`, `5 expected: fail`).
+  - `realworld` conformance fixtures: 11 active (`11 expected: pass`).
+  - total active conformance fixtures: 179 (`174 expected: pass`, `5 expected: fail`).
 - M7B current quality summary (from latest `artifacts/conformance/conformance-report.json`):
   - expected-pass weighted mean: `4.8791`
   - expected-pass catastrophic readability fixtures: `0`

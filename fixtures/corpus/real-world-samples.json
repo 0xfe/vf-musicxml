@@ -51,6 +51,18 @@
       "notes": "String quartet movement for dense chamber-ensemble part alignment."
     },
     {
+      "id": "realworld-music21-beethoven-op59no2-m1",
+      "title": "music21 corpus: Beethoven Op.59 No.2 Mvt.1",
+      "bucket": "chamber-quartet",
+      "complexity_level": "large",
+      "part_count_hint": 4,
+      "long_form": true,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/beethoven/opus59no2/movement1.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Extended quartet movement with sustained multi-part counterpoint and dense slur/beam interactions."
+    },
+    {
       "id": "realworld-music21-beethoven-op133-longform",
       "title": "music21 corpus: Beethoven Op.133 (Long-form Quartet)",
       "bucket": "chamber-quartet",
@@ -75,6 +87,18 @@
       "notes": "Single-instrument dense keyboard writing with multiple voices and ornaments."
     },
     {
+      "id": "realworld-music21-mozart-k458-m1",
+      "title": "music21 corpus: Mozart K458 Mvt.1",
+      "bucket": "chamber-quartet",
+      "complexity_level": "large",
+      "part_count_hint": 4,
+      "long_form": true,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/mozart/k458/movement1.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Haydn-quartet texture with frequent articulation and dynamic changes across all voices."
+    },
+    {
       "id": "realworld-music21-mozart-k545-exposition",
       "title": "music21 corpus: Mozart K545 Exposition",
       "bucket": "piano-sonata",
@@ -97,6 +121,18 @@
       "sourceRepo": "https://github.com/cuthbertLab/music21",
       "license": "BSD-3-Clause",
       "notes": "Large multi-part excerpt (winds, strings, choir, continuo) used as an orchestral/choral stress fixture."
+    },
+    {
+      "id": "realworld-music21-bach-bwv244-10",
+      "title": "music21 corpus: Bach BWV 244.10",
+      "bucket": "chorale-satb",
+      "complexity_level": "medium",
+      "part_count_hint": 4,
+      "long_form": false,
+      "sourceUrl": "https://raw.githubusercontent.com/cuthbertLab/music21/master/music21/corpus/bach/bwv244.10.mxl",
+      "sourceRepo": "https://github.com/cuthbertLab/music21",
+      "license": "BSD-3-Clause",
+      "notes": "Compact SATB chorale proof-point with dense vertical harmony and straightforward system packing."
     }
   ]
 }

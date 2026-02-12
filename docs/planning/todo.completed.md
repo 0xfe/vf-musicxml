@@ -4,6 +4,19 @@ This file tracks closed risks and bugs moved out of the active backlog.
 
 ## Closed Risks
 
+### R-021: Clef-state drift under partial multi-staff attribute updates
+- Priority: P0
+- Status: CLOSED
+- Risk: Partial `<attributes><clef>` updates could replace the full clef state and leak wrong clefs across staves, producing register and collision regressions in real-world multi-staff scores.
+- Mitigation plan:
+  - Parser now merges clef updates by `staff` instead of replacing the whole clef array.
+  - Clef parsing honors `clef@number` and uses source-order fallback when multiple unnumbered clefs appear.
+  - Added parser regression test for partial-clef updates preserving unchanged staves.
+  - Renderer clef lookup now avoids cross-staff fallback and supports small mid-system clef-change glyphs.
+- Close criteria:
+  - Schumann/Mozart proof-point pages no longer show staff-clef swaps from partial updates.
+  - Parser regression tests pass.
+
 ### R-003: Conformance scope creep (LilyPond suite breadth)
 - Priority: P0
 - Status: CLOSED

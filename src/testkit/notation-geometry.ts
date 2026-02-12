@@ -24,6 +24,7 @@ export interface NoteheadBarlineIntrusionOptions {
   minHorizontalOverlap?: number;
   minVerticalOverlap?: number;
   requireCenterLeftOfBarline?: boolean;
+  minRightEdgePastBarline?: number;
 }
 
 /** Summary counters used by tests, reports, and triage automation. */
@@ -221,6 +222,7 @@ export function detectNoteheadBarlineIntrusions(
   const minHorizontalOverlap = options.minHorizontalOverlap ?? 0.5;
   const minVerticalOverlap = options.minVerticalOverlap ?? 2;
   const requireCenterLeftOfBarline = options.requireCenterLeftOfBarline ?? true;
+  const minRightEdgePastBarline = options.minRightEdgePastBarline ?? 1.25;
   const intrusions: NoteheadBarlineIntrusion[] = [];
 
   for (const notehead of geometry.noteheads) {
@@ -254,6 +256,14 @@ export function detectNoteheadBarlineIntrusions(
         if (noteheadCenterX >= barlineCenterX) {
           continue;
         }
+      }
+
+      // Filter near-touch cases where anti-aliased outlines overlap by ~1px but
+      // the notehead does not materially extend past the barline center.
+      const noteheadRightEdge = notehead.bounds.x + notehead.bounds.width;
+      const barlineCenterX = barline.bounds.x + barline.bounds.width / 2;
+      if (noteheadRightEdge - barlineCenterX < minRightEdgePastBarline) {
+        continue;
       }
 
       intrusions.push({

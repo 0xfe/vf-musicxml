@@ -85,6 +85,31 @@ This document defines the execution strategy for making LilyPond + selected real
 - Added deterministic measure-spacing extraction in `src/testkit/notation-geometry.ts` (`summarizeMeasureSpacingByBarlines`) and surfaced spacing-ratio output in `npm run inspect:score`.
 - Added regression coverage to guard first-measure spacing quality for `lilypond-01a-pitches-pitches`.
 - Removed noisy `MEASURE_LAYOUT_OVERFLOW` warning path and now rely on deterministic geometry intrusions for barline-bleed detection.
+- Added parser/renderer clef-state hardening for partial multi-staff updates (staff-specific merge semantics + non-leaking clef fallback) and revalidated Schumann/Mozart proof-point fixtures.
+- Added overlap-aware lyric/chord-name row packing improvements (`61b`, `71g`) with deterministic text-overlap reporting in headless inspection.
+- Added unsupported-duration skip diagnostics for explicit out-of-vocabulary note types (used by `03a`) to avoid misleading fallback rendering.
+- Extended `inspect:score` spacing output with per-band compression telemetry (`min/max` ratio + compressed-band count) to support M8/M9 gate calibration on dense real-world fixtures (`B-003`).
+
+### B.6 Progress notes (2026-02-12)
+- Expanded parser coverage for notation-heavy fixtures:
+  - parse all repeated `<notations>` blocks (articulations, ornaments, slurs, tuplets) rather than only the first block,
+  - parse ornament payload details (`accidental-mark:*`, `tremolo:*`) for richer render mapping.
+- Expanded renderer category-32 mapping to dedicated VexFlow modifiers where available:
+  - articulations/ornaments/vibrato/stroke/fret-hand fingering/tremolo mappings,
+  - technical-token fallback annotations (`hammer-on`, `pull-off`, `thumb-position`, tonguing variants, etc.),
+  - remaining unsupported note-notation diagnostics reduced to `NON_ARPEGGIATE_UNSUPPORTED` for `32a`.
+- Added deterministic parser/mapper regression coverage for multi-notation parsing and category-32 modifier attachment (`tests/integration/parser-csm.test.ts`, `tests/unit/render-note-mapper.test.ts`).
+- Revalidated with `npm run lint`, `npm run typecheck`, and full `npm run test` (all green).
+- Improved category-31/32 readability with generalized text/modifier routing updates:
+  - chord-shared articulations/ornaments are now deduplicated at chord anchor level instead of being reattached per notehead,
+  - note-specific technical text/fingering markers are routed per-note with compact multi-token fallback to avoid stacked collisions,
+  - direction text now uses overlap-aware row packing (same strategy family as harmony/lyric placement).
+- Added deterministic category-specific regression gates in `tests/integration/render-quality-regressions.test.ts`:
+  - `31a-Directions`: bounded text-overlap threshold,
+  - `32a-Notations`: bounded text-overlap threshold + explicit unsupported-symbol coverage.
+- Headless inspection deltas after the slice:
+  - `31a-Directions`: text overlaps `13 -> 7`,
+  - `32a-Notations`: text overlaps `21 -> 4` (remaining warnings only `NON_ARPEGGIATE_UNSUPPORTED`).
 
 ## Track M8C: Golden Image Comparison Pipeline (Headless)
 
@@ -129,6 +154,15 @@ This document defines the execution strategy for making LilyPond + selected real
 - Added proof-point manifest (`fixtures/evaluation/golden-proofpoints.json`) with first real-world advisory fixture:
   - `realworld-music21-bach-bwv1-6-8bars` using `fixtures/images/bwv-1.6-8bars.png`.
 - Current proof-point result correctly flags a severe mismatch (advisory fail), which establishes a measurable baseline before pagination/title/instrument-label parity work lands.
+
+### C.6 Progress notes (2026-02-12)
+- Improved demo-site canvas sizing by trimming SVG viewports to notation-first bounds and including only nearby text bounds (lyrics/chords/annotations), reducing excessive blank-space regions.
+- Demo-scale update for visual triage: generated demos now use `layout.scale=0.7`.
+- Added three new complex real-world conformance/demo fixtures:
+  - `realworld-music21-beethoven-op59no2-m1`
+  - `realworld-music21-mozart-k458-m1`
+  - `realworld-music21-bach-bwv244-10`
+- Demo index/category navigation now includes explicit LilyPond category labels (`NN - Name`) across index and roadmap pages.
 
 ## Track M8D: Human + AI Triage Workflow
 

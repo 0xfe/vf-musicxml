@@ -22,6 +22,7 @@ Milestones:
 - `milestone-8.md`
 - `milestone-9.md`
 - `milestone-10.md`
+- `milestone-11.md`
 
 Convention:
 - Active milestone docs use `milestone-<id>.md`.

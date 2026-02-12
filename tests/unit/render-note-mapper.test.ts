@@ -11,7 +11,7 @@ import {
 } from '../../src/vexflow/render-note-mapper.js';
 
 describe('render note mapper', () => {
-  it('attaches supported articulations and warns for unsupported articulation tokens', () => {
+  it('attaches supported articulation tokens without unsupported warnings', () => {
     const xml = `
 <score-partwise version="4.0">
   <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
@@ -52,9 +52,72 @@ describe('render note mapper', () => {
     const firstModifiers = noteResult.notes[0]?.getModifiersByType('Articulation') ?? [];
     const secondModifiers = noteResult.notes[1]?.getModifiersByType('Articulation') ?? [];
     expect(firstModifiers.length).toBe(1);
-    expect(secondModifiers.length).toBe(0);
+    expect(secondModifiers.length).toBe(1);
 
-    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ARTICULATION')).toBe(true);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ARTICULATION')).toBe(false);
+  });
+
+  it('maps category-32 ornaments and technical markings to dedicated VexFlow modifiers', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <notations>
+          <articulations><staccato/></articulations>
+          <technical><fingering>2</fingering><pluck>p</pluck></technical>
+          <fermata type="inverted"/>
+        </notations>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <notations>
+          <ornaments>
+            <trill-mark/>
+            <wavy-line type="start"/>
+          </ornaments>
+          <arpeggiate direction="up"/>
+        </notations>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+    expect(noteResult.notes).toHaveLength(2);
+
+    const firstArticulations = noteResult.notes[0]?.getModifiersByType('Articulation') ?? [];
+    const firstFingerings = noteResult.notes[0]?.getModifiersByType('FretHandFinger') ?? [];
+    const firstAnnotations = noteResult.notes[0]?.getModifiersByType('Annotation') ?? [];
+    const secondOrnaments = noteResult.notes[1]?.getModifiersByType('Ornament') ?? [];
+    const secondVibratos = noteResult.notes[1]?.getModifiersByType('Vibrato') ?? [];
+    const secondStrokes = noteResult.notes[1]?.getModifiersByType('Stroke') ?? [];
+
+    expect(firstArticulations.length).toBeGreaterThanOrEqual(1);
+    expect(firstFingerings.length).toBe(1);
+    expect(firstAnnotations.length).toBe(1);
+    expect(secondOrnaments.length).toBeGreaterThanOrEqual(1);
+    expect(secondVibratos.length).toBe(1);
+    expect(secondStrokes.length).toBe(1);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ARTICULATION')).toBe(false);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ORNAMENT')).toBe(false);
   });
 
   it('routes note events by staff number for multi-staff measures', () => {
@@ -263,6 +326,49 @@ describe('render note mapper', () => {
     expect(firstAccidental?.cautionary).toBe(true);
     expect(secondAccidental?.type).toBe('++');
     expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ACCIDENTAL')).toBe(false);
+  });
+
+  it('skips unsupported explicit duration types instead of coercing quarter-note fallbacks', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Rhythm</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1024</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1024</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>1024th</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>128</duration>
+        <voice>1</voice>
+        <type>32nd</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    // Quarter + 32nd remain; the explicit 1024th note is skipped.
+    expect(noteResult.notes).toHaveLength(2);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_DURATION_TYPE_SKIPPED')).toBe(true);
   });
 
   it('renders fractional pitch alters as microtonal accidentals when explicit accidental tags are absent', () => {

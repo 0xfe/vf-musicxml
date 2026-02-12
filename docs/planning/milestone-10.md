@@ -132,6 +132,43 @@ Exit checklist:
   - `realworld-music21-beethoven-op133-longform` page 1: `extremeCurveCount=0`.
   - `realworld-music21-beethoven-op18no1-m1` page 1: `extremeCurveCount=0` (large cut-through slur resolved), but spacing compression remains (`first/median ratio=0.6459`).
 
+## Latest M10D note (2026-02-11, follow-up run)
+- Fixed multi-staff clef-state drift that caused wrong-register rendering in real-world piano fixtures:
+  - parser now merges partial clef updates by staff (instead of replacing full clef arrays),
+  - clef parsing now falls back to source order (`1..N`) when multiple unnumbered clefs appear,
+  - renderer clef resolution now avoids cross-staff fallback leakage and supports small mid-system clef-change glyphs.
+- Revalidated proof-points after clef fixes:
+  - `realworld-music21-schumann-clara-polonaise-op1n1` no longer exhibits the prior staff-clef swap behavior.
+  - `realworld-music21-mozart-k545-exposition` no longer exhibits clef/register drift across systems.
+- Text/readability hardening updates are now in place for M8/M9 overlap areas:
+  - `lilypond-61b-multiplelyrics` uses overlap-aware lyric row packing and currently reports zero text overlaps in deterministic inspection.
+  - `lilypond-71g-multiplechordnames` uses improved harmony stacking/spacing and currently reports zero text overlaps in deterministic inspection.
+- Unsupported-duration fallback behavior for `lilypond-03a-rhythm-durations` now skips unsupported explicit note types with diagnostics (`UNSUPPORTED_DURATION_TYPE_SKIPPED`) rather than coercing quarter-note fallbacks.
+- Demo-page overflow hardening:
+  - demo HTML now enforces `overflow-x: hidden` at page and surface levels to prevent horizontal blank-scroll artifacts in browser demo review.
+
+## Latest M10D note (2026-02-12)
+- Demo viewport tuning for review ergonomics:
+  - demo rendering scale set to `0.7`,
+  - SVG trimming now anchors to notation geometry and includes only nearby text bounds (so large header/footer/page-number whitespace no longer dominates short fixtures).
+- LilyPond category UX now surfaces both ID and title (`Category 31 - Dynamics and other single symbols`, etc.) on index/roadmap/demo pages.
+- Expanded complex real-world coverage by importing and activating:
+  - `realworld-music21-beethoven-op59no2-m1`
+  - `realworld-music21-mozart-k458-m1`
+  - `realworld-music21-bach-bwv244-10`
+
+## Latest M10D note (2026-02-12, follow-up run)
+- Category-31/32 readability hardening:
+  - direction text rendering now uses overlap-aware row packing above the stave,
+  - chord-shared articulation/ornament modifiers are deduplicated to prevent duplicate symbol stacking on chord noteheads,
+  - note-specific technical text/fingering labels are compacted when multiple tokens share one anchor.
+- Deterministic gate expansion:
+  - added integration quality checks for `31a-Directions` and `32a-Notations` text-overlap budgets and unsupported-notation diagnostics.
+- Current inspection deltas:
+  - `31a-Directions` text overlaps reduced from `13` to `7`.
+  - `32a-Notations` text overlaps reduced from `21` to `4`.
+  - Remaining explicit unsupported notation in category 32: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as VexFlow gap `VF-GAP-002`).
+
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.
 - [ ] Horizontal continuous mode remains available and tested.

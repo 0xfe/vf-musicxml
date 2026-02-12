@@ -1,12 +1,17 @@
 import {
   Accidental,
+  Annotation,
   Articulation,
   Dot,
+  FretHandFinger,
   GraceNote,
   GraceNoteGroup,
   Ornament,
   StaveNote,
+  Stroke,
+  Tremolo,
   Tuplet,
+  Vibrato,
   type StaveNoteStruct
 } from 'vexflow';
 
@@ -244,21 +249,60 @@ function createPitchNote(
   };
 
   const note = new StaveNote(staveNoteData);
+  /** Cache note-level mappings once to avoid duplicated parse/diagnostic work. */
+  const perNoteMappings: PerNoteModifierMapping[] = event.notes.map((noteData) => ({
+    articulation: mapArticulations(noteData, diagnostics),
+    ornament: mapOrnaments(noteData, diagnostics)
+  }));
 
+  /**
+   * Accidentals are pitch-specific and must stay index-bound, so we attach
+   * those in a dedicated first pass before any chord-level modifier merging.
+   */
   event.notes.forEach((noteData, index) => {
     const accidental = createAccidentalModifier(noteData, diagnostics);
     if (accidental) {
       note.addModifier(accidental, index);
     }
+  });
 
-    const articulationCode = mapArticulation(noteData, diagnostics);
-    if (articulationCode) {
-      note.addModifier(new Articulation(articulationCode), index);
-    }
+  /**
+   * MusicXML chord notes often duplicate shared articulations/ornaments on each
+   * notehead. If we mirror that naively, VexFlow stacks identical modifiers in
+   * the same location and creates dense text/symbol overlaps. We therefore
+   * merge shared modifiers across chord noteheads and attach each unique
+   * modifier once at a stable chord anchor index.
+   */
+  const mergedModifiers = collectChordLevelModifiers(perNoteMappings);
+  const anchorIndex = resolveChordModifierAnchorIndex(event);
 
-    for (const ornamentCode of mapOrnaments(noteData, diagnostics)) {
-      note.addModifier(new Ornament(ornamentCode), index);
-    }
+  for (const articulationCode of mergedModifiers.articulationCodes) {
+    note.addModifier(new Articulation(articulationCode), anchorIndex);
+  }
+  for (const ornamentCode of mergedModifiers.ornamentCodesFromArticulations) {
+    note.addModifier(new Ornament(ornamentCode), anchorIndex);
+  }
+  for (const ornamentCode of mergedModifiers.ornamentCodes) {
+    note.addModifier(new Ornament(ornamentCode), anchorIndex);
+  }
+  if (mergedModifiers.vibrato) {
+    note.addModifier(new Vibrato(), anchorIndex);
+  }
+
+  for (const strokeType of mergedModifiers.strokeTypes) {
+    note.addModifier(new Stroke(strokeType), anchorIndex);
+  }
+  for (const tremoloSlashCount of mergedModifiers.tremoloSlashCounts) {
+    note.addModifier(new Tremolo(tremoloSlashCount), anchorIndex);
+  }
+
+  /**
+   * Technical text/fingering annotations are often note-specific. Keep them at
+   * note index granularity, but compact multi-token clusters so VexFlow does
+   * not stack unreadable piles on one glyph anchor.
+   */
+  perNoteMappings.forEach((mapping, index) => {
+    attachPerNoteTextualModifiers(note, index, mapping);
   });
 
   for (let index = 0; index < dots; index += 1) {
@@ -274,6 +318,117 @@ function createPitchNote(
   }
 
   return note;
+}
+
+/** Chord-level merged modifier payload to avoid duplicate notehead attachments. */
+interface ChordLevelModifierMapping {
+  articulationCodes: string[];
+  ornamentCodesFromArticulations: string[];
+  ornamentCodes: string[];
+  strokeTypes: number[];
+  vibrato: boolean;
+  tremoloSlashCounts: number[];
+}
+
+/** Per-note modifier payload retained for technical text/fingering routing. */
+interface PerNoteModifierMapping {
+  articulation: ArticulationMapping;
+  ornament: OrnamentMapping;
+}
+
+/** Deduplicate chord-level note modifiers while preserving source token order. */
+function collectChordLevelModifiers(
+  perNoteMappings: PerNoteModifierMapping[]
+): ChordLevelModifierMapping {
+  const articulationCodes = new Set<string>();
+  const ornamentCodesFromArticulations = new Set<string>();
+  const ornamentCodes = new Set<string>();
+  const strokeTypes = new Set<number>();
+  const tremoloSlashCounts = new Set<number>();
+  let vibrato = false;
+
+  for (const mapping of perNoteMappings) {
+    const articulationMapping = mapping.articulation;
+    for (const code of articulationMapping.codes) {
+      articulationCodes.add(code);
+    }
+    for (const ornamentCode of articulationMapping.ornamentCodes) {
+      ornamentCodesFromArticulations.add(ornamentCode);
+    }
+
+    const ornamentMapping = mapping.ornament;
+    for (const ornamentCode of ornamentMapping.ornamentCodes) {
+      ornamentCodes.add(ornamentCode);
+    }
+    for (const strokeType of ornamentMapping.strokeTypes) {
+      strokeTypes.add(strokeType);
+    }
+    for (const tremoloSlashCount of ornamentMapping.tremoloSlashCounts) {
+      tremoloSlashCounts.add(tremoloSlashCount);
+    }
+    vibrato = vibrato || ornamentMapping.vibrato;
+  }
+
+  return {
+    articulationCodes: [...articulationCodes],
+    ornamentCodesFromArticulations: [...ornamentCodesFromArticulations],
+    ornamentCodes: [...ornamentCodes],
+    strokeTypes: [...strokeTypes],
+    vibrato,
+    tremoloSlashCounts: [...tremoloSlashCounts]
+  };
+}
+
+/**
+ * Resolve a stable anchor note index for chord-level modifiers.
+ * We keep this simple and deterministic: the first key serves as the chord
+ * anchor until we add placement-aware chord indexing in a later milestone.
+ */
+function resolveChordModifierAnchorIndex(event: NoteEvent): number {
+  return event.notes.length > 0 ? 0 : 0;
+}
+
+/** Build note-level text annotations with compact typography and top placement. */
+function buildNoteTextAnnotation(text: string): Annotation {
+  const annotation = new Annotation(text);
+  annotation.setFont('Times New Roman', 10, 'normal', 'italic');
+  annotation.setVerticalJustification(Annotation.VerticalJustify.TOP);
+  return annotation;
+}
+
+/** Attach note-specific technical labels while preventing intra-note text pileups. */
+function attachPerNoteTextualModifiers(
+  note: StaveNote,
+  index: number,
+  mapping: PerNoteModifierMapping
+): void {
+  if (mapping.articulation.fingerings.length === 1) {
+    note.addModifier(new FretHandFinger(mapping.articulation.fingerings[0] ?? ''), index);
+  } else if (mapping.articulation.fingerings.length > 1) {
+    note.addModifier(buildNoteTextAnnotation(mapping.articulation.fingerings.join(' ')), index);
+  }
+
+  const textAnnotations = dedupeStrings([
+    ...mapping.articulation.textAnnotations,
+    ...mapping.ornament.textAnnotations
+  ]);
+  for (const text of textAnnotations) {
+    note.addModifier(buildNoteTextAnnotation(text), index);
+  }
+}
+
+/** Stable-order string dedupe helper for annotation token lists. */
+function dedupeStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    deduped.push(value);
+  }
+  return deduped;
 }
 
 /** Translate parser stem tokens into VexFlow stem-direction numbers. */
@@ -629,11 +784,23 @@ function hasUnsupportedFractionalAlter(alter: number | undefined): boolean {
   return mapFractionalPitchAlterToAccidental(alter) === undefined;
 }
 
+/** VexFlow-ready articulation mapping payload for one parsed note token set. */
+interface ArticulationMapping {
+  codes: string[];
+  ornamentCodes: string[];
+  fingerings: string[];
+  textAnnotations: string[];
+}
+
 /** Map normalized articulation tokens into VexFlow articulation glyph IDs. */
-function mapArticulation(noteData: NoteData, diagnostics: Diagnostic[]): string | undefined {
-  const first = noteData.articulations?.[0]?.type;
-  if (!first) {
-    return undefined;
+function mapArticulations(noteData: NoteData, diagnostics: Diagnostic[]): ArticulationMapping {
+  if (!noteData.articulations || noteData.articulations.length === 0) {
+    return {
+      codes: [],
+      ornamentCodes: [],
+      fingerings: [],
+      textAnnotations: []
+    };
   }
 
   const map: Record<string, string> = {
@@ -641,39 +808,255 @@ function mapArticulation(noteData: NoteData, diagnostics: Diagnostic[]): string 
     tenuto: 'a-',
     accent: 'a>',
     staccatissimo: 'av',
-    marcato: 'a^'
+    marcato: 'a^',
+    'strong-accent': 'a^',
+    'detached-legato': 'a-',
+    spiccato: 'av',
+    stress: 'a>',
+    unstress: 'a-',
+    'soft-accent': 'a>',
+    'up-bow': 'a|',
+    'down-bow': 'am',
+    'snap-pizzicato': 'ao',
+    'open-string': 'ah',
+    harmonic: 'ah',
+    stopped: 'a+',
+    fermata: 'a@a',
+    'fermata-inverted': 'a@u',
+    'fermata-angled': 'a@s',
+    'fermata-square': 'a@l'
   };
 
-  const code = map[first];
-  if (code) {
-    return code;
+  const codes: string[] = [];
+  const ornamentCodes: string[] = [];
+  const fingerings: string[] = [];
+  const textAnnotations: string[] = [];
+
+  for (const articulation of noteData.articulations) {
+    const token = articulation.type;
+    if (token.startsWith('fingering:')) {
+      const value = token.slice('fingering:'.length).trim();
+      if (value.length > 0) {
+        fingerings.push(value);
+      }
+      continue;
+    }
+
+    if (token.startsWith('pluck:')) {
+      const value = token.slice('pluck:'.length).trim();
+      if (value.length > 0) {
+        textAnnotations.push(value);
+      }
+      continue;
+    }
+
+    if (token.startsWith('fret:')) {
+      const value = token.slice('fret:'.length).trim();
+      if (value.length > 0) {
+        textAnnotations.push(value);
+      }
+      continue;
+    }
+
+    if (token.startsWith('string:')) {
+      const value = token.slice('string:'.length).trim();
+      if (value.length > 0) {
+        textAnnotations.push(`str.${value}`);
+      }
+      continue;
+    }
+
+    if (token.startsWith('tap:')) {
+      const value = token.slice('tap:'.length).trim();
+      if (value.length > 0) {
+        textAnnotations.push(value);
+      }
+      continue;
+    }
+
+    if (token === 'bend') {
+      ornamentCodes.push('bend');
+      continue;
+    }
+    if (token === 'hammer-on') {
+      textAnnotations.push('H');
+      continue;
+    }
+    if (token === 'pull-off') {
+      textAnnotations.push('P');
+      continue;
+    }
+    if (token === 'heel') {
+      textAnnotations.push('heel');
+      continue;
+    }
+    if (token === 'toe') {
+      textAnnotations.push('toe');
+      continue;
+    }
+    if (token === 'thumb-position') {
+      textAnnotations.push('T.P.');
+      continue;
+    }
+    if (token === 'double-tongue') {
+      textAnnotations.push('d.t.');
+      continue;
+    }
+    if (token === 'triple-tongue') {
+      textAnnotations.push('t.t.');
+      continue;
+    }
+    if (token === 'tap') {
+      textAnnotations.push('tap');
+      continue;
+    }
+    if (token === 'fingernails') {
+      textAnnotations.push('nails');
+      continue;
+    }
+
+    if (token === 'scoop') {
+      ornamentCodes.push('scoop');
+      continue;
+    }
+    if (token === 'plop') {
+      ornamentCodes.push('doitLong');
+      continue;
+    }
+    if (token === 'doit') {
+      ornamentCodes.push('doit');
+      continue;
+    }
+    if (token === 'falloff') {
+      ornamentCodes.push('fall');
+      continue;
+    }
+    if (token === 'breath-mark') {
+      textAnnotations.push(',');
+      continue;
+    }
+    if (token === 'caesura') {
+      textAnnotations.push('//');
+      continue;
+    }
+
+    const code = map[token];
+    if (code) {
+      codes.push(code);
+      continue;
+    }
+
+    diagnostics.push({
+      code: 'UNSUPPORTED_ARTICULATION',
+      severity: 'warning',
+      message: `Unsupported articulation '${token}' is not rendered.`
+    });
   }
 
-  diagnostics.push({
-    code: 'UNSUPPORTED_ARTICULATION',
-    severity: 'warning',
-    message: `Unsupported articulation '${first}' is not rendered.`
-  });
-  return undefined;
+  return {
+    codes,
+    ornamentCodes,
+    fingerings,
+    textAnnotations
+  };
 }
 
-/** Map normalized ornament tokens into VexFlow ornament IDs. */
-function mapOrnaments(noteData: NoteData, diagnostics: Diagnostic[]): string[] {
+/** VexFlow-ready ornament/stroke payload for one parsed note token set. */
+interface OrnamentMapping {
+  ornamentCodes: string[];
+  strokeTypes: number[];
+  vibrato: boolean;
+  tremoloSlashCounts: number[];
+  textAnnotations: string[];
+}
+
+/** Map normalized ornament tokens into VexFlow ornament IDs and related modifiers. */
+function mapOrnaments(noteData: NoteData, diagnostics: Diagnostic[]): OrnamentMapping {
   if (!noteData.ornaments || noteData.ornaments.length === 0) {
-    return [];
+    return {
+      ornamentCodes: [],
+      strokeTypes: [],
+      vibrato: false,
+      tremoloSlashCounts: [],
+      textAnnotations: []
+    };
   }
 
   const map: Record<string, string> = {
     'trill-mark': 'tr',
     turn: 'turn',
+    'delayed-turn': 'turn',
+    'vertical-turn': 'turn',
     'inverted-turn': 'turn_inverted',
+    'delayed-inverted-turn': 'turn_inverted',
+    'inverted-vertical-turn': 'turn_inverted',
     mordent: 'mordent',
     'inverted-mordent': 'mordent_inverted',
-    schleifer: 'upprall'
+    schleifer: 'upprall',
+    shake: 'tr',
+    scoop: 'scoop',
+    plop: 'doitLong',
+    doit: 'doit',
+    falloff: 'fall',
+    haydn: 'turn'
   };
 
   const ornamentCodes: string[] = [];
+  const strokeTypes: number[] = [];
+  const tremoloSlashCounts: number[] = [];
+  const textAnnotations: string[] = [];
+  let vibrato = false;
   for (const ornament of noteData.ornaments) {
+    if (ornament.type === 'arpeggiate') {
+      strokeTypes.push(Stroke.Type.ARPEGGIO_DIRECTIONLESS);
+      continue;
+    }
+    if (ornament.type === 'arpeggiate-up') {
+      strokeTypes.push(Stroke.Type.ROLL_UP);
+      continue;
+    }
+    if (ornament.type === 'arpeggiate-down') {
+      strokeTypes.push(Stroke.Type.ROLL_DOWN);
+      continue;
+    }
+    if (ornament.type.startsWith('wavy-line')) {
+      vibrato = true;
+      continue;
+    }
+    if (ornament.type.startsWith('accidental-mark:')) {
+      const accidentalToken = ornament.type.slice('accidental-mark:'.length).trim().toLowerCase();
+      const accidentalText = mapAccidentalMarkText(accidentalToken);
+      if (accidentalText) {
+        textAnnotations.push(accidentalText);
+      }
+      continue;
+    }
+    if (ornament.type === 'accidental-mark') {
+      textAnnotations.push('acc');
+      continue;
+    }
+    if (ornament.type.startsWith('tremolo:')) {
+      const rawMarks = Number.parseInt(ornament.type.slice('tremolo:'.length), 10);
+      if (Number.isFinite(rawMarks)) {
+        tremoloSlashCounts.push(clampTremoloSlashCount(rawMarks));
+      } else {
+        tremoloSlashCounts.push(3);
+      }
+      continue;
+    }
+    if (ornament.type === 'tremolo') {
+      tremoloSlashCounts.push(3);
+      continue;
+    }
+    if (ornament.type.startsWith('non-arpeggiate')) {
+      diagnostics.push({
+        code: 'NON_ARPEGGIATE_UNSUPPORTED',
+        severity: 'warning',
+        message: 'non-arpeggiate is parsed but currently has no direct VexFlow glyph mapping.'
+      });
+      continue;
+    }
+
     const code = map[ornament.type];
     if (code) {
       ornamentCodes.push(code);
@@ -687,7 +1070,32 @@ function mapOrnaments(noteData: NoteData, diagnostics: Diagnostic[]): string[] {
     });
   }
 
-  return ornamentCodes;
+  return {
+    ornamentCodes,
+    strokeTypes,
+    vibrato,
+    tremoloSlashCounts,
+    textAnnotations
+  };
+}
+
+/** Clamp tremolo slash counts to VexFlow-compatible range. */
+function clampTremoloSlashCount(value: number): number {
+  return Math.min(4, Math.max(1, value));
+}
+
+/** Map MusicXML accidental-mark tokens into compact textual glyph surrogates. */
+function mapAccidentalMarkText(token: string): string | undefined {
+  const map: Record<string, string> = {
+    sharp: '#',
+    flat: 'b',
+    natural: 'n',
+    'double-sharp': 'x',
+    'flat-flat': 'bb',
+    'quarter-sharp': '+',
+    'quarter-flat': 'd'
+  };
+  return map[token];
 }
 
 /**
@@ -703,6 +1111,18 @@ function mapDuration(
     const fromType = mapDurationFromType(event.noteType, event.dotCount);
     if (fromType) {
       return fromType;
+    }
+
+    // When a note explicitly declares an unsupported `<type>`, dropping the
+    // event is safer than coercing to a quarter note: fallback coercion can
+    // create misleading spacing and stem/flag artifacts in dense rhythm tests.
+    if (event.noteType) {
+      diagnostics.push({
+        code: 'UNSUPPORTED_DURATION_TYPE_SKIPPED',
+        severity: 'warning',
+        message: `Unsupported note type '${event.noteType}' was skipped.`
+      });
+      return undefined;
     }
 
     if (event.grace) {
@@ -732,13 +1152,17 @@ function mapDuration(
   if (approx(0.75)) return { duration: '8', dots: 1 };
   if (approx(0.5)) return { duration: '8', dots: 0 };
   if (approx(0.25)) return { duration: '16', dots: 0 };
+  if (approx(0.125)) return { duration: '32', dots: 0 };
+  if (approx(0.0625)) return { duration: '64', dots: 0 };
+  if (approx(0.03125)) return { duration: '128', dots: 0 };
+  if (approx(0.015625)) return { duration: '256', dots: 0 };
 
   diagnostics.push({
-    code: 'UNSUPPORTED_DURATION',
+    code: 'UNSUPPORTED_DURATION_SKIPPED',
     severity: 'warning',
-    message: `Unsupported duration ratio ${ratio.toFixed(4)} quarter notes. Using quarter note fallback.`
+    message: `Unsupported duration ratio ${ratio.toFixed(4)} quarter notes. Event was skipped.`
   });
-  return { duration: 'q', dots: 0 };
+  return undefined;
 }
 
 /** Map MusicXML `<type>` + `<dot/>` values into VexFlow duration tokens. */
@@ -748,15 +1172,21 @@ function mapDurationFromType(noteType: string | undefined, dotCount: number | un
   }
 
   const map: Record<string, string> = {
-    longa: 'w',
-    breve: 'w',
+    // VexFlow supports breve (`1/2`) but not longa (`1/4`).
+    // We currently approximate longa with breve so rhythm planning remains
+    // deterministic until a true longa representation is introduced.
+    longa: '1/2',
+    long: '1/2',
+    breve: '1/2',
     whole: 'w',
     half: 'h',
     quarter: 'q',
     eighth: '8',
     '16th': '16',
     '32nd': '32',
-    '64th': '64'
+    '64th': '64',
+    '128th': '128',
+    '256th': '256'
   };
 
   const duration = map[noteType.toLowerCase()];

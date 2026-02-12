@@ -1,13 +1,15 @@
 /* global console, process */
 
+import path from 'node:path';
+
 import { loadConformanceFixtures, loadVexflowGapRegistry, validateVexflowGapRegistry } from '../dist/testkit/index.js';
 
 /** Default VexFlow gap registry path used by M7D checks. */
-const DEFAULT_GAP_REGISTRY_PATH = '/Users/mo/git/musicxml/fixtures/vexflow/gap-registry.json';
+const DEFAULT_GAP_REGISTRY_PATH = path.resolve('fixtures/vexflow/gap-registry.json');
 /** Default conformance fixture root used to validate fixture references. */
-const DEFAULT_CONFORMANCE_ROOT = '/Users/mo/git/musicxml/fixtures/conformance';
+const DEFAULT_CONFORMANCE_ROOT = path.resolve('fixtures/conformance');
 /** Default workspace root used for absolute-path validation in registry links. */
-const DEFAULT_WORKSPACE_ROOT = '/Users/mo/git/musicxml';
+const DEFAULT_WORKSPACE_ROOT = path.resolve('.');
 
 /** Run VexFlow gap registry validation and exit non-zero on policy violations. */
 async function main() {
