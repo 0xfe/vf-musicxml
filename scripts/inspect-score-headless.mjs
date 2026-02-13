@@ -18,6 +18,7 @@ import {
   summarizeNotationGeometry
 } from '../dist/testkit/notation-geometry.js';
 import { detectSvgOverlaps, extractSvgElementBounds } from '../dist/testkit/svg-collision.js';
+import { createFixtureRenderCache, DEFAULT_FIXTURE_RENDER_CACHE_DIR } from './lib/fixture-render-cache.mjs';
 
 /** Default output root for one-score inspection artifacts. */
 const DEFAULT_OUTPUT_ROOT = path.resolve('artifacts/score-inspection');
@@ -38,6 +39,8 @@ await runInspection(options);
  * - `--page=<0-based-index>` (default `0`)
  * - `--out-dir=<directory>`
  * - `--reference-png=<png-path>` (optional baseline image for diff)
+ * - `--no-cache`
+ * - `--cache-dir=<path>`
  */
 function parseCliArgs(argv) {
   /** @type {string | undefined} */
@@ -51,6 +54,8 @@ function parseCliArgs(argv) {
   let outputDir;
   /** @type {string | undefined} */
   let referencePngPath;
+  let cacheEnabled = true;
+  let cacheDir = DEFAULT_FIXTURE_RENDER_CACHE_DIR;
 
   for (const arg of argv) {
     if (arg.startsWith('--input=')) {
@@ -88,6 +93,18 @@ function parseCliArgs(argv) {
       referencePngPath = arg.slice('--reference-png='.length).trim();
       continue;
     }
+
+    if (arg === '--no-cache') {
+      cacheEnabled = false;
+      continue;
+    }
+
+    if (arg.startsWith('--cache-dir=')) {
+      const value = arg.slice('--cache-dir='.length).trim();
+      if (value.length > 0) {
+        cacheDir = path.resolve(value);
+      }
+    }
   }
 
   if (!inputPath) {
@@ -108,7 +125,9 @@ function parseCliArgs(argv) {
     format: resolvedFormat,
     pageIndex,
     outputDir: resolvedOutputDir,
-    referencePngPath: referencePngPath ? path.resolve(referencePngPath) : undefined
+    referencePngPath: referencePngPath ? path.resolve(referencePngPath) : undefined,
+    cacheEnabled,
+    cacheDir
   };
 }
 
@@ -117,37 +136,83 @@ function parseCliArgs(argv) {
  */
 async function runInspection(options) {
   await mkdir(options.outputDir, { recursive: true });
+  const renderCache = createFixtureRenderCache({
+    enabled: options.cacheEnabled,
+    cacheDir: options.cacheDir
+  });
 
-  const sourceBytes = await readFile(options.inputPath);
-  const parsed = await parseMusicXMLAsync(
-    {
-      data: new Uint8Array(sourceBytes),
-      format: options.format
-    },
-    {
-      sourceName: options.inputPath,
-      mode: 'lenient'
+  const cached = await renderCache.read({
+    id: options.id,
+    fixturePath: options.inputPath,
+    format: options.format,
+    pageIndex: options.pageIndex
+  });
+  const cacheHit = Boolean(cached);
+  let svgMarkup = cached?.svgMarkup;
+  let rasterizedPng = cached?.png;
+  let rasterizedWidth = cached?.width;
+  let rasterizedHeight = cached?.height;
+  let pageCount = cached?.pageCount ?? 1;
+  let parseDiagnostics = cached?.parseDiagnostics ?? [];
+  let renderDiagnostics = cached?.renderDiagnostics ?? [];
+
+  if (!svgMarkup || !rasterizedPng || !rasterizedWidth || !rasterizedHeight) {
+    const sourceBytes = await readFile(options.inputPath);
+    const parsed = await parseMusicXMLAsync(
+      {
+        data: new Uint8Array(sourceBytes),
+        format: options.format
+      },
+      {
+        sourceName: options.inputPath,
+        mode: 'lenient'
+      }
+    );
+    parseDiagnostics = parsed.diagnostics;
+
+    if (!parsed.score) {
+      throw new Error(`Parse failed without score output for ${options.inputPath}.`);
     }
-  );
 
-  if (!parsed.score) {
-    throw new Error(`Parse failed without score output for ${options.inputPath}.`);
-  }
+    const renderResult = renderToSVGPages(parsed.score);
+    pageCount = renderResult.pages.length;
+    renderDiagnostics = renderResult.diagnostics;
+    const selectedPage = renderResult.pages[options.pageIndex];
+    if (!selectedPage) {
+      throw new Error(`Rendered page index ${options.pageIndex} is out of range (pages=${renderResult.pages.length}).`);
+    }
 
-  const renderResult = renderToSVGPages(parsed.score);
-  const selectedPage = renderResult.pages[options.pageIndex];
-  if (!selectedPage) {
-    throw new Error(
-      `Rendered page index ${options.pageIndex} is out of range (pages=${renderResult.pages.length}).`
+    svgMarkup = extractFirstSvgMarkup(selectedPage);
+    if (!svgMarkup) {
+      throw new Error('Rendered output did not contain an <svg> root.');
+    }
+
+    const rasterized = rasterizeSvg(svgMarkup);
+    rasterizedPng = rasterized.png;
+    rasterizedWidth = rasterized.width;
+    rasterizedHeight = rasterized.height;
+    await renderCache.write(
+      {
+        id: options.id,
+        fixturePath: options.inputPath,
+        format: options.format,
+        pageIndex: options.pageIndex
+      },
+      {
+        svgMarkup,
+        png: rasterizedPng,
+        width: rasterizedWidth,
+        height: rasterizedHeight,
+        pageCount,
+        parseDiagnostics,
+        renderDiagnostics
+      }
     );
   }
 
-  const svgMarkup = extractFirstSvgMarkup(selectedPage);
-  if (!svgMarkup) {
-    throw new Error('Rendered output did not contain an <svg> root.');
+  if (!svgMarkup || !rasterizedPng) {
+    throw new Error('render cache payload incomplete');
   }
-
-  const rasterized = rasterizeSvg(svgMarkup);
   const geometry = collectNotationGeometry(svgMarkup);
   const geometrySummary = summarizeNotationGeometry(geometry, {
     minHorizontalOverlap: 0.75,
@@ -168,13 +233,13 @@ async function runInspection(options) {
   const diffOutputPath = path.join(options.outputDir, `${options.id}.diff.png`);
 
   await writeFile(svgOutputPath, `${svgMarkup}\n`, 'utf8');
-  await writeFile(pngOutputPath, rasterized.png);
+  await writeFile(pngOutputPath, rasterizedPng);
 
   /** @type {{ mismatchPixels: number; mismatchRatio: number; ssim: number; referencePngPath: string; diffPngPath: string; } | undefined} */
   let visualDiffSummary;
   if (options.referencePngPath) {
     const expectedPng = await readFile(options.referencePngPath);
-    const diff = comparePngBuffers(rasterized.png, expectedPng);
+    const diff = comparePngBuffers(rasterizedPng, expectedPng);
     await writeFile(diffOutputPath, diff.diffPng);
 
     visualDiffSummary = {
@@ -191,15 +256,15 @@ async function runInspection(options) {
     inputPath: options.inputPath,
     format: options.format,
     pageIndex: options.pageIndex,
-    pageCount: renderResult.pages.length,
+    pageCount,
     outputDir: options.outputDir,
     outputs: {
       svg: svgOutputPath,
       png: pngOutputPath,
       report: reportOutputPath
     },
-    parseDiagnostics: parsed.diagnostics,
-    renderDiagnostics: renderResult.diagnostics,
+    parseDiagnostics,
+    renderDiagnostics,
     geometrySummary,
     extremeCurveCount: extremeCurves.length,
     spacingSummary,
@@ -216,6 +281,7 @@ async function runInspection(options) {
   // Keep terminal output compact so this command is easy to use in rapid triage loops.
   console.log(`Inspected score: ${options.inputPath}`);
   console.log(`Output directory: ${options.outputDir}`);
+  console.log(`Render cache: ${options.cacheEnabled ? (cacheHit ? 'hit' : 'miss') : 'disabled'}`);
   console.log(`SVG: ${svgOutputPath}`);
   console.log(`PNG: ${pngOutputPath}`);
   console.log(

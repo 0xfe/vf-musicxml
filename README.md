@@ -113,6 +113,34 @@ npm run inspect:score -- --input=fixtures/conformance/lilypond/01a-pitches-pitch
 
 One-score artifacts are emitted under `artifacts/score-inspection/<score-id>/`.
 
+## Fast Iteration Loop
+Use these tiers to minimize turnaround during rendering/debug sessions:
+
+```bash
+# Tier 1: deterministic smoke quality checks.
+npm run loop:quick
+
+# Tier 2: fixture-focused visual + geometry triage pack.
+npm run loop:targeted -- --fixtures=lilypond-01a-pitches-pitches,realworld-music21-bach-bwv1-6
+
+# Tier 3: full quality gate run.
+npm run loop:full
+```
+
+Hot fixture pack artifacts are written to `artifacts/hot-fixture-pack/` and aggregate:
+- golden comparison status (`artifacts/hot-fixture-pack/golden/`)
+- headless visual regression status (`artifacts/visual-headless/`)
+- per-fixture inspect reports (`artifacts/hot-fixture-pack/inspect/`)
+- triage runs are report-first by default; add `--strict` to fail on comparison errors.
+
+Detailed loop/caching guidance: `/Users/mo/git/musicxml/docs/iteration-speed-tips.md`.
+
+Targeted demo rebuilds (no full-site rebuild needed):
+```bash
+npm run demos:build:fixtures -- --fixtures=realworld-music21-schumann-clara-polonaise-op1n1,lilypond-03a-rhythm-durations
+npm run demos:build:changed
+```
+
 If you see an executable-path mismatch (for example Playwright looks for `mac-x64` but only `mac-arm64` exists), reinstall from this repo environment:
 
 ```bash
@@ -135,8 +163,10 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run test:visual:headless`: run browser-free visual regression checks (SVG->PNG + pixel/SSIM).
 - `npm run test:visual:headless:update`: refresh browser-free baseline images.
 - `npm run test:golden`: compare rendered fixtures directly against external golden references (`fixtures/golden/manifest.json` + `fixtures/evaluation/golden-proofpoints.json`).
+- `npm run test:golden:fixtures -- --fixtures=<ids>`: run golden comparison on selected fixtures only.
 - `npm run inspect:score -- --input=<path>`: inspect one score headlessly and emit SVG/PNG/report artifacts.
 - `npm run eval:run`: run layered evaluation report generation (`artifacts/evaluation/`).
+- `npm run eval:run:fixtures -- --fixtures=<ids>`: run layered evaluation on selected fixture IDs only.
 - `npm run vexflow:gaps:check`: validate VexFlow gap registry links and lifecycle metadata.
 - `npm run vexflow:gaps:brief`: generate upstream issue/PR briefing artifacts from the gap registry.
 - `npm run patches:apply`: apply `patch-package` patches (when present).
@@ -146,7 +176,14 @@ PLAYWRIGHT_BROWSERS_PATH=/Users/mo/git/musicxml/.playwright npx playwright insta
 - `npm run conformance:lilypond:promote`: bulk-import remaining LilyPond fixtures and auto-classify expected pass/fail from current parse/render behavior.
 - `npm run conformance:realworld:import`: import representative real-world `.mxl` samples into `fixtures/conformance/realworld/`.
 - `npm run demos:build`: build static demo HTML pages for full LilyPond conformance coverage plus selected complex real-world fixtures.
+- `npm run demos:build:fixtures -- --fixtures=<ids>`: incrementally rebuild selected demo pages only.
+- `npm run demos:build:changed`: rebuild demos affected by `origin/master...HEAD` changes.
 - `npm run demos:serve`: build demos and serve them locally at `http://localhost:4173/`.
+- `npm run triage:fixtures -- --fixtures=<ids>`: execute automated fixture triage pack (golden + headless + inspect + consolidated report).
+- `npm run check:parallel`: run lint, typecheck, and unit tests concurrently.
+- `npm run loop:quick`: tier-1 fast deterministic loop.
+- `npm run loop:targeted -- --fixtures=<ids>`: tier-2 focused fixture loop.
+- `npm run loop:full`: tier-3 full quality gate loop.
 
 ## Testkit utilities
 - `src/testkit/svg-collision.ts` provides headless SVG collision-audit helpers:

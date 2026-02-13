@@ -67,8 +67,10 @@ Every function, constant, enum, class, or major relevant identifier should be cl
 - `npm run test:visual:headless`
 - `npm run test:visual:headless:update`
 - `npm run test:golden`
+- `npm run test:golden:fixtures -- --fixtures <comma-separated-fixture-ids>`
 - `npm run inspect:score -- --input=<path-to-score.musicxml-or-.mxl>`
 - `npm run eval:run`
+- `npm run eval:run:fixtures -- --fixtures <comma-separated-fixture-ids>`
 - `npm run vexflow:gaps:check`
 - `npm run vexflow:gaps:brief`
 - `npm run patches:apply`
@@ -78,7 +80,15 @@ Every function, constant, enum, class, or major relevant identifier should be cl
 - `npm run conformance:lilypond:promote`
 - `npm run conformance:realworld:import`
 - `npm run demos:build`
+- `npm run demos:build:fixtures -- --fixtures <comma-separated-demo-ids>`
+- `npm run demos:build:changed`
 - `npm run demos:serve`
+- `npm run triage:fixtures -- --fixtures <comma-separated-fixture-ids>`
+- `npm run triage:fixtures -- --fixtures <comma-separated-fixture-ids> --strict`
+- `npm run check:parallel`
+- `npm run loop:quick`
+- `npm run loop:targeted -- --fixtures <comma-separated-fixture-ids>`
+- `npm run loop:full`
 
 ## Distribution
 - ESM-first package layout.

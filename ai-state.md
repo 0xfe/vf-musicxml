@@ -12,6 +12,13 @@
 - `lilypond-01a-pitches-pitches` headless visual baseline has been refreshed post-fix (`tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png`).
 - M8C first slice landed: `npm run test:golden` now compares rendered output to external references using `fixtures/golden/manifest.json` + `fixtures/evaluation/golden-proofpoints.json`.
 - M8C golden runner now supports deterministic system-window proof-point crops (`autoCropActual.systems`) via geometry-derived system bounds.
+- Iteration-speed loop hardening landed:
+  - shared execution-loop helpers in `src/testkit/execution-loop.ts`,
+  - reusable fixture render cache in `scripts/lib/fixture-render-cache.mjs`,
+  - incremental/parallel demo build controls in `scripts/build-demos.mjs`,
+  - unified hot-fixture triage pack in `scripts/run-hot-fixture-pack.mjs`,
+  - fixture-scoped evaluation (`npm run eval:run -- --fixtures=...`),
+  - robust report-first triage behavior (golden `--allow-blocking-failures` and sentinel-aware headless subset skipping).
 - Real-world proof-point `realworld-music21-bach-bwv1-6-8bars` is configured as advisory and currently fails (large mismatch), establishing baseline evidence for pagination/title/part-label gaps.
 - M10 baseline is implemented in renderer:
   - paginated default with multi-page planning/output,
@@ -38,7 +45,7 @@
   - direction text now uses overlap-aware row packing.
 - Latest category-31/32 inspection deltas:
   - `31a-Directions` text overlaps: `13 -> 2`,
-  - `32a-Notations` text overlaps: `21 -> 4`,
+  - `32a-Notations` text overlaps: `21 -> 3`,
   - remaining warning: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as `VF-GAP-002`).
 - Latest spacing telemetry + vertical spread follow-up (2026-02-13):
   - inter-part spacing now reacts more strongly to extreme ledger-register content (`estimatePartVerticalSpread` blends average + peak + elevated spread prevalence; `resolveInterPartGap` increases vertical-spread weight),
@@ -83,12 +90,15 @@
     - tuned above/below dynamics baseline shifts,
     - deduped dynamics-equivalent `<words>` text when `<dynamics>` markers already exist.
   - latest category-31 snapshot:
-    - `text overlaps=0`
-    - `dynamics-to-text overlaps=4` (at current gate threshold; passes)
+    - `text overlaps=2`
+    - `dynamics-to-text overlaps=2`
   - regression budgets were tightened after revalidation:
     - `k458` page-1 compressed bands must stay at `0`,
     - `bwv244-10` page-1 compressed bands must stay at `0` with minimum band ratio `> 0.75`,
-    - `31a-Directions` text and dynamics-text overlaps are capped at `<= 4`.
+    - `31a-Directions` text and dynamics-text overlaps are capped at `<= 2`,
+    - `31d` text overlaps are capped at `<= 2`,
+    - `71f` text overlaps are capped at `<= 1`,
+    - `32a` text overlaps are capped at `<= 4`.
 - Latest pagination-density follow-up:
   - system-range planning now adapts measures-per-system by local measure-density peaks so dense windows can auto-split before left-bar compression appears.
 - Latest M10D hardening:
@@ -183,6 +193,7 @@
   - `/Users/mo/git/musicxml/docs/lilypond-suite-tips.md`
   - `/Users/mo/git/musicxml/docs/notation-style-tips.md`
   - `/Users/mo/git/musicxml/docs/headless-visual-tips.md`
+  - `/Users/mo/git/musicxml/docs/iteration-speed-tips.md`
   - `/Users/mo/git/musicxml/docs/evaluation-tips.md`
   - `/Users/mo/git/musicxml/docs/evaluation-runbook.md`
   - `/Users/mo/git/musicxml/docs/vexflow-gap-registry.md`

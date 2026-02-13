@@ -529,7 +529,7 @@ describe('renderer quality regressions', () => {
     const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
     expect(textBounds.length).toBeGreaterThan(40);
-    expect(overlaps.length).toBeLessThanOrEqual(3);
+    expect(overlaps.length).toBeLessThanOrEqual(1);
   });
 
   it('keeps category-31 direction text readable without heavy overlap', async () => {
@@ -551,9 +551,9 @@ describe('renderer quality regressions', () => {
     const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
     expect(textBounds.length).toBeGreaterThan(40);
-    // Category 31 intentionally packs dense labels; keep overlaps bounded so
-    // symbols/labels remain readable while we continue M11 layout work.
-    expect(overlaps.length).toBeLessThanOrEqual(4);
+    // Category 31 intentionally packs dense labels; keep overlaps tightly
+    // bounded so symbols/labels remain readable while we continue M11 layout work.
+    expect(overlaps.length).toBeLessThanOrEqual(2);
   });
 
   it('keeps category-31d compound direction text readable with bounded overlap', async () => {
@@ -575,7 +575,7 @@ describe('renderer quality regressions', () => {
     const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
     expect(textBounds.length).toBeGreaterThan(20);
-    expect(overlaps.length).toBeLessThanOrEqual(4);
+    expect(overlaps.length).toBeLessThanOrEqual(2);
   });
 
   it('keeps category-31 dynamics glyph runs separated from nearby text labels', async () => {
@@ -603,7 +603,7 @@ describe('renderer quality regressions', () => {
     });
 
     expect(dynamicsBounds.length).toBeGreaterThanOrEqual(8);
-    expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(4);
+    expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(2);
   });
 
   it('keeps category-32 notation labels bounded and maps unsupported symbols explicitly', async () => {
@@ -632,7 +632,7 @@ describe('renderer quality regressions', () => {
     const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
     expect(textBounds.length).toBeGreaterThan(80);
-    expect(overlaps.length).toBeLessThanOrEqual(6);
+    expect(overlaps.length).toBeLessThanOrEqual(4);
   });
 
 });

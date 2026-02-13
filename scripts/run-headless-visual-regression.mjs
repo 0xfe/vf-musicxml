@@ -2,6 +2,7 @@
 /* global console, process */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { parseMusicXMLAsync, renderToSVGPages } from '../dist/public/api.js';
@@ -14,6 +15,8 @@ import {
   collectNotationGeometry,
   detectNoteheadBarlineIntrusions
 } from '../dist/testkit/notation-geometry.js';
+import { runWithConcurrency, summarizeDurations } from '../dist/testkit/execution-loop.js';
+import { createFixtureRenderCache, DEFAULT_FIXTURE_RENDER_CACHE_DIR } from './lib/fixture-render-cache.mjs';
 
 /** Path to the fixture manifest that defines headless visual sentinels. */
 const SENTINEL_MANIFEST_PATH = path.resolve('fixtures/evaluation/headless-visual-sentinels.json');
@@ -30,6 +33,8 @@ const REPORT_MARKDOWN_PATH = path.join(ARTIFACT_DIR, 'report.md');
 const DEFAULT_MAX_MISMATCH_RATIO = 0.004;
 /** Default minimum structural similarity (SSIM) floor for pass/fail. */
 const DEFAULT_MIN_SSIM = 0.985;
+/** Default worker count for fixture loops. */
+const DEFAULT_CONCURRENCY = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 
 /** Single sentinel fixture definition loaded from the manifest. */
 /**
@@ -56,6 +61,8 @@ const DEFAULT_MIN_SSIM = 0.985;
  *   mismatchPixels: number | null;
  *   mismatchRatio: number | null;
  *   ssim: number | null;
+ *   durationMs: number;
+ *   cacheHit: boolean;
  *   status: 'updated' | 'pass' | 'fail' | 'error';
  *   reason?: string;
  * }} HeadlessVisualResult
@@ -72,19 +79,31 @@ const selectedFixtures = filterFixtures(fixtures, options.fixtureIds);
 if (selectedFixtures.length === 0) {
   throw new Error('No fixtures selected for headless visual regression run.');
 }
+const renderCache = createFixtureRenderCache({
+  enabled: options.cacheEnabled,
+  cacheDir: options.cacheDir
+});
 
 /** @type {HeadlessVisualResult[]} */
-const results = [];
-for (const fixture of selectedFixtures) {
-  const result = await executeFixture(fixture, options);
-  results.push(result);
-}
+const results = await runWithConcurrency(selectedFixtures, options.concurrency, async (fixture) =>
+  executeFixture(fixture, options, renderCache)
+);
+const timingSummary = summarizeDurations(
+  results.map((result) => result.durationMs),
+  options.timingBudgetMs
+);
 
 const summary = {
   generatedAt: new Date().toISOString(),
   updateMode: options.update,
+  concurrency: options.concurrency,
+  cacheEnabled: options.cacheEnabled,
+  cacheDir: options.cacheDir,
+  cacheHitCount: results.filter((result) => result.cacheHit).length,
   maxMismatchRatio: options.maxMismatchRatio,
   minSsim: options.minSsim,
+  timingBudgetMs: options.timingBudgetMs ?? null,
+  timing: timingSummary,
   fixtureCount: results.length,
   passCount: results.filter((result) => result.status === 'pass').length,
   failCount: results.filter((result) => result.status === 'fail').length,
@@ -103,6 +122,15 @@ if (failures.length > 0 && !options.update) {
     `Headless visual regression failed for ${failures.length} fixture(s): ${failureIds}. See ${REPORT_JSON_PATH}.`
   );
 }
+if (
+  options.failOnBudgetExceeded &&
+  timingSummary.budgetMs !== null &&
+  timingSummary.budgetExceededCount > 0
+) {
+  throw new Error(
+    `Headless visual regression exceeded timing budget on ${timingSummary.budgetExceededCount} fixture(s) (budget=${timingSummary.budgetMs}ms).`
+  );
+}
 
 if (options.update) {
   console.log(`Updated ${summary.updatedCount} headless baseline image(s).`);
@@ -119,6 +147,11 @@ if (options.update) {
  * - `--fixtures=id1,id2`
  * - `--max-mismatch-ratio=0.004`
  * - `--min-ssim=0.985`
+ * - `--concurrency=4`
+ * - `--timing-budget-ms=3000`
+ * - `--fail-on-budget-exceeded`
+ * - `--no-cache`
+ * - `--cache-dir=<path>`
  */
 function parseCliArgs(argv) {
   let update = false;
@@ -126,6 +159,12 @@ function parseCliArgs(argv) {
   let fixtureIds;
   let maxMismatchRatio = DEFAULT_MAX_MISMATCH_RATIO;
   let minSsim = DEFAULT_MIN_SSIM;
+  let concurrency = DEFAULT_CONCURRENCY;
+  /** @type {number | undefined} */
+  let timingBudgetMs;
+  let failOnBudgetExceeded = false;
+  let cacheEnabled = true;
+  let cacheDir = DEFAULT_FIXTURE_RENDER_CACHE_DIR;
 
   for (const arg of argv) {
     if (arg === '--update') {
@@ -154,13 +193,52 @@ function parseCliArgs(argv) {
       }
       continue;
     }
+
+    if (arg.startsWith('--concurrency=')) {
+      const value = Number.parseInt(arg.slice('--concurrency='.length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        concurrency = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--timing-budget-ms=')) {
+      const value = Number.parseInt(arg.slice('--timing-budget-ms='.length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        timingBudgetMs = value;
+      }
+      continue;
+    }
+
+    if (arg === '--fail-on-budget-exceeded') {
+      failOnBudgetExceeded = true;
+      continue;
+    }
+
+    if (arg === '--no-cache') {
+      cacheEnabled = false;
+      continue;
+    }
+
+    if (arg.startsWith('--cache-dir=')) {
+      const value = arg.slice('--cache-dir='.length).trim();
+      if (value.length > 0) {
+        cacheDir = path.resolve(value);
+      }
+      continue;
+    }
   }
 
   return {
     update,
     fixtureIds,
     maxMismatchRatio,
-    minSsim
+    minSsim,
+    concurrency,
+    timingBudgetMs,
+    failOnBudgetExceeded,
+    cacheEnabled,
+    cacheDir
   };
 }
 
@@ -187,70 +265,109 @@ function filterFixtures(fixtures, fixtureIds) {
 }
 
 /** Run render/raster/compare flow for one fixture. */
-async function executeFixture(fixture, options) {
+async function executeFixture(fixture, options, renderCache) {
   const fixtureAbsolutePath = path.resolve(fixture.fixturePath);
   const baselinePath = path.join(BASELINE_DIR, `${fixture.id}.png`);
   const actualPath = path.join(ARTIFACT_DIR, `${fixture.id}.actual.png`);
   const diffPath = path.join(ARTIFACT_DIR, `${fixture.id}.diff.png`);
+  const startedAt = Date.now();
 
   try {
-    const sourceBytes = await readFile(fixtureAbsolutePath);
-    const parsed = await parseMusicXMLAsync(
-      {
-        data: new Uint8Array(sourceBytes),
-        format: fixture.format
-      },
-      {
-        sourceName: fixture.fixturePath,
-        mode: 'lenient'
+    const cached = await renderCache.read({
+      id: fixture.id,
+      fixturePath: fixtureAbsolutePath,
+      format: fixture.format,
+      pageIndex: 0
+    });
+    const cacheHit = Boolean(cached);
+    let svgMarkup = cached?.svgMarkup;
+    let rasterizedPng = cached?.png;
+    let rasterizedWidth = cached?.width;
+    let rasterizedHeight = cached?.height;
+
+    if (!svgMarkup || !rasterizedPng || !rasterizedWidth || !rasterizedHeight) {
+      const sourceBytes = await readFile(fixtureAbsolutePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(sourceBytes),
+          format: fixture.format
+        },
+        {
+          sourceName: fixture.fixturePath,
+          mode: 'lenient'
+        }
+      );
+
+      if (!parsed.score) {
+        return {
+          id: fixture.id,
+          fixturePath: fixture.fixturePath,
+          baselinePath,
+          actualPath,
+          diffPath: null,
+          renderedWidth: 0,
+          renderedHeight: 0,
+          noteheadCount: 0,
+          beamCount: 0,
+          barlineIntrusionCount: 0,
+          mismatchPixels: null,
+          mismatchRatio: null,
+          ssim: null,
+          durationMs: Date.now() - startedAt,
+          cacheHit: false,
+          status: 'error',
+          reason: 'parse produced no score'
+        };
       }
-    );
 
-    if (!parsed.score) {
-      return {
-        id: fixture.id,
-        fixturePath: fixture.fixturePath,
-        baselinePath,
-        actualPath,
-        diffPath: null,
-        renderedWidth: 0,
-        renderedHeight: 0,
-        noteheadCount: 0,
-        beamCount: 0,
-        barlineIntrusionCount: 0,
-        mismatchPixels: null,
-        mismatchRatio: null,
-        ssim: null,
-        status: 'error',
-        reason: 'parse produced no score'
-      };
+      const rendered = renderToSVGPages(parsed.score);
+      svgMarkup = extractFirstSvgMarkup(rendered.pages[0] ?? '');
+      if (!svgMarkup) {
+        return {
+          id: fixture.id,
+          fixturePath: fixture.fixturePath,
+          baselinePath,
+          actualPath,
+          diffPath: null,
+          renderedWidth: 0,
+          renderedHeight: 0,
+          noteheadCount: 0,
+          beamCount: 0,
+          barlineIntrusionCount: 0,
+          mismatchPixels: null,
+          mismatchRatio: null,
+          ssim: null,
+          durationMs: Date.now() - startedAt,
+          cacheHit: false,
+          status: 'error',
+          reason: 'render produced no SVG markup'
+        };
+      }
+
+      const rasterized = rasterizeSvg(svgMarkup);
+      rasterizedPng = rasterized.png;
+      rasterizedWidth = rasterized.width;
+      rasterizedHeight = rasterized.height;
+      await renderCache.write(
+        {
+          id: fixture.id,
+          fixturePath: fixtureAbsolutePath,
+          format: fixture.format,
+          pageIndex: 0
+        },
+        {
+          svgMarkup,
+          png: rasterized.png,
+          width: rasterized.width,
+          height: rasterized.height,
+          pageCount: rendered.pages.length,
+          parseDiagnostics: parsed.diagnostics,
+          renderDiagnostics: rendered.diagnostics
+        }
+      );
     }
 
-    const rendered = renderToSVGPages(parsed.score);
-    const svgMarkup = extractFirstSvgMarkup(rendered.pages[0] ?? '');
-    if (!svgMarkup) {
-      return {
-        id: fixture.id,
-        fixturePath: fixture.fixturePath,
-        baselinePath,
-        actualPath,
-        diffPath: null,
-        renderedWidth: 0,
-        renderedHeight: 0,
-        noteheadCount: 0,
-        beamCount: 0,
-        barlineIntrusionCount: 0,
-        mismatchPixels: null,
-        mismatchRatio: null,
-        ssim: null,
-        status: 'error',
-        reason: 'render produced no SVG markup'
-      };
-    }
-
-    const rasterized = rasterizeSvg(svgMarkup);
-    await writeFile(actualPath, rasterized.png);
-
+    await writeFile(actualPath, rasterizedPng);
     const geometry = collectNotationGeometry(svgMarkup);
     const intrusions = detectNoteheadBarlineIntrusions(geometry, {
       minHorizontalOverlap: 0.75,
@@ -258,27 +375,29 @@ async function executeFixture(fixture, options) {
     });
 
     if (options.update) {
-      await writeFile(baselinePath, rasterized.png);
+      await writeFile(baselinePath, rasterizedPng);
       return {
         id: fixture.id,
         fixturePath: fixture.fixturePath,
         baselinePath,
         actualPath,
         diffPath: null,
-        renderedWidth: rasterized.width,
-        renderedHeight: rasterized.height,
+        renderedWidth: rasterizedWidth,
+        renderedHeight: rasterizedHeight,
         noteheadCount: geometry.noteheads.length,
         beamCount: geometry.beams.length,
         barlineIntrusionCount: intrusions.length,
         mismatchPixels: null,
         mismatchRatio: null,
         ssim: null,
+        durationMs: Date.now() - startedAt,
+        cacheHit,
         status: 'updated'
       };
     }
 
     const baselinePng = await readFile(baselinePath);
-    const comparison = comparePngBuffers(rasterized.png, baselinePng);
+    const comparison = comparePngBuffers(rasterizedPng, baselinePng);
     const mismatchFail = comparison.mismatchRatio > options.maxMismatchRatio;
     const ssimFail = comparison.ssim < options.minSsim;
     const failed = mismatchFail || ssimFail;
@@ -292,14 +411,16 @@ async function executeFixture(fixture, options) {
       baselinePath,
       actualPath,
       diffPath: failed ? diffPath : null,
-      renderedWidth: rasterized.width,
-      renderedHeight: rasterized.height,
+      renderedWidth: rasterizedWidth,
+      renderedHeight: rasterizedHeight,
       noteheadCount: geometry.noteheads.length,
       beamCount: geometry.beams.length,
       barlineIntrusionCount: intrusions.length,
       mismatchPixels: comparison.mismatchPixels,
       mismatchRatio: comparison.mismatchRatio,
       ssim: comparison.ssim,
+      durationMs: Date.now() - startedAt,
+      cacheHit,
       status: failed ? 'fail' : 'pass',
       reason: failed
         ? `mismatchRatio=${comparison.mismatchRatio.toFixed(6)} ssim=${comparison.ssim.toFixed(6)}`
@@ -321,6 +442,8 @@ async function executeFixture(fixture, options) {
       mismatchPixels: null,
       mismatchRatio: null,
       ssim: null,
+      durationMs: Date.now() - startedAt,
+      cacheHit: false,
       status: 'error',
       reason: message
     };
@@ -339,16 +462,28 @@ function renderMarkdownSummary(summary) {
     `Fail: ${summary.failCount}`,
     `Error: ${summary.errorCount}`,
     `Updated: ${summary.updatedCount}`,
+    `Concurrency: ${summary.concurrency}`,
+    `Cache: ${summary.cacheEnabled ? 'on' : 'off'} (hits=${summary.cacheHitCount})`,
     `Max mismatch ratio: ${summary.maxMismatchRatio}`,
     `Min SSIM: ${summary.minSsim}`,
+    `Timing: avg=${summary.timing.averageMs.toFixed(1)}ms p95=${summary.timing.p95Ms.toFixed(
+      1
+    )}ms max=${summary.timing.maxMs.toFixed(1)}ms`,
+    `Timing budget: ${
+      summary.timingBudgetMs === null
+        ? 'disabled'
+        : `${summary.timingBudgetMs}ms (exceeded=${summary.timing.budgetExceededCount})`
+    }`,
     '',
-    '| Fixture | Status | Mismatch Ratio | SSIM | Beams | Intrusions | Notes |',
-    '|---|---|---|---|---|---|---|'
+    '| Fixture | Status | Cache | Duration (ms) | Mismatch Ratio | SSIM | Beams | Intrusions | Notes |',
+    '|---|---|---|---|---|---|---|---|---|'
   ];
 
   for (const result of summary.results) {
     lines.push(
-      `| ${result.id} | ${result.status} | ${formatMetric(result.mismatchRatio)} | ${formatMetric(result.ssim)} | ${result.beamCount} | ${result.barlineIntrusionCount} | ${escapeCell(result.reason ?? '')} |`
+      `| ${result.id} | ${result.status} | ${result.cacheHit ? 'hit' : 'miss'} | ${result.durationMs.toFixed(
+        1
+      )} | ${formatMetric(result.mismatchRatio)} | ${formatMetric(result.ssim)} | ${result.beamCount} | ${result.barlineIntrusionCount} | ${escapeCell(result.reason ?? '')} |`
     );
   }
 

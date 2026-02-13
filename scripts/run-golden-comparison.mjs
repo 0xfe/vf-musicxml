@@ -2,6 +2,7 @@
 /* global console, process */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { parseMusicXMLAsync, renderToSVGPages } from '../dist/public/api.js';
@@ -22,6 +23,8 @@ import {
   summarizeNotationGeometry,
   summarizeMeasureSpacingByBarlines
 } from '../dist/testkit/notation-geometry.js';
+import { runWithConcurrency, summarizeDurations } from '../dist/testkit/execution-loop.js';
+import { createFixtureRenderCache, DEFAULT_FIXTURE_RENDER_CACHE_DIR } from './lib/fixture-render-cache.mjs';
 
 /** Golden manifest generated from LilyPond collated-suite references. */
 const DEFAULT_GOLDEN_MANIFEST_PATH = path.resolve('fixtures/golden/manifest.json');
@@ -33,6 +36,8 @@ const DEFAULT_ARTIFACT_DIR = path.resolve('artifacts/golden-comparison');
 const DEFAULT_MAX_MISMATCH_RATIO = 0.02;
 /** Default SSIM floor for fixtures that do not override it. */
 const DEFAULT_MIN_SSIM = 0.94;
+/** Default worker count for fixture comparison loops. */
+const DEFAULT_CONCURRENCY = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 
 /** Parsed command-line options. */
 const options = parseCliArgs(process.argv.slice(2));
@@ -45,19 +50,25 @@ const proofpointFixtures = options.includeProofpoints
   ? await loadProofpointFixtures(options.proofpointsPath)
   : [];
 const fixtures = selectFixtures(mergeFixtures(lilypondFixtures, proofpointFixtures), options.fixtureIds);
+const renderCache = createFixtureRenderCache({
+  enabled: options.cacheEnabled,
+  cacheDir: options.cacheDir
+});
 
 if (fixtures.length === 0) {
   throw new Error('No fixtures selected for golden comparison run.');
 }
 
 /** @type {GoldenComparisonResult[]} */
-const results = [];
-for (const fixture of fixtures) {
-  const result = await executeFixtureComparison(fixture, options);
-  results.push(result);
-}
+const results = await runWithConcurrency(fixtures, options.concurrency, async (fixture) =>
+  executeFixtureComparison(fixture, options, renderCache)
+);
+const timingSummary = summarizeDurations(
+  results.map((result) => result.durationMs),
+  options.timingBudgetMs
+);
 
-const summary = buildSummary(results, options);
+const summary = buildSummary(results, options, timingSummary);
 await writeReportArtifacts(summary, options.outDir);
 
 const blockingFailures = summary.results.filter(
@@ -67,7 +78,7 @@ const advisoryFailures = summary.results.filter(
   (result) => (result.status === 'fail' || result.status === 'error') && !result.blocking
 );
 
-if (blockingFailures.length > 0) {
+if (blockingFailures.length > 0 && !options.allowBlockingFailures) {
   const ids = blockingFailures.map((result) => result.id).join(', ');
   throw new Error(`Golden comparison blocking failures (${blockingFailures.length}): ${ids}`);
 }
@@ -75,6 +86,11 @@ if (blockingFailures.length > 0) {
 if (options.failOnAdvisory && advisoryFailures.length > 0) {
   const ids = advisoryFailures.map((result) => result.id).join(', ');
   throw new Error(`Golden comparison advisory failures elevated by --fail-on-advisory (${advisoryFailures.length}): ${ids}`);
+}
+if (options.failOnBudgetExceeded && timingSummary.budgetMs !== null && timingSummary.budgetExceededCount > 0) {
+  throw new Error(
+    `Golden comparison exceeded timing budget on ${timingSummary.budgetExceededCount} fixture(s) (budget=${timingSummary.budgetMs}ms).`
+  );
 }
 
 console.log(
@@ -93,6 +109,12 @@ console.log(
  * - `--max-mismatch-ratio=<number>`
  * - `--min-ssim=<number>`
  * - `--fail-on-advisory`
+ * - `--allow-blocking-failures`
+ * - `--concurrency=<number>`
+ * - `--timing-budget-ms=<number>`
+ * - `--fail-on-budget-exceeded`
+ * - `--no-cache`
+ * - `--cache-dir=<path>`
  */
 function parseCliArgs(argv) {
   /** @type {string[] | undefined} */
@@ -105,6 +127,13 @@ function parseCliArgs(argv) {
   let maxMismatchRatio = DEFAULT_MAX_MISMATCH_RATIO;
   let minSsim = DEFAULT_MIN_SSIM;
   let failOnAdvisory = false;
+  let allowBlockingFailures = false;
+  let concurrency = DEFAULT_CONCURRENCY;
+  /** @type {number | undefined} */
+  let timingBudgetMs;
+  let failOnBudgetExceeded = false;
+  let cacheEnabled = true;
+  let cacheDir = DEFAULT_FIXTURE_RENDER_CACHE_DIR;
 
   for (const arg of argv) {
     if (arg.startsWith('--fixtures=')) {
@@ -158,6 +187,45 @@ function parseCliArgs(argv) {
 
     if (arg === '--fail-on-advisory') {
       failOnAdvisory = true;
+      continue;
+    }
+
+    if (arg === '--allow-blocking-failures') {
+      allowBlockingFailures = true;
+      continue;
+    }
+
+    if (arg.startsWith('--concurrency=')) {
+      const parsed = Number.parseInt(arg.slice('--concurrency='.length), 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        concurrency = parsed;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--timing-budget-ms=')) {
+      const parsed = Number.parseInt(arg.slice('--timing-budget-ms='.length), 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        timingBudgetMs = parsed;
+      }
+      continue;
+    }
+
+    if (arg === '--fail-on-budget-exceeded') {
+      failOnBudgetExceeded = true;
+      continue;
+    }
+
+    if (arg === '--no-cache') {
+      cacheEnabled = false;
+      continue;
+    }
+
+    if (arg.startsWith('--cache-dir=')) {
+      const value = arg.slice('--cache-dir='.length).trim();
+      if (value.length > 0) {
+        cacheDir = path.resolve(value);
+      }
     }
   }
 
@@ -170,7 +238,13 @@ function parseCliArgs(argv) {
     includeProofpoints,
     maxMismatchRatio,
     minSsim,
-    failOnAdvisory
+    failOnAdvisory,
+    allowBlockingFailures,
+    concurrency,
+    timingBudgetMs,
+    failOnBudgetExceeded,
+    cacheEnabled,
+    cacheDir
   };
 }
 
@@ -283,6 +357,8 @@ function parseCliArgs(argv) {
  *   flagBeamOverlapCount: number;
  *   barlineIntrusionCount: number;
  *   firstToMedianOtherGapRatio: number | null;
+ *   durationMs: number;
+ *   cacheHit: boolean;
  *   outputs: {
  *     svg: string;
  *     actual: string;
@@ -473,58 +549,118 @@ function selectFixtures(fixtures, fixtureIds) {
 }
 
 /** Execute parse/render/raster/compare flow for one fixture. */
-async function executeFixtureComparison(fixture, options) {
+async function executeFixtureComparison(fixture, options, renderCache) {
   const outPrefix = path.join(options.outDir, fixture.id);
   const svgPath = `${outPrefix}.svg`;
   const actualPath = `${outPrefix}.actual.png`;
   const expectedPath = `${outPrefix}.expected.png`;
   const diffPath = `${outPrefix}.diff.png`;
+  const startedAt = Date.now();
 
   const maxMismatchRatio = fixture.thresholds?.maxMismatchRatio ?? options.maxMismatchRatio;
   const minSsim = fixture.thresholds?.minSsim ?? options.minSsim;
   const maxStructuralMismatchRatio = fixture.thresholds?.maxStructuralMismatchRatio;
 
   try {
-    const sourceBytes = await readFile(fixture.fixturePath);
-    const parsed = await parseMusicXMLAsync(
-      {
-        data: new Uint8Array(sourceBytes),
-        format: fixture.format
-      },
-      {
-        sourceName: fixture.fixturePath,
-        mode: 'lenient'
-      }
-    );
+    const cached = await renderCache.read({
+      id: fixture.id,
+      fixturePath: fixture.fixturePath,
+      format: fixture.format,
+      pageIndex: 0
+    });
+    const cacheHit = Boolean(cached);
+    /** @type {string | undefined} */
+    let svgMarkup = cached?.svgMarkup;
+    /** @type {Buffer | undefined} */
+    let renderedPngBuffer = cached?.png;
+    let renderedWidth = cached?.width;
+    let renderedHeight = cached?.height;
+    let parseDiagnostics = cached?.parseDiagnostics ?? [];
+    let renderDiagnostics = cached?.renderDiagnostics ?? [];
 
-    if (!parsed.score) {
-      return failureResult(fixture, svgPath, actualPath, expectedPath, {
-        status: 'error',
-        parseDiagnostics: parsed.diagnostics,
-        renderDiagnostics: [],
-        maxMismatchRatio,
-        minSsim,
-        maxStructuralMismatchRatio,
-        reason: 'parse produced no score output'
-      });
+    if (!svgMarkup || !renderedPngBuffer || !renderedWidth || !renderedHeight) {
+      const sourceBytes = await readFile(fixture.fixturePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(sourceBytes),
+          format: fixture.format
+        },
+        {
+          sourceName: fixture.fixturePath,
+          mode: 'lenient'
+        }
+      );
+      parseDiagnostics = parsed.diagnostics;
+
+      if (!parsed.score) {
+        return failureResult(fixture, svgPath, actualPath, expectedPath, {
+          status: 'error',
+          parseDiagnostics,
+          renderDiagnostics: [],
+          maxMismatchRatio,
+          minSsim,
+          maxStructuralMismatchRatio,
+          reason: 'parse produced no score output',
+          durationMs: Date.now() - startedAt,
+          cacheHit: false
+        });
+      }
+
+      const rendered = renderToSVGPages(parsed.score);
+      renderDiagnostics = rendered.diagnostics;
+      svgMarkup = extractFirstSvgMarkup(rendered.pages[0] ?? '');
+      if (!svgMarkup) {
+        return failureResult(fixture, svgPath, actualPath, expectedPath, {
+          status: 'error',
+          parseDiagnostics,
+          renderDiagnostics,
+          maxMismatchRatio,
+          minSsim,
+          maxStructuralMismatchRatio,
+          reason: 'render produced no SVG payload',
+          durationMs: Date.now() - startedAt,
+          cacheHit: false
+        });
+      }
+
+      const renderedPng = rasterizeSvg(svgMarkup);
+      renderedPngBuffer = renderedPng.png;
+      renderedWidth = renderedPng.width;
+      renderedHeight = renderedPng.height;
+      await renderCache.write(
+        {
+          id: fixture.id,
+          fixturePath: fixture.fixturePath,
+          format: fixture.format,
+          pageIndex: 0
+        },
+        {
+          svgMarkup,
+          png: renderedPngBuffer,
+          width: renderedWidth,
+          height: renderedHeight,
+          pageCount: rendered.pages.length,
+          parseDiagnostics,
+          renderDiagnostics
+        }
+      );
     }
 
-    const rendered = renderToSVGPages(parsed.score);
-    const svgMarkup = extractFirstSvgMarkup(rendered.pages[0] ?? '');
-    if (!svgMarkup) {
+    if (!svgMarkup || !renderedPngBuffer || !renderedWidth || !renderedHeight) {
       return failureResult(fixture, svgPath, actualPath, expectedPath, {
         status: 'error',
-        parseDiagnostics: parsed.diagnostics,
-        renderDiagnostics: rendered.diagnostics,
+        parseDiagnostics,
+        renderDiagnostics,
         maxMismatchRatio,
         minSsim,
         maxStructuralMismatchRatio,
-        reason: 'render produced no SVG payload'
+        reason: 'render cache payload incomplete',
+        durationMs: Date.now() - startedAt,
+        cacheHit
       });
     }
 
     await writeFile(svgPath, `${svgMarkup}\n`, 'utf8');
-    const renderedPng = rasterizeSvg(svgMarkup);
     const geometry = collectNotationGeometry(svgMarkup);
     const intrusions = detectNoteheadBarlineIntrusions(geometry, {
       minHorizontalOverlap: 0.75,
@@ -532,12 +668,12 @@ async function executeFixtureComparison(fixture, options) {
     });
     const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
 
-    let renderedComparable = renderedPng.png;
+    let renderedComparable = renderedPngBuffer;
     if (fixture.autoCropActual?.systems) {
       const autoCropRegion = deriveSystemCropRegion(
         geometry,
-        renderedPng.width,
-        renderedPng.height,
+        renderedWidth,
+        renderedHeight,
         fixture.autoCropActual.systems
       );
       if (autoCropRegion) {
@@ -604,10 +740,10 @@ async function executeFixtureComparison(fixture, options) {
       referenceImagePath: fixture.referenceImagePath,
       referenceKind: fixture.referenceKind,
       parsedFormat: fixture.format,
-      parseDiagnostics: parsed.diagnostics,
-      renderDiagnostics: rendered.diagnostics,
-      renderedWidth: renderedPng.width,
-      renderedHeight: renderedPng.height,
+      parseDiagnostics,
+      renderDiagnostics,
+      renderedWidth,
+      renderedHeight,
       comparedWidth: comparison.width,
       comparedHeight: comparison.height,
       mismatchPixels: comparison.mismatchPixels,
@@ -626,6 +762,8 @@ async function executeFixtureComparison(fixture, options) {
       flagBeamOverlapCount: summarizeNotationGeometry(geometry).flagBeamOverlapCount,
       barlineIntrusionCount: intrusions.length,
       firstToMedianOtherGapRatio: spacingSummary.firstToMedianOtherGapRatio,
+      durationMs: Date.now() - startedAt,
+      cacheHit,
       outputs: {
         svg: svgPath,
         actual: actualPath,
@@ -646,7 +784,9 @@ async function executeFixtureComparison(fixture, options) {
       maxMismatchRatio,
       minSsim,
       maxStructuralMismatchRatio,
-      reason: message
+      reason: message,
+      durationMs: Date.now() - startedAt,
+      cacheHit: false
     });
   }
 }
@@ -689,6 +829,8 @@ function failureResult(
     flagBeamOverlapCount: 0,
     barlineIntrusionCount: 0,
     firstToMedianOtherGapRatio: null,
+    durationMs: params.durationMs,
+    cacheHit: params.cacheHit,
     outputs: {
       svg: svgPath,
       actual: actualPath,
@@ -706,7 +848,7 @@ function inferFormatFromPath(filePath) {
 }
 
 /** Aggregate report counters and result list. */
-function buildSummary(results, options) {
+function buildSummary(results, options, timing) {
   const passCount = results.filter((result) => result.status === 'pass').length;
   const failCount = results.filter((result) => result.status === 'fail').length;
   const errorCount = results.filter((result) => result.status === 'error').length;
@@ -724,7 +866,11 @@ function buildSummary(results, options) {
       minSsim: options.minSsim,
       includeLilypond: options.includeLilypond,
       includeProofpoints: options.includeProofpoints,
-      failOnAdvisory: options.failOnAdvisory
+      failOnAdvisory: options.failOnAdvisory,
+      concurrency: options.concurrency,
+      cacheEnabled: options.cacheEnabled,
+      cacheDir: options.cacheDir,
+      timingBudgetMs: options.timingBudgetMs ?? null
     },
     fixtureCount: results.length,
     passCount,
@@ -732,6 +878,8 @@ function buildSummary(results, options) {
     errorCount,
     blockingFailCount,
     advisoryFailCount,
+    cacheHitCount: results.filter((result) => result.cacheHit).length,
+    timing,
     results
   };
 }
@@ -757,14 +905,26 @@ function renderMarkdownSummary(summary) {
     `Error: ${summary.errorCount}`,
     `Blocking failures: ${summary.blockingFailCount}`,
     `Advisory failures: ${summary.advisoryFailCount}`,
+    `Concurrency: ${summary.options.concurrency}`,
+    `Cache: ${summary.options.cacheEnabled ? 'on' : 'off'} (hits=${summary.cacheHitCount})`,
+    `Timing: avg=${summary.timing.averageMs.toFixed(1)}ms p95=${summary.timing.p95Ms.toFixed(
+      1
+    )}ms max=${summary.timing.maxMs.toFixed(1)}ms`,
+    `Timing budget: ${
+      summary.options.timingBudgetMs === null
+        ? 'disabled'
+        : `${summary.options.timingBudgetMs}ms (exceeded=${summary.timing.budgetExceededCount})`
+    }`,
     '',
-    '| Fixture | Status | Blocking | Mismatch Ratio | Structural Mismatch | SSIM | Intrusions | Flags | Flag/Beam Overlaps | Gap Ratio | Notes |',
-    '|---|---|---|---|---|---|---|---|---|---|---|'
+    '| Fixture | Status | Blocking | Cache | Duration (ms) | Mismatch Ratio | Structural Mismatch | SSIM | Intrusions | Flags | Flag/Beam Overlaps | Gap Ratio | Notes |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|'
   ];
 
   for (const result of summary.results) {
     lines.push(
-      `| ${result.id} | ${result.status} | ${result.blocking ? 'yes' : 'no'} | ${formatMetric(result.mismatchRatio)} | ${formatMetric(result.structuralMismatchRatio)} | ${formatMetric(result.ssim)} | ${result.barlineIntrusionCount} | ${result.flagCount} | ${result.flagBeamOverlapCount} | ${formatMetric(result.firstToMedianOtherGapRatio)} | ${escapeCell(result.reason ?? result.notes ?? '')} |`
+      `| ${result.id} | ${result.status} | ${result.blocking ? 'yes' : 'no'} | ${result.cacheHit ? 'hit' : 'miss'} | ${result.durationMs.toFixed(
+        1
+      )} | ${formatMetric(result.mismatchRatio)} | ${formatMetric(result.structuralMismatchRatio)} | ${formatMetric(result.ssim)} | ${result.barlineIntrusionCount} | ${result.flagCount} | ${result.flagBeamOverlapCount} | ${formatMetric(result.firstToMedianOtherGapRatio)} | ${escapeCell(result.reason ?? result.notes ?? '')} |`
     );
   }
 

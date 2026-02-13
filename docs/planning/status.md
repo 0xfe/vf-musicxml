@@ -4,13 +4,13 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ## Status
 
-- Last updated: 2026-02-13 (US, 09:33 EST)
+- Last updated: 2026-02-13 (US, 14:20 EST)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
 - Current state: M0-M7 are completed. M8/M9/M10 remain active, but execution has been re-baselined to a linear closeout order to prevent regression churn: finish M10D blocking layout defects first, then finish M8 deterministic/golden gates, then finish M9 style gates. M11 remains planning-only. New milestone `M12` is opened for structural notation-completeness work (multi-voice, ottava, pedal, rehearsal/coda/segno, inline clef changes, and related quality-model updates) after M10/M8/M9 close.
 - Review integration: Feedback items `F-001` through `F-039` are accepted and tracked in planning (`feedback/feedback-R1-R2.md`, `feedback/feedback-R3.md`, `todo.md`, `milestone-12.md`).
 
 ### Next step when execution continues:
-  1. M10D blocker wave: close `B-012` by tightening overlap budgets after the new harmony compaction pass (`71f overlaps now 0`) and validating on category-31/71 plus real-world pages.
+  1. M10D blocker wave: close `B-012` by validating the newly tightened overlap budgets (`31a text<=2`, `31a dynamics/text<=2`, `31d<=2`, `71f<=1`, `32a<=4`) on category-31/71 plus real-world pages.
   2. M10D closeout: resolve residual dense-spacing/tie proximity issues in `B-003` and `B-007` and make the proof-point set blocking (Schumann page-1 remains clean under width-ratio classification; later sparse pages still need calibration/heuristic cleanup).
   3. M8B/M8C closeout: expand deterministic rule packs (presence + justification + text clearances), then calibrate and promote golden comparison thresholds.
   4. M9 closeout: land style rule catalog + diagnostics and tighten text/dynamics/chord-name overlap budgets.
@@ -42,6 +42,13 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ### Completed in this phase
 
+  - Added shared fast-loop execution tooling in `src/testkit/execution-loop.ts` (`parseCsvArgument`, `runWithConcurrency`, `summarizeDurations`) with deterministic unit coverage in `tests/unit/execution-loop.test.ts`.
+  - Added reusable fixture render cache (`scripts/lib/fixture-render-cache.mjs`) and integrated it into golden/headless/inspect workflows (`run-golden-comparison`, `run-headless-visual-regression`, `inspect-score-headless`) for faster repeated triage runs.
+  - Added incremental + parallel demo build controls in `scripts/build-demos.mjs` (`--fixtures`, `--changed-from`, `--concurrency`, timing budget options) and exposed them via package scripts (`demos:build:fixtures`, `demos:build:changed`).
+  - Added `scripts/run-hot-fixture-pack.mjs` and `npm run triage:fixtures` to run golden/headless/inspect in one command and write consolidated markdown reports for focused fixture waves.
+  - Hardened triage portability: hot-fixture packs now skip headless comparisons when selected fixtures are outside sentinel scope and run golden in report-first mode (`--allow-blocking-failures`) unless `--strict` is explicitly requested.
+  - Added fixture-scoped evaluation filtering (`npm run eval:run -- --fixtures=...`) and documented three-tier loops in `README.md`, `AGENTS.md`, and `docs/iteration-speed-tips.md`.
+  - Tightened M10D/B-012 deterministic overlap budgets in `tests/integration/render-quality-regressions.test.ts` to lock in current gains (`31a text<=2`, `31a dynamics/text<=2`, `31d<=2`, `71f<=1`, `32a<=4`) and revalidated with lint/typecheck + targeted integration tests.
   - Upgraded spacing triage metrics for first-bar compression to be density-aware by adding per-band note-count telemetry and `firstToMedianOtherEstimatedWidthRatio` in `src/testkit/notation-geometry.ts`; `inspect:score` now reports compressed bands from width-ratio classification instead of raw gap ratio alone.
   - Added deterministic unit coverage for density-aware spacing classification (`tests/unit/notation-geometry.test.ts`) and revalidated with `npm run test:unit`.
   - Updated integration proof-point spacing gates to use the same width-ratio compression metric (`tests/integration/render-quality-regressions.test.ts`) so CI and `inspect:score` triage stay aligned.

@@ -8,6 +8,7 @@ import { PNG } from 'pngjs';
 import { ssim } from 'ssim.js';
 
 import { evaluateDeterministicSplit, resolveSplitResults } from '../dist/testkit/evaluation.js';
+import { parseCsvArgument } from '../dist/testkit/execution-loop.js';
 
 /** Default report path produced by `npm run test:conformance:report`. */
 const DEFAULT_CONFORMANCE_REPORT_PATH = '/Users/mo/git/musicxml/artifacts/conformance/conformance-report.json';
@@ -39,7 +40,9 @@ function parseArgs(argv) {
     modelSample: 0,
     model: 'gpt-4.1-mini',
     promptPath: DEFAULT_PROMPT_PATH,
-    promptSchemaPath: DEFAULT_PROMPT_SCHEMA_PATH
+    promptSchemaPath: DEFAULT_PROMPT_SCHEMA_PATH,
+    fixtureIds: undefined,
+    strict: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -47,6 +50,11 @@ function parseArgs(argv) {
     const value = argv[index + 1];
 
     if (!arg?.startsWith('--')) {
+      continue;
+    }
+
+    if (arg.startsWith('--fixtures=')) {
+      options.fixtureIds = parseCsvArgument(arg.slice('--fixtures='.length));
       continue;
     }
 
@@ -103,6 +111,13 @@ function parseArgs(argv) {
         options.promptSchemaPath = value;
         index += 1;
         break;
+      case '--fixtures':
+        options.fixtureIds = parseCsvArgument(value ?? undefined);
+        index += 1;
+        break;
+      case '--strict':
+        options.strict = true;
+        break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
     }
@@ -142,6 +157,25 @@ async function listPngFiles(rootDir) {
   return map;
 }
 
+/** Filter path keys by optional fixture-id selector list. */
+function filterKeysByFixtureIds(keys, fixtureIds) {
+  if (!fixtureIds || fixtureIds.length === 0) {
+    return keys;
+  }
+
+  return keys.filter((key) => isPathIncludedByFixtureFilter(key, fixtureIds));
+}
+
+/** Determine whether a path should be included by fixture-id selector list. */
+function isPathIncludedByFixtureFilter(relativePath, fixtureIds) {
+  if (!fixtureIds || fixtureIds.length === 0) {
+    return true;
+  }
+
+  const normalized = relativePath.toLowerCase();
+  return fixtureIds.some((fixtureId) => normalized.includes(fixtureId.toLowerCase()));
+}
+
 /** Compute per-image perceptual metrics and return aggregate summary. */
 async function runPerceptualLayer(options, gateConfig) {
   if (!options.baselineDir || !options.candidateDir) {
@@ -157,8 +191,9 @@ async function runPerceptualLayer(options, gateConfig) {
   const sharedKeys = [...baselineFiles.keys()]
     .filter((key) => candidateFiles.has(key))
     .sort((left, right) => left.localeCompare(right));
+  const filteredKeys = filterKeysByFixtureIds(sharedKeys, options.fixtureIds);
 
-  if (sharedKeys.length === 0) {
+  if (filteredKeys.length === 0) {
     return {
       status: 'skipped',
       reason: 'no matching PNG files between baseline and candidate directories',
@@ -168,7 +203,7 @@ async function runPerceptualLayer(options, gateConfig) {
 
   const perImage = [];
   const diffRoot = path.join(options.outDir, 'perceptual-diffs');
-  for (const key of sharedKeys) {
+  for (const key of filteredKeys) {
     const baselinePath = baselineFiles.get(key);
     const candidatePath = candidateFiles.get(key);
     if (!baselinePath || !candidatePath) {
@@ -296,6 +331,7 @@ async function runModelLayer(options) {
   }
 
   const imageFiles = [...(await listPngFiles(options.modelImageDir)).entries()]
+    .filter(([relativePath]) => isPathIncludedByFixtureFilter(relativePath, options.fixtureIds))
     .sort((left, right) => left[0].localeCompare(right[0]))
     .slice(0, options.modelSample);
 
@@ -453,7 +489,10 @@ async function main() {
     }
 
     const splitResults = resolveSplitResults(conformanceReport, splitDefinition);
-    return evaluateDeterministicSplit(splitName, splitResults, splitGate);
+    const filteredSplitResults = options.fixtureIds
+      ? splitResults.filter((result) => options.fixtureIds.includes(result.fixtureId))
+      : splitResults;
+    return evaluateDeterministicSplit(splitName, filteredSplitResults, splitGate);
   });
 
   const deterministicStatus = deterministicSplits.every((split) => split.pass) ? 'pass' : 'fail';
@@ -475,7 +514,8 @@ async function main() {
     inputs: {
       reportPath: options.reportPath,
       splitsPath: options.splitsPath,
-      gatesPath: options.gatesPath
+      gatesPath: options.gatesPath,
+      fixtureIds: options.fixtureIds ?? null
     },
     layers: {
       deterministic: {
@@ -507,7 +547,7 @@ async function main() {
   );
   console.log(`blocking_pass=${evaluationReport.overall.blockingPass ? 'yes' : 'no'}`);
 
-  if (!evaluationReport.overall.blockingPass) {
+  if (!evaluationReport.overall.blockingPass && (options.strict || !options.fixtureIds)) {
     process.exitCode = 1;
   }
 }

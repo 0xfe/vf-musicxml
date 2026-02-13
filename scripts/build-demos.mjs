@@ -1,6 +1,8 @@
-/* global console */
+/* global console, process */
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +10,7 @@ import { JSDOM } from 'jsdom';
 
 import { parseMusicXMLAsync, renderToSVGPages } from '../dist/public/index.js';
 import { loadConformanceFixtures } from '../dist/testkit/index.js';
+import { parseCsvArgument, runWithConcurrency, summarizeDurations } from '../dist/testkit/execution-loop.js';
 import { extractSvgElementBounds } from '../dist/testkit/svg-collision.js';
 
 /** Absolute repository root path resolved from this script location. */
@@ -20,6 +23,8 @@ const LILYPOND_MANIFEST_PATH = path.join(ROOT_DIR, 'demos', 'lilypond', 'manifes
 const REALWORLD_CORPUS_PATH = path.join(ROOT_DIR, 'fixtures', 'corpus', 'real-world-samples.json');
 /** Conformance fixture root used for roadmap alignment reporting. */
 const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
+/** Default concurrency for demo rendering loops. */
+const DEFAULT_DEMO_BUILD_CONCURRENCY = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 /** Demo pages use the same default scale as the library renderer. */
 const DEMO_RENDER_SCALE = 0.7;
 /** Target output page width (post-scale) used by demo pages. */
@@ -1103,8 +1108,139 @@ async function loadRealWorldCorpusManifest() {
   return /** @type {RealWorldCorpusManifest} */ (JSON.parse(raw));
 }
 
+/** Parse CLI args for full and incremental demo builds. */
+function parseCliArgs(argv) {
+  /** @type {string[] | undefined} */
+  let fixtureIds;
+  /** @type {string | undefined} */
+  let changedFrom;
+  let concurrency = DEFAULT_DEMO_BUILD_CONCURRENCY;
+  let includeIndex = false;
+  let includeRoadmap = false;
+  let clean = true;
+  /** @type {number | undefined} */
+  let timingBudgetMs;
+  let failOnBudgetExceeded = false;
+
+  for (const arg of argv) {
+    if (arg.startsWith('--fixtures=')) {
+      fixtureIds = parseCsvArgument(arg.slice('--fixtures='.length).trim());
+      continue;
+    }
+
+    if (arg.startsWith('--changed-from=')) {
+      const value = arg.slice('--changed-from='.length).trim();
+      changedFrom = value.length > 0 ? value : undefined;
+      continue;
+    }
+
+    if (arg.startsWith('--concurrency=')) {
+      const value = Number.parseInt(arg.slice('--concurrency='.length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        concurrency = value;
+      }
+      continue;
+    }
+
+    if (arg === '--with-index') {
+      includeIndex = true;
+      continue;
+    }
+
+    if (arg === '--with-roadmap') {
+      includeRoadmap = true;
+      continue;
+    }
+
+    if (arg === '--no-clean') {
+      clean = false;
+      continue;
+    }
+
+    if (arg.startsWith('--timing-budget-ms=')) {
+      const value = Number.parseInt(arg.slice('--timing-budget-ms='.length), 10);
+      if (Number.isFinite(value) && value > 0) {
+        timingBudgetMs = value;
+      }
+      continue;
+    }
+
+    if (arg === '--fail-on-budget-exceeded') {
+      failOnBudgetExceeded = true;
+      continue;
+    }
+  }
+
+  return {
+    fixtureIds,
+    changedFrom,
+    concurrency,
+    includeIndex,
+    includeRoadmap,
+    clean,
+    timingBudgetMs,
+    failOnBudgetExceeded
+  };
+}
+
+/** Read changed path list from git for incremental demo-selection mode. */
+function readChangedPaths(baseRef) {
+  const result = spawnSync('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+    cwd: ROOT_DIR,
+    encoding: 'utf8'
+  });
+  if (result.status !== 0) {
+    const stderr = (result.stderr ?? '').trim();
+    throw new Error(`failed to read changed files from git diff (${stderr || 'unknown error'})`);
+  }
+
+  return (result.stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => line.replaceAll('\\', '/'));
+}
+
+/** Resolve demo IDs from changed file paths for incremental build loops. */
+function resolveDemoIdsFromChangedPaths(demoDefinitions, changedPaths) {
+  const changedSet = new Set(changedPaths);
+  const scorePathToId = new Map(
+    demoDefinitions.map((demo) => [path.relative(ROOT_DIR, demo.scorePath).replaceAll('\\', '/'), demo.id])
+  );
+  const selected = new Set();
+  let forceFullRebuild = false;
+
+  for (const changedPath of changedSet) {
+    if (
+      changedPath === path.relative(ROOT_DIR, LILYPOND_MANIFEST_PATH).replaceAll('\\', '/') ||
+      changedPath === path.relative(ROOT_DIR, REALWORLD_CORPUS_PATH).replaceAll('\\', '/') ||
+      changedPath === 'scripts/build-demos.mjs'
+    ) {
+      forceFullRebuild = true;
+      break;
+    }
+
+    const demoId = scorePathToId.get(changedPath);
+    if (demoId) {
+      selected.add(demoId);
+      continue;
+    }
+
+    // Meta changes under conformance fixtures should rebuild the corresponding demo page id.
+    const conformanceMatch = changedPath.match(/^fixtures\/conformance\/[^/]+\/([^/]+)\/meta\.yml$/);
+    if (conformanceMatch?.[1]) {
+      selected.add(conformanceMatch[1]);
+    }
+  }
+
+  return {
+    forceFullRebuild,
+    selectedIds: selected
+  };
+}
+
 /** Build static demo pages from tracked MusicXML demo scores. */
-async function buildDemos() {
+async function buildDemos(options) {
   const lilypondManifest = await loadLilyPondManifest();
   const lilypondCorpusManifest = await loadLilyPondCorpusManifest(lilypondManifest);
   const realWorldCorpusManifest = await loadRealWorldCorpusManifest();
@@ -1137,24 +1273,77 @@ async function buildDemos() {
   const allDemoDefinitions = [...allDemoDefinitionsById.values()].sort((left, right) =>
     left.id.localeCompare(right.id)
   );
+  const selectedIds = new Set();
+  let forceFullRebuild = false;
 
-  await rm(SITE_DIR, { recursive: true, force: true });
+  if (options.fixtureIds && options.fixtureIds.length > 0) {
+    for (const id of options.fixtureIds) {
+      selectedIds.add(id);
+    }
+  }
+
+  if (options.changedFrom) {
+    const changedPaths = readChangedPaths(options.changedFrom);
+    const changedSelection = resolveDemoIdsFromChangedPaths(allDemoDefinitions, changedPaths);
+    forceFullRebuild = changedSelection.forceFullRebuild;
+    for (const id of changedSelection.selectedIds) {
+      selectedIds.add(id);
+    }
+  }
+
+  const selectorRequested =
+    (options.fixtureIds && options.fixtureIds.length > 0) || Boolean(options.changedFrom);
+  const targetedBuild = selectorRequested && !forceFullRebuild;
+  const demosToBuild = targetedBuild
+    ? allDemoDefinitions.filter((demoDefinition) => selectedIds.has(demoDefinition.id))
+    : allDemoDefinitions;
+  if (targetedBuild && demosToBuild.length === 0) {
+    throw new Error('No demos matched requested --fixtures/--changed-from selectors.');
+  }
+
+  const cleanOutput = options.clean && !targetedBuild;
+  if (cleanOutput) {
+    await rm(SITE_DIR, { recursive: true, force: true });
+  }
   await mkdir(SITE_DIR, { recursive: true });
 
-  for (const demoDefinition of allDemoDefinitions) {
+  const timingByDemoId = new Map();
+  const renderedPages = await runWithConcurrency(demosToBuild, options.concurrency, async (demoDefinition) => {
+    const startedAt = Date.now();
     const renderOutcome = await renderDemoFixture(demoDefinition);
+    timingByDemoId.set(demoDefinition.id, Date.now() - startedAt);
+    return { demoDefinition, renderOutcome };
+  });
+  const timingSummary = summarizeDurations(
+    [...timingByDemoId.values()],
+    options.timingBudgetMs
+  );
+  const passExpectationFailures = [];
+  for (const { demoDefinition, renderOutcome } of renderedPages) {
     const expectedPass = demoDefinition.expected === 'pass';
     if (expectedPass && renderOutcome.observedOutcome !== 'pass') {
       const failureCodes = renderOutcome.diagnostics
         .filter((diagnostic) => diagnostic.severity === 'error')
         .map((diagnostic) => diagnostic.code)
         .join(', ');
-      throw new Error(
+      passExpectationFailures.push(
         `Demo '${demoDefinition.id}' expected pass but observed ${renderOutcome.observedOutcome}: ${failureCodes}`
       );
     }
     const pageHtml = buildDemoPageHtml(demoDefinition, renderOutcome);
     await writeFile(path.join(SITE_DIR, `${demoDefinition.id}.html`), pageHtml, 'utf8');
+  }
+  if (passExpectationFailures.length > 0) {
+    throw new Error(passExpectationFailures.join('\n'));
+  }
+  if (
+    options.failOnBudgetExceeded &&
+    timingSummary.budgetMs !== null &&
+    timingSummary.budgetExceededCount > 0
+  ) {
+    throw new Error(
+      `Demo build exceeded timing budget on ${timingSummary.budgetExceededCount} page(s) (budget=${timingSummary.budgetMs}ms).`
+    );
   }
 
   const activeFixtures = conformanceFixtures.filter((fixture) => fixture.meta.status === 'active');
@@ -1164,27 +1353,35 @@ async function buildDemos() {
     expectedFail: activeFixtures.filter((fixture) => fixture.meta.expected === 'fail').length
   };
 
-  await writeFile(
-    path.join(SITE_DIR, 'lilypond-roadmap.html'),
-    buildLilyPondRoadmapPageHtml(lilypondManifest, lilypondCorpusManifest, conformanceFixtures),
-    'utf8'
-  );
-  await writeFile(
-    path.join(SITE_DIR, 'index.html'),
-    buildIndexPageHtml(
-      featuredDemoDefinitions,
-      lilyPondSuiteDemoDefinitions,
-      complexScoreDemoDefinitions,
-      lilypondManifest,
-      lilyPondCategoryTitleById,
-      conformanceSummary
-    ),
-    'utf8'
-  );
+  const writeRoadmap = !targetedBuild || options.includeRoadmap;
+  const writeIndex = !targetedBuild || options.includeIndex;
+  if (writeRoadmap) {
+    await writeFile(
+      path.join(SITE_DIR, 'lilypond-roadmap.html'),
+      buildLilyPondRoadmapPageHtml(lilypondManifest, lilypondCorpusManifest, conformanceFixtures),
+      'utf8'
+    );
+  }
+  if (writeIndex) {
+    await writeFile(
+      path.join(SITE_DIR, 'index.html'),
+      buildIndexPageHtml(
+        featuredDemoDefinitions,
+        lilyPondSuiteDemoDefinitions,
+        complexScoreDemoDefinitions,
+        lilypondManifest,
+        lilyPondCategoryTitleById,
+        conformanceSummary
+      ),
+      'utf8'
+    );
+  }
   // Console output is intentionally short because this script is used in npm pipelines.
   console.log(
-    `Built ${allDemoDefinitions.length} demos + LilyPond roadmap (${conformanceSummary.active} active fixtures) into ${SITE_DIR}`
+    `Built ${demosToBuild.length}/${allDemoDefinitions.length} demos (${targetedBuild ? 'targeted' : 'full'}, concurrency=${options.concurrency}, timing.avg=${timingSummary.averageMs.toFixed(
+      1
+    )}ms) into ${SITE_DIR}`
   );
 }
 
-await buildDemos();
+await buildDemos(parseCliArgs(process.argv.slice(2)));

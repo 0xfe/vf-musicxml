@@ -9,6 +9,7 @@ Testkit code is organized by responsibility:
 - `src/testkit/conformance-quality-geometry.ts`: SVG geometry extraction and overlap/viewport helpers.
 - `src/testkit/conformance-quality-scoring.ts`: rubric dimension scoring and weighted-score math.
 - `src/testkit/conformance.ts`: fixture discovery and collision-audit execution.
+- `src/testkit/execution-loop.ts`: shared fixture-loop concurrency and timing-budget utilities.
 - `src/testkit/notation-geometry.ts` and `src/testkit/svg-collision.ts`: notation-aware SVG bounds extraction and geometry analysis.
 - `src/testkit/headless-visual.ts`: browser-free screenshot/diff tooling.
 - `src/testkit/evaluation.ts`: split-level pass/fail and classifier evaluation helpers.
