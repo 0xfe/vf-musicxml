@@ -37,9 +37,13 @@
   - note-specific technical text/fingering markers keep per-note anchors but compact multi-token clusters to avoid in-place label pileups,
   - direction text now uses overlap-aware row packing.
 - Latest category-31/32 inspection deltas:
-  - `31a-Directions` text overlaps: `13 -> 7`,
+  - `31a-Directions` text overlaps: `13 -> 2`,
   - `32a-Notations` text overlaps: `21 -> 4`,
   - remaining warning: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as `VF-GAP-002`).
+- Latest spacing telemetry + vertical spread follow-up (2026-02-13):
+  - inter-part spacing now reacts more strongly to extreme ledger-register content (`estimatePartVerticalSpread` blends average + peak + elevated spread prevalence; `resolveInterPartGap` increases vertical-spread weight),
+  - spacing-band width-ratio telemetry now avoids sparse-opening false positives by applying note-count normalization only when first bars are denser than later bars,
+  - `lilypond-01a-pitches-pitches` inspection now reports `minWidthRatio=1` and `compressed(<0.75 width-ratio)=0/5` (previously false-positive compressed-band count).
 - Latest quality-fallback hardening:
   - unsupported explicit duration types are skipped with diagnostics (`UNSUPPORTED_DURATION_TYPE_SKIPPED`) instead of quarter-note coercion,
   - chord-name and lyric text placement use overlap-aware row packing (zero text-overlap in current `61b`/`71g` headless checks).
@@ -62,6 +66,31 @@
 - Latest follow-up spacing pass:
   - added grand-staff pressure into auto-wrap planning and blended density into source-width hint allocation,
   - no new regressions, but residual compression remains in Schumann (`min band ratio ~0.671`) and op18 (`compressed bands 1/8`), so both stay active M10D/M11 candidates.
+- Latest spacing/quality follow-up (2026-02-12 evening):
+  - first-column density guards were strengthened (bounded density floor + density-driven extra width reserve) to reduce residual left-bar compression in dense proof-points while preserving source-width weighting behavior.
+  - grand-staff gap heuristics now include cross-staff octave-proximity pressure with curved-relation weighting.
+  - headless proof-point snapshot after changes:
+    - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/4`, `min ratio=1.0`.
+    - `realworld-music21-mozart-k458-m1`: `barlineIntrusions=0`, `compressed bands=0/8`.
+    - `lilypond-01a-pitches-pitches` + `lilypond-03a-rhythm-durations`: no barline intrusions or compressed bands (`03a` now `0/3` bands).
+    - `realworld-music21-schumann-clara-polonaise-op1n1`: still `compressed bands=1/4` (`min ratio=0.695`), but page-level crowding improved.
+  - full validation remains green: `npm run lint`, `npm run typecheck`, `npm run test` (23/23 files, 137/137 tests), `npm run demos:build`.
+- Latest direction-lane correctness follow-up:
+  - default staff routing for MusicXML directions was corrected: when `direction.staff` is omitted in multi-staff parts, direction text/dynamics now render only on staff 1 (top staff) instead of duplicating on every staff.
+  - this reduces generalized duplicated dynamic-glyph collisions and is tracked under `B-012` (now MITIGATING, not OPEN).
+  - direction/dynamics lane spacing was further tuned (`src/vexflow/render-notations-text.ts`):
+    - increased direction row spacing,
+    - tuned above/below dynamics baseline shifts,
+    - deduped dynamics-equivalent `<words>` text when `<dynamics>` markers already exist.
+  - latest category-31 snapshot:
+    - `text overlaps=0`
+    - `dynamics-to-text overlaps=4` (at current gate threshold; passes)
+  - regression budgets were tightened after revalidation:
+    - `k458` page-1 compressed bands must stay at `0`,
+    - `bwv244-10` page-1 compressed bands must stay at `0` with minimum band ratio `> 0.75`,
+    - `31a-Directions` text and dynamics-text overlaps are capped at `<= 4`.
+- Latest pagination-density follow-up:
+  - system-range planning now adapts measures-per-system by local measure-density peaks so dense windows can auto-split before left-bar compression appears.
 - Latest M10D hardening:
   - adaptive inter-part vertical spacing based on adjacent-part complexity (`resolveInterPartGap`),
   - safer label wrap/truncation under source system margins without shrinking notation width,
@@ -247,6 +276,18 @@
     - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=1.0`.
     - `lilypond-03a-rhythm-durations`: `barlineIntrusions=0`, `compressed bands=0/2`.
   - Remaining active visual-layout issues are now concentrated in dynamic/text lane collisions (`B-012`) and residual Schumann dense-band spacing/tie proximity (`B-007`).
+- Latest M10D spacing telemetry status (2026-02-13):
+  - Spacing-band triage now includes density-aware width estimates:
+    - `firstMeasureNoteheadCount`
+    - `medianOtherMeasuresNoteheadCount`
+    - `firstToMedianOtherEstimatedWidthRatio`
+  - `npm run inspect:score` compressed-band classification now uses `<0.75 width-ratio` (fallback to gap ratio only when width-ratio is unavailable).
+  - Schumann proof-point (`realworld-music21-schumann-clara-polonaise-op1n1`) now reports:
+    - `minGapRatio=0.695`
+    - `minWidthRatio=1.1583`
+    - `compressed(<0.75 width-ratio)=0/4`
+  - This means current Schumann blocker is visual tie/curve proximity polish, not first-measure width starvation.
+  - Integration regression gates now use the same width-ratio classification for Schumann/K458/BWV244 spacing checks (`tests/integration/render-quality-regressions.test.ts`).
 
 ## Diagnostics to know
 - XML/root: `XML_NOT_WELL_FORMED`, `UNSUPPORTED_ROOT`
@@ -327,3 +368,20 @@
 - Iterate golden comparison alignment/per-region metrics and expand proof-point set.
 - Land paginated-default rendering API and page metadata rendering (title/labels/page numbers) for real-world PDF/image parity.
 - Execute M9 proof-point workflow and style burndown waves in parallel with M8 remediation.
+- Latest M10D text-lane routing status (2026-02-12, follow-up):
+  - Added per-system lane persistence for directions/harmonies/lyrics in `src/vexflow/render.ts`.
+  - Replaced right-edge-only row packing with interval occupancy checks in `src/vexflow/render-notations-text.ts` to handle non-monotonic event ordering.
+  - Increased `DIRECTION_BOTTOM_BASE_OFFSET` and row spacing constants for harmony/lyrics to reduce direction-vs-lyric collisions.
+  - Added integration gate for `31d-directions-compounds` (`text overlaps <= 4`).
+  - Current inspection deltas: `31d 8->4`, `71f 10->5`, `31a=0`, `61b=0`.
+- Validation after lane-routing update: `npm run lint`, `npm run typecheck`, `npm run test` (23 files / 139 tests), and `npm run demos:build` all pass.
+- Latest M10D spacing follow-up (2026-02-12, cross-system text lanes):
+  - `resolveLayoutPlanConfig` now auto-expands `systemGap` from text pressure when `layout.system.minSystemGap` is not explicitly set.
+  - Purpose: avoid cross-system collisions between dense lower text lanes (lyrics/directions) and upper text lanes (harmony/directions) in the next system.
+  - Added regression gate: `71f-allchordtypes` text overlaps `<= 3`.
+  - Current targeted inspection snapshot: `71f=1`, `31d=1`, `31a=2`, `61b=0` overlaps.
+- Validation after this wave: `npm run lint`, `npm run typecheck`, `npm run test -- tests/integration/render-quality-regressions.test.ts`, full `npm run test` (23 files / 140 tests), `npm run test:conformance:report`, and `npm run demos:build` all pass.
+- 2026-02-13 follow-up: harmony text packing now measures width with the same bold/italic font used at draw-time (`measureHarmonyTextWidth`), adds side-padding to packed row spans, and expands harmony row search budget. This removed the last measured overlap in `71f-allchordtypes` (`overlaps 1 -> 0`).
+- 2026-02-13 follow-up: harmony quality labels are now compactly formatted from MusicXML kind tokens (e.g., `C major-seventh` -> `Cmaj7`) while preserving explicitly styled custom text. Related SVG structure baseline test was updated to expect compact symbols.
+- 2026-02-13 follow-up: auto system-gap expansion now uses a dedicated lane-collision pressure signal (lyrics/harmony/direction words) and discounts dynamics-only pressure. This preserves collision protection but avoids over-penalizing dynamic-heavy systems.
+- Current open nuance: Schumann page 1 remains clean under density-aware spacing (`compressed 0/4`), but page 4 still reports one low-ratio band under current heuristic despite visually acceptable output; this remains tracked under `B-007` for heuristic/pagination calibration.

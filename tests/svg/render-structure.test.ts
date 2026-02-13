@@ -143,8 +143,8 @@ describe('SVG rendering structure', () => {
     expect(rendered.pages.length).toBe(1);
     expect(svg).toContain('Hel');
     expect(svg).toContain('lo');
-    expect(svg).toContain('C maj7');
-    expect(svg).toContain('G 7');
+    expect(svg).toContain('Cmaj7');
+    expect(svg).toContain('G7');
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'LYRIC_TEXT_RENDERED')).toBe(true);
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
   });

@@ -69,6 +69,43 @@ const MULTI_BAND_SPACING_SVG = `
 </svg>
 `;
 
+/** Spacing fixture where the first measure is denser but not truly width-compressed. */
+const DENSITY_AWARE_SPACING_SVG = `
+<svg width="240" height="120" viewBox="0 0 240 120">
+  <g class="vf-stavebarline"><rect x="20" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="120" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="220" y="20" width="1" height="80" /></g>
+
+  <g class="vf-notehead"><ellipse cx="30" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="45" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="60" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="75" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="90" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="105" cy="60" rx="5" ry="3" /></g>
+
+  <g class="vf-notehead"><ellipse cx="140" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="170" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="200" cy="60" rx="5" ry="3" /></g>
+</svg>
+`;
+
+/** Spacing fixture where first measure is sparse and should not be flagged as compressed. */
+const SPARSE_FIRST_MEASURE_SPACING_SVG = `
+<svg width="240" height="120" viewBox="0 0 240 120">
+  <g class="vf-stavebarline"><rect x="20" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="120" y="20" width="1" height="80" /></g>
+  <g class="vf-stavebarline"><rect x="220" y="20" width="1" height="80" /></g>
+
+  <g class="vf-notehead"><ellipse cx="50" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="80" cy="60" rx="5" ry="3" /></g>
+
+  <g class="vf-notehead"><ellipse cx="140" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="170" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="200" cy="60" rx="5" ry="3" /></g>
+  <g class="vf-notehead"><ellipse cx="230" cy="60" rx="5" ry="3" /></g>
+</svg>
+`;
+
 /** Multi-system barline layout used to validate system crop-region extraction. */
 const SYSTEM_BOUNDS_SVG = `
 <svg width="240" height="260" viewBox="0 0 240 260">
@@ -145,6 +182,30 @@ describe('notation geometry testkit', () => {
     expect(spacing.firstMeasureAverageGap).toBe(30);
     expect(spacing.medianOtherMeasuresAverageGap).toBe(30);
     expect(spacing.firstToMedianOtherGapRatio).toBe(1);
+  });
+
+  it('reports density-aware width ratios for first-measure compression triage', () => {
+    const geometry = collectNotationGeometry(DENSITY_AWARE_SPACING_SVG);
+    const spacing = summarizeMeasureSpacingByBarlines(geometry);
+    const summary = spacing.bandSummaries[0];
+
+    expect(summary).toBeDefined();
+    expect(summary?.firstToMedianOtherGapRatio).toBe(0.5);
+    expect(summary?.firstMeasureNoteheadCount).toBe(6);
+    expect(summary?.medianOtherMeasuresNoteheadCount).toBe(3);
+    expect(summary?.firstToMedianOtherEstimatedWidthRatio).toBe(1.25);
+  });
+
+  it('does not over-report compression when opening measures are sparse', () => {
+    const geometry = collectNotationGeometry(SPARSE_FIRST_MEASURE_SPACING_SVG);
+    const spacing = summarizeMeasureSpacingByBarlines(geometry);
+    const summary = spacing.bandSummaries[0];
+
+    expect(summary).toBeDefined();
+    expect(summary?.firstToMedianOtherGapRatio).toBe(1);
+    expect(summary?.firstMeasureNoteheadCount).toBe(2);
+    expect(summary?.medianOtherMeasuresNoteheadCount).toBe(3);
+    expect(summary?.firstToMedianOtherEstimatedWidthRatio).toBe(1);
   });
 
   it('estimates system bounds from grouped staff bands', () => {

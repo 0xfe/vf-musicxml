@@ -47,6 +47,13 @@ function collectGeometryAcrossPages(pageMarkup: string[]): NotationGeometrySnaps
   return combined;
 }
 
+/** Normalize spacing-band compression ratio using density-aware width hints when available. */
+function resolveBandCompressionRatio(
+  band: ReturnType<typeof summarizeMeasureSpacingByBarlines>['bandSummaries'][number]
+): number | null {
+  return band.firstToMedianOtherEstimatedWidthRatio ?? band.firstToMedianOtherGapRatio;
+}
+
 describe('renderer quality regressions', () => {
   it('prevents noteheads from intruding through barlines in lilypond-01a-pitches-pitches', async () => {
     const fixturePath = path.resolve('fixtures/conformance/lilypond/01a-pitches-pitches.musicxml');
@@ -317,7 +324,7 @@ describe('renderer quality regressions', () => {
     });
     const spacingSummary = summarizeMeasureSpacingByBarlines(collectNotationGeometry(svg));
     const evaluatedBandRatios = spacingSummary.bandSummaries
-      .map((band) => band.firstToMedianOtherGapRatio)
+      .map((band) => resolveBandCompressionRatio(band))
       .filter((ratio): ratio is number => ratio !== null);
 
     expect(extremes.length).toBe(0);
@@ -404,15 +411,11 @@ describe('renderer quality regressions', () => {
     const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
     const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
     const evaluatedBandRatios = spacingSummary.bandSummaries
-      .map((band) => band.firstToMedianOtherGapRatio)
+      .map((band) => resolveBandCompressionRatio(band))
       .filter((ratio): ratio is number => ratio !== null);
 
     expect(evaluatedBandRatios.length).toBeGreaterThan(0);
-    // Schumann proof-point still contains mixed-density systems where one
-    // opening measure can be intentionally narrower than later local bands.
-    // We guard against catastrophic compression while allowing moderate
-    // variance until M11 optimizer work lands.
-    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.65);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.75);
   });
 
   it('bounds first-system left-bar compression in realworld-music21-mozart-k458-m1', async () => {
@@ -442,17 +445,16 @@ describe('renderer quality regressions', () => {
       minVerticalOverlap: 3
     });
     const evaluatedBandRatios = spacingSummary.bandSummaries
-      .map((band) => band.firstToMedianOtherGapRatio)
+      .map((band) => resolveBandCompressionRatio(band))
       .filter((ratio): ratio is number => ratio !== null);
     const compressedBandCount = evaluatedBandRatios.filter((ratio) => ratio < 0.75).length;
 
-    // Keep left-edge pressure bounded on this dense proof-point until full M11
-    // column optimizer work lands. We allow known edge-touch intrusions but
-    // guard against broader compression spread.
-    expect(intrusions.length).toBeLessThanOrEqual(8);
+    // Keep left-edge pressure bounded on this dense proof-point while we
+    // continue M10D/M11 tuning. Current baseline has no intrusion events.
+    expect(intrusions.length).toBeLessThanOrEqual(0);
     expect(evaluatedBandRatios.length).toBeGreaterThan(0);
-    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.16);
-    expect(compressedBandCount).toBeLessThanOrEqual(4);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.8);
+    expect(compressedBandCount).toBeLessThanOrEqual(0);
   });
 
   it('keeps first-system opening spacing readable in realworld-music21-bach-bwv244-10', async () => {
@@ -478,11 +480,13 @@ describe('renderer quality regressions', () => {
     const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
     const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
     const evaluatedBandRatios = spacingSummary.bandSummaries
-      .map((band) => band.firstToMedianOtherGapRatio)
+      .map((band) => resolveBandCompressionRatio(band))
       .filter((ratio): ratio is number => ratio !== null);
+    const compressedBandCount = evaluatedBandRatios.filter((ratio) => ratio < 0.75).length;
 
     expect(evaluatedBandRatios.length).toBeGreaterThan(0);
-    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.6);
+    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.75);
+    expect(compressedBandCount).toBe(0);
   });
 
   it('keeps chord-name labels non-overlapping in lilypond-71g-multiplechordnames', async () => {
@@ -506,6 +510,28 @@ describe('renderer quality regressions', () => {
     expect(overlaps.length).toBe(0);
   });
 
+  it('keeps category-71f all-chord-type labels within bounded overlap budget', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/71f-allchordtypes.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/71f-allchordtypes.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+
+    expect(textBounds.length).toBeGreaterThan(40);
+    expect(overlaps.length).toBeLessThanOrEqual(3);
+  });
+
   it('keeps category-31 direction text readable without heavy overlap', async () => {
     const fixturePath = path.resolve('fixtures/conformance/lilypond/31a-Directions.musicxml');
     const xml = await readFile(fixturePath, 'utf8');
@@ -527,7 +553,29 @@ describe('renderer quality regressions', () => {
     expect(textBounds.length).toBeGreaterThan(40);
     // Category 31 intentionally packs dense labels; keep overlaps bounded so
     // symbols/labels remain readable while we continue M11 layout work.
-    expect(overlaps.length).toBeLessThanOrEqual(8);
+    expect(overlaps.length).toBeLessThanOrEqual(4);
+  });
+
+  it('keeps category-31d compound direction text readable with bounded overlap', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/31d-directions-compounds.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/31d-directions-compounds.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBe(1);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+    const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+
+    expect(textBounds.length).toBeGreaterThan(20);
+    expect(overlaps.length).toBeLessThanOrEqual(4);
   });
 
   it('keeps category-31 dynamics glyph runs separated from nearby text labels', async () => {
@@ -555,9 +603,7 @@ describe('renderer quality regressions', () => {
     });
 
     expect(dynamicsBounds.length).toBeGreaterThanOrEqual(8);
-    // Category 31 intentionally layers many nearby direction labels; keep
-    // collisions bounded while B-012 tracks further dynamics-lane polish.
-    expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(12);
+    expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(4);
   });
 
   it('keeps category-32 notation labels bounded and maps unsupported symbols explicitly', async () => {

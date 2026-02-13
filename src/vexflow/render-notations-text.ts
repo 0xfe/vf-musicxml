@@ -5,34 +5,70 @@ import type { Diagnostic } from '../core/diagnostics.js';
 import type { HarmonyEvent, Measure, NoteEvent } from '../core/score.js';
 import { buildVoiceEventKey } from './render-note-mapper.js';
 
+/** One occupied horizontal interval in a text row. */
+interface TextRowSpan {
+  left: number;
+  right: number;
+}
+
+/** Reusable lane state for direction text rows on one staff within one system. */
+export interface DirectionTextLaneState {
+  aboveRowSpans: Map<number, TextRowSpan[]>;
+  belowRowSpans: Map<number, TextRowSpan[]>;
+}
+
+/** Reusable lane state for harmony text rows on one staff within one system. */
+export interface HarmonyTextLaneState {
+  rowSpans: Map<number, TextRowSpan[]>;
+}
+
+/** Reusable lane state for lyric lines on one staff within one system. */
+export interface LyricTextLaneState {
+  lineSpans: Map<number, TextRowSpan[]>;
+}
+
 /** Minimum x-gap between adjacent harmony symbols on the same row. */
-const HARMONY_MIN_HORIZONTAL_GAP = 8;
+const HARMONY_MIN_HORIZONTAL_GAP = 12;
 /** Minimum x-gap between adjacent lyric syllables on the same line. */
-const LYRIC_MIN_HORIZONTAL_GAP = 6;
+const LYRIC_MIN_HORIZONTAL_GAP = 12;
 /** Minimum x-gap between adjacent direction-text labels on the same row. */
-const DIRECTION_MIN_HORIZONTAL_GAP = 16;
+const DIRECTION_MIN_HORIZONTAL_GAP = 22;
 /** Hard cap for extra lyric lines added by overlap-avoidance routing. */
 const MAX_ADDITIONAL_LYRIC_LINES = 8;
 /** Fixed row step for stacked harmony labels to prevent vertical text collisions. */
-const HARMONY_ROW_SPACING = 14;
+const HARMONY_ROW_SPACING = 18;
+/** Safety side padding applied to harmony labels during collision packing. */
+const HARMONY_LABEL_SIDE_PADDING = 5;
+/** Hard cap for extra harmony rows in dense chord-symbol systems. */
+const MAX_ADDITIONAL_HARMONY_ROWS = 10;
 /** Fixed row step for stacked lyric lines to preserve readability in dense verses. */
-const LYRIC_ROW_SPACING = 14;
+const LYRIC_ROW_SPACING = 17;
 /** Fixed row step for stacked direction labels above the stave. */
-const DIRECTION_ROW_SPACING = 22;
+const DIRECTION_ROW_SPACING = 40;
+/** Extra top-lane offset for direction rows to avoid notehead/ledger collisions. */
+const DIRECTION_TOP_BASE_OFFSET = 24;
+/** Extra bottom-lane offset for direction rows to avoid staff-line collisions. */
+const DIRECTION_BOTTOM_BASE_OFFSET = 46;
 /** Shared serif font stack for readable textual score annotations. */
 const SCORE_TEXT_FONT = 'Times New Roman';
 /** Direction text size (words/tempo) for M10 readability baseline. */
 const DIRECTION_TEXT_SIZE = 12;
+/** Extra safety padding after direction words before appending dynamics glyph runs. */
+const DIRECTION_TEXT_WIDTH_PADDING = 24;
 /** Harmony text size for chord symbols and analysis marks. */
 const HARMONY_TEXT_SIZE = 13;
 /** Lyric text size tuned for multi-line readability in dense fixtures. */
 const LYRIC_TEXT_SIZE = 12;
 /** Dynamic glyph point size used when drawing SMuFL dynamics above staves. */
-const DYNAMICS_GLYPH_POINT = 40;
+const DYNAMICS_GLYPH_POINT = 34;
 /** Horizontal gap between direction text and following dynamics glyph run. */
-const DYNAMICS_TEXT_GAP = 24;
+const DYNAMICS_TEXT_GAP = 34;
 /** Extra side bearing reserved for each dynamics glyph to reduce overlap under-estimation. */
 const DYNAMICS_GLYPH_SIDE_BEARING = 3;
+/** Baseline shift used for dynamics in above-placement direction lanes. */
+const DYNAMICS_BASELINE_SHIFT_ABOVE = 14;
+/** Baseline shift used for dynamics in below-placement direction lanes. */
+const DYNAMICS_BASELINE_SHIFT_BELOW = 4;
 
 /** Supported dynamics glyph map (mirrors VexFlow TextDynamics glyph set). */
 const DYNAMICS_GLYPH_CODE: Record<string, string> = {
@@ -54,12 +90,49 @@ const DYNAMICS_GLYPH_ADVANCE: Record<string, number> = {
   r: 13
 };
 
+/**
+ * Compact chord-kind suffixes aligned with common lead-sheet practice.
+ * Long MusicXML kind labels (for example `major-seventh`) are normalized to
+ * concise symbols so dense harmony fixtures remain readable.
+ */
+const HARMONY_KIND_SUFFIX: Record<string, string> = {
+  major: '',
+  minor: 'm',
+  augmented: 'aug',
+  diminished: 'dim',
+  dominant: '7',
+  majorseventh: 'maj7',
+  minorseventh: 'm7',
+  diminishedseventh: 'dim7',
+  augmentedseventh: 'aug7',
+  halfdiminished: 'm7♭5',
+  majorminor: 'm(maj7)',
+  majorsixth: '6',
+  minorsixth: 'm6',
+  dominantninth: '9',
+  majorninth: 'maj9',
+  minorninth: 'm9',
+  dominant11th: '11',
+  major11th: 'maj11',
+  minor11th: 'm11',
+  dominant13th: '13',
+  major13th: 'maj13',
+  minor13th: 'm13',
+  suspendedsecond: 'sus2',
+  suspendedfourth: 'sus4',
+  power: '5',
+  none: ''
+};
+
 /** Draw direction words/tempo/dynamics above a stave with offset-based x placement. */
 export function drawMeasureDirections(
   measure: Measure,
   stave: Stave,
   ticksPerQuarter: number,
-  diagnostics: Diagnostic[]
+  staffNumber: number,
+  staffCount: number,
+  diagnostics: Diagnostic[],
+  laneState?: DirectionTextLaneState
 ): void {
   if (measure.directions.length === 0) {
     return;
@@ -79,41 +152,64 @@ export function drawMeasureDirections(
   const availableWidth = Math.max(32, stave.getWidth() - 36);
   const staveLeft = stave.getX() + 12;
   const staveRight = stave.getX() + stave.getWidth() - 12;
-  const rowRightEdges = new Map<number, number>();
-  let maxRow = 0;
+  const rowSpansAbove = laneState?.aboveRowSpans ?? new Map<number, TextRowSpan[]>();
+  const rowSpansBelow = laneState?.belowRowSpans ?? new Map<number, TextRowSpan[]>();
+  let maxAboveRow = 0;
+  let maxBelowRow = 0;
+  const belowBaseY = stave.getYForBottomText(2) + DIRECTION_BOTTOM_BASE_OFFSET;
 
   for (const direction of measure.directions) {
+    // MusicXML directions without an explicit staff target should be rendered
+    // once per part (top staff) for multi-staff parts. Rendering them on every
+    // staff duplicates dynamics/words and causes false collision pressure.
+    if (direction.staff === undefined && staffCount > 1 && staffNumber !== 1) {
+      continue;
+    }
+    if (direction.staff !== undefined && direction.staff !== staffNumber) {
+      continue;
+    }
+
+    const explicitDynamicSequence = normalizeDynamicsSequence(direction.dynamics);
+    const wordDynamicSequence = normalizeDynamicsWords(direction.words);
+    const dynamicSequence = mergeDynamicsSequences(explicitDynamicSequence, wordDynamicSequence);
+    const words = resolveDirectionWordsForRender(direction.words, dynamicSequence);
     const chunks: string[] = [];
-    if (direction.words) {
-      chunks.push(direction.words);
+    if (words) {
+      chunks.push(words);
     }
     if (direction.tempo !== undefined) {
       chunks.push(`q = ${Math.round(direction.tempo)}`);
     }
-    const dynamicSequence = normalizeDynamicsSequence(direction.dynamics);
     const text = chunks.join('  ');
     const textWidth = text.length > 0 ? measureDirectionTextWidth(text, context) : 0;
+    const paddedTextWidth = textWidth > 0 ? textWidth + DIRECTION_TEXT_WIDTH_PADDING : 0;
     const dynamicsWidth = dynamicSequence ? estimateDynamicsSequenceWidth(dynamicSequence) : 0;
-    const totalWidth = textWidth + (textWidth > 0 && dynamicsWidth > 0 ? DYNAMICS_TEXT_GAP : 0) + dynamicsWidth;
+    const totalWidth =
+      paddedTextWidth + (paddedTextWidth > 0 && dynamicsWidth > 0 ? DYNAMICS_TEXT_GAP : 0) + dynamicsWidth;
 
     if (totalWidth <= 0) {
       continue;
     }
 
+    const placement = direction.placement ?? 'above';
+    const rowSpans = placement === 'below' ? rowSpansBelow : rowSpansAbove;
     const ratio = measureTicks > 0 ? clamp(direction.offsetTicks / measureTicks, 0, 1) : 0;
     const offsetX = stave.getX() + 16 + availableWidth * ratio;
     const x = clamp(offsetX, staveLeft, Math.max(staveLeft, staveRight - totalWidth));
     const left = x;
     const right = x + totalWidth;
     const row = resolveTextRowWithoutOverlap(
-      rowRightEdges,
+      rowSpans,
       0,
       left,
       right,
       DIRECTION_MIN_HORIZONTAL_GAP,
       10
     );
-    const y = stave.getY() - 18 - row * DIRECTION_ROW_SPACING;
+    const y =
+      placement === 'below'
+        ? belowBaseY + row * DIRECTION_ROW_SPACING
+        : stave.getY() - DIRECTION_TOP_BASE_OFFSET - row * DIRECTION_ROW_SPACING;
 
     // Render lightweight direction text without introducing additional VexFlow tickables.
     if (text.length > 0) {
@@ -123,11 +219,16 @@ export function drawMeasureDirections(
       context.restore();
     }
     if (dynamicSequence) {
-      const dynamicX = x + textWidth + (textWidth > 0 ? DYNAMICS_TEXT_GAP : 0);
-      drawDynamicsSequence(context, dynamicSequence, dynamicX, y + 1);
+      const dynamicX = x + paddedTextWidth + (paddedTextWidth > 0 ? DYNAMICS_TEXT_GAP : 0);
+      const dynamicsBaselineShift = placement === 'below' ? DYNAMICS_BASELINE_SHIFT_BELOW : DYNAMICS_BASELINE_SHIFT_ABOVE;
+      drawDynamicsSequence(context, dynamicSequence, dynamicX, y + dynamicsBaselineShift);
     }
-    rowRightEdges.set(row, right);
-    maxRow = Math.max(maxRow, row);
+    registerTextRowSpan(rowSpans, row, left, right);
+    if (placement === 'below') {
+      maxBelowRow = Math.max(maxBelowRow, row);
+    } else {
+      maxAboveRow = Math.max(maxAboveRow, row);
+    }
 
     if (direction.wedge) {
       diagnostics.push({
@@ -138,11 +239,18 @@ export function drawMeasureDirections(
     }
   }
 
-  if (maxRow >= 2) {
+  if (maxAboveRow >= 2) {
     diagnostics.push({
       code: 'DIRECTION_TEXT_STACK_HIGH',
       severity: 'info',
-      message: `Measure ${measure.index + 1} drew ${maxRow + 1} direction-text rows.`
+      message: `Measure ${measure.index + 1} drew ${maxAboveRow + 1} direction-text rows above staff ${staffNumber}.`
+    });
+  }
+  if (maxBelowRow >= 2) {
+    diagnostics.push({
+      code: 'DIRECTION_TEXT_STACK_HIGH',
+      severity: 'info',
+      message: `Measure ${measure.index + 1} drew ${maxBelowRow + 1} direction-text rows below staff ${staffNumber}.`
     });
   }
 }
@@ -159,6 +267,18 @@ function measureDirectionTextWidth(
   return width;
 }
 
+/** Measure harmony-label width using the same bold/italic style used when drawing. */
+function measureHarmonyTextWidth(
+  text: string,
+  context: NonNullable<ReturnType<Stave['getContext']>>
+): number {
+  context.save();
+  context.setFont(SCORE_TEXT_FONT, HARMONY_TEXT_SIZE, 'bold', 'italic');
+  const width = estimateTextWidth(text, HARMONY_TEXT_SIZE, context, 'bold italic');
+  context.restore();
+  return width;
+}
+
 /** Draw measure-level harmony symbols above the stave with note-anchor fallback. */
 export function drawMeasureHarmonies(
   measure: Measure,
@@ -166,7 +286,8 @@ export function drawMeasureHarmonies(
   ticksPerQuarter: number,
   staffNumber: number,
   noteByEventKey: Map<string, StaveNote>,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  laneState?: HarmonyTextLaneState
 ): void {
   if (!measure.harmonies || measure.harmonies.length === 0) {
     return;
@@ -177,7 +298,7 @@ export function drawMeasureHarmonies(
     return;
   }
 
-  const rowRightEdges = new Map<number, number>();
+  const rowSpans = laneState?.rowSpans ?? new Map<number, TextRowSpan[]>();
   const harmonyBaseY = stave.getYForTopText(2);
   let maxRow = 0;
   for (const harmony of measure.harmonies) {
@@ -191,16 +312,23 @@ export function drawMeasureHarmonies(
     }
 
     const anchorX = resolveHarmonyX(measure, harmony.offsetTicks, stave, ticksPerQuarter, staffNumber, noteByEventKey);
-    const width = estimateTextWidth(label, HARMONY_TEXT_SIZE);
+    const width = measureHarmonyTextWidth(label, context);
     const staveLeft = stave.getX() + 4;
     const staveRight = stave.getX() + stave.getWidth() - 4;
-    const x = clamp(anchorX - width / 2, staveLeft, Math.max(staveLeft, staveRight - width));
+    const x = clamp(
+      anchorX - width / 2,
+      staveLeft + HARMONY_LABEL_SIDE_PADDING,
+      Math.max(staveLeft + HARMONY_LABEL_SIDE_PADDING, staveRight - width - HARMONY_LABEL_SIDE_PADDING)
+    );
+    const spanLeft = x - HARMONY_LABEL_SIDE_PADDING;
+    const spanRight = x + width + HARMONY_LABEL_SIDE_PADDING;
     const row = resolveTextRowWithoutOverlap(
-      rowRightEdges,
+      rowSpans,
       0,
-      x,
-      x + width,
-      HARMONY_MIN_HORIZONTAL_GAP
+      spanLeft,
+      spanRight,
+      HARMONY_MIN_HORIZONTAL_GAP,
+      MAX_ADDITIONAL_HARMONY_ROWS
     );
     const y = harmonyBaseY - row * HARMONY_ROW_SPACING;
 
@@ -208,7 +336,7 @@ export function drawMeasureHarmonies(
     context.setFont(SCORE_TEXT_FONT, HARMONY_TEXT_SIZE, 'bold', 'italic');
     context.fillText(label, x, y);
     context.restore();
-    rowRightEdges.set(row, x + width);
+    registerTextRowSpan(rowSpans, row, spanLeft, spanRight);
     maxRow = Math.max(maxRow, row);
   }
 
@@ -227,14 +355,15 @@ export function drawMeasureLyrics(
   stave: Stave,
   staffNumber: number,
   noteByEventKey: Map<string, StaveNote>,
-  diagnostics: Diagnostic[]
+  diagnostics: Diagnostic[],
+  laneState?: LyricTextLaneState
 ): void {
   const context = stave.getContext();
   if (!context) {
     return;
   }
 
-  const lineRightEdges = new Map<number, number>();
+  const lineSpans = laneState?.lineSpans ?? new Map<number, TextRowSpan[]>();
   const lyricBaseY = stave.getYForBottomText(2);
   let renderedCount = 0;
   let maxLineIndex = 0;
@@ -258,11 +387,11 @@ export function drawMeasureLyrics(
 
         const parsedLine = Number.parseInt(lyric.number ?? '1', 10);
         const preferredLine = Number.isFinite(parsedLine) ? Math.max(0, parsedLine - 1) : 0;
-        const width = estimateTextWidth(text, LYRIC_TEXT_SIZE);
+        const width = estimateTextWidth(text, LYRIC_TEXT_SIZE, context);
         const left = note.getAbsoluteX() - width / 2;
         const right = note.getAbsoluteX() + width / 2;
         const lineIndex = resolveTextRowWithoutOverlap(
-          lineRightEdges,
+          lineSpans,
           preferredLine,
           left,
           right,
@@ -275,7 +404,7 @@ export function drawMeasureLyrics(
         context.setFont(SCORE_TEXT_FONT, LYRIC_TEXT_SIZE, '');
         context.fillText(text, left, y);
         context.restore();
-        lineRightEdges.set(lineIndex, right);
+        registerTextRowSpan(lineSpans, lineIndex, left, right);
         maxLineIndex = Math.max(maxLineIndex, lineIndex);
         renderedCount += 1;
       }
@@ -325,7 +454,8 @@ function clamp(value: number, min: number, max: number): number {
 function estimateTextWidth(
   text: string,
   fontSize: number,
-  context?: NonNullable<ReturnType<Stave['getContext']>>
+  context?: NonNullable<ReturnType<Stave['getContext']>>,
+  fontStyle = ''
 ): number {
   if (text.length === 0) {
     return 0;
@@ -336,7 +466,7 @@ function estimateTextWidth(
   if (context && typeof context.measureText === 'function') {
     try {
       context.save();
-      context.setFont(SCORE_TEXT_FONT, fontSize, '');
+      context.setFont(SCORE_TEXT_FONT, fontSize, fontStyle);
       const measured = context.measureText(text);
       context.restore();
       if (Number.isFinite(measured?.width) && (measured?.width ?? 0) > 0) {
@@ -384,8 +514,65 @@ function estimateCharacterWidthScale(character: string): number {
 /** Format one harmony event into display text used by baseline rendering. */
 function formatHarmonyLabel(harmony: HarmonyEvent): string {
   const root = harmony.rootStep ? `${harmony.rootStep}${formatAlter(harmony.rootAlter)}` : '';
-  const quality = harmony.text ?? harmony.kind ?? '';
-  return [root, quality].filter((item) => item.length > 0).join(' ');
+  const quality = resolveHarmonyQualityLabel(harmony);
+  if (!root) {
+    return quality.label;
+  }
+  if (!quality.label) {
+    return root;
+  }
+  return quality.compact ? `${root}${quality.label}` : `${root} ${quality.label}`;
+}
+
+/** Resolve one harmony quality label and whether it can be rendered compactly. */
+function resolveHarmonyQualityLabel(harmony: HarmonyEvent): { label: string; compact: boolean } {
+  const text = harmony.text?.trim();
+  const normalizedKind = normalizeHarmonyKindKey(harmony.kind);
+  const compactSuffix = normalizedKind ? HARMONY_KIND_SUFFIX[normalizedKind] : undefined;
+
+  if (text && text.length > 0) {
+    // MusicXML often repeats verbose words in `kind@text` while `kind` carries
+    // the machine-readable chord quality token. Prefer compact symbols in that
+    // case, but preserve explicit custom text when it appears intentionally
+    // styled (accidentals, punctuation, or short abbreviations).
+    const normalizedText = text.toLowerCase();
+    const textLooksVerboseWords = /^[a-z][a-z\s-]+$/.test(normalizedText);
+    if (compactSuffix !== undefined && textLooksVerboseWords) {
+      return { label: compactSuffix, compact: true };
+    }
+    return { label: text, compact: isCompactHarmonyText(text) };
+  }
+
+  if (compactSuffix !== undefined) {
+    return { label: compactSuffix, compact: true };
+  }
+
+  const fallbackKind = harmony.kind?.trim() ?? '';
+  return { label: fallbackKind, compact: isCompactHarmonyText(fallbackKind) };
+}
+
+/** Normalize MusicXML harmony kind strings into map keys used by compact lookup. */
+function normalizeHarmonyKindKey(kind: string | undefined): string | undefined {
+  if (!kind) {
+    return undefined;
+  }
+
+  const normalized = kind.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+/** True when harmony text is already short/compact enough for no extra separator. */
+function isCompactHarmonyText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  if (trimmed.length <= 3) {
+    return true;
+  }
+
+  return /[#♭♯0-9()+/.-]/u.test(trimmed);
 }
 
 /** Format harmony root alteration into baseline accidental text. */
@@ -396,17 +583,11 @@ function formatAlter(alter: number | undefined): string {
 
   if (alter > 0) {
     const steps = Math.max(1, Math.round(alter));
-    if (steps === 1) {
-      return '♯';
-    }
-    return '𝄪';
+    return steps === 1 ? '#' : '##';
   }
 
   const steps = Math.max(1, Math.round(Math.abs(alter)));
-  if (steps === 1) {
-    return '♭';
-  }
-  return '𝄫';
+  return steps === 1 ? 'b' : 'bb';
 }
 
 /** Resolve harmony anchor x-position using nearest rendered note or ratio fallback. */
@@ -480,7 +661,7 @@ function collectEventLyrics(event: NoteEvent): Array<{ number?: string; text?: s
  * text-measurement or force-directed layout behavior.
  */
 function resolveTextRowWithoutOverlap(
-  rowRightEdges: Map<number, number>,
+  rowSpans: Map<number, TextRowSpan[]>,
   preferredRow: number,
   left: number,
   right: number,
@@ -490,14 +671,32 @@ function resolveTextRowWithoutOverlap(
   let row = Math.max(0, preferredRow);
   const maxRow = row + Math.max(0, maxAdditionalRows);
   while (row <= maxRow) {
-    const previousRight = rowRightEdges.get(row);
-    if (previousRight === undefined || left >= previousRight + minGap) {
+    const spans = rowSpans.get(row) ?? [];
+    const overlapsExisting = spans.some((span) => spansOverlapWithGap(span, left, right, minGap));
+    if (!overlapsExisting) {
       return row;
     }
     row += 1;
   }
 
   return maxRow;
+}
+
+/** True when one candidate span overlaps an existing span under row-gap constraints. */
+function spansOverlapWithGap(span: TextRowSpan, left: number, right: number, minGap: number): boolean {
+  return left < span.right + minGap && right > span.left - minGap;
+}
+
+/** Append one occupied span to the selected text row. */
+function registerTextRowSpan(
+  rowSpans: Map<number, TextRowSpan[]>,
+  row: number,
+  left: number,
+  right: number
+): void {
+  const spans = rowSpans.get(row) ?? [];
+  spans.push({ left, right });
+  rowSpans.set(row, spans);
 }
 
 /** Normalize parsed dynamics into one glyph-renderable sequence. */
@@ -519,6 +718,98 @@ function normalizeDynamicsSequence(markers: string[] | undefined): string | unde
   }
 
   return tokens.length > 0 ? tokens.join(' ') : undefined;
+}
+
+/**
+ * Normalize words text into a dynamics-like token sequence when possible.
+ * This allows us to suppress duplicate rendering when MusicXML encodes the
+ * same dynamic both as `<words>` and `<dynamics>`.
+ */
+function normalizeDynamicsWords(words: string | undefined): string | undefined {
+  if (!words) {
+    return undefined;
+  }
+
+  const cleaned = words
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  if (tokens.length === 0) {
+    return undefined;
+  }
+
+  const dynamicsTokens: string[] = [];
+  for (const token of tokens) {
+    if (!/^[fpmzsr]+$/.test(token)) {
+      return undefined;
+    }
+    dynamicsTokens.push(token);
+  }
+
+  return dynamicsTokens.join(' ');
+}
+
+/**
+ * Resolve direction words for rendering.
+ * If words are dynamics-equivalent to parsed dynamics markers, we drop the
+ * textual duplicate and keep glyph rendering only.
+ */
+function resolveDirectionWordsForRender(
+  words: string | undefined,
+  dynamicSequence: string | undefined
+): string | undefined {
+  const normalizedWordsDynamics = normalizeDynamicsWords(words);
+  if (!dynamicSequence) {
+    return words;
+  }
+
+  // Dynamics-only `<words>` should be rendered as SMuFL dynamics glyphs, not
+  // as plain text duplicates, even when the parsed `<dynamics>` sequence uses
+  // a different token order/content.
+  if (normalizedWordsDynamics) {
+    return undefined;
+  }
+  return words;
+}
+
+/**
+ * Merge explicit `<dynamics>` and dynamics-only `<words>` into one glyph run.
+ * This keeps visual output consistent and avoids dropping authored dynamic
+ * intent when some exporters encode markers in both channels.
+ */
+function mergeDynamicsSequences(
+  explicitSequence: string | undefined,
+  wordsSequence: string | undefined
+): string | undefined {
+  if (!explicitSequence && !wordsSequence) {
+    return undefined;
+  }
+
+  const merged = `${explicitSequence ?? ''} ${wordsSequence ?? ''}`
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+  if (merged.length === 0) {
+    return undefined;
+  }
+
+  const deduped: string[] = [];
+  for (const token of merged) {
+    if (deduped.includes(token)) {
+      continue;
+    }
+    deduped.push(token);
+  }
+
+  return deduped.join(' ');
 }
 
 /** Estimate one dynamics glyph-run width using TextDynamics-compatible advances. */

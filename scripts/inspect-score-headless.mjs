@@ -231,12 +231,24 @@ async function runInspection(options) {
     .map((summary) => summary.firstToMedianOtherGapRatio)
     .filter((ratio) => typeof ratio === 'number' && Number.isFinite(ratio))
     .sort((left, right) => left - right);
+  const perBandEstimatedWidthRatios = spacingSummary.bandSummaries
+    .map((summary) => summary.firstToMedianOtherEstimatedWidthRatio)
+    .filter((ratio) => typeof ratio === 'number' && Number.isFinite(ratio))
+    .sort((left, right) => left - right);
   if (perBandRatios.length > 0) {
     const weakest = perBandRatios[0] ?? null;
     const strongest = perBandRatios[perBandRatios.length - 1] ?? null;
-    const compressedBandCount = perBandRatios.filter((ratio) => ratio < 0.75).length;
+    const compressedBandCount = spacingSummary.bandSummaries.filter((summary) => {
+      const widthRatio = summary.firstToMedianOtherEstimatedWidthRatio;
+      if (typeof widthRatio !== 'number' || !Number.isFinite(widthRatio)) {
+        const gapRatio = summary.firstToMedianOtherGapRatio;
+        return typeof gapRatio === 'number' && Number.isFinite(gapRatio) && gapRatio < 0.75;
+      }
+      return widthRatio < 0.75;
+    }).length;
+    const weakestWidthRatio = perBandEstimatedWidthRatios[0] ?? null;
     console.log(
-      `Spacing bands: min=${weakest}, max=${strongest}, compressed(<0.75)=${compressedBandCount}/${perBandRatios.length}`
+      `Spacing bands: minGapRatio=${weakest}, maxGapRatio=${strongest}, minWidthRatio=${weakestWidthRatio}, compressed(<0.75 width-ratio)=${compressedBandCount}/${perBandRatios.length}`
     );
   }
   console.log(`Text summary: count=${textBounds.length}, overlaps=${textOverlaps.length}`);

@@ -22,10 +22,18 @@ const REALWORLD_CORPUS_PATH = path.join(ROOT_DIR, 'fixtures', 'corpus', 'real-wo
 const CONFORMANCE_FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures', 'conformance');
 /** Demo pages use the same default scale as the library renderer. */
 const DEMO_RENDER_SCALE = 0.7;
-/** Render wide first, then trim SVG viewBox to notation bounds for dense/short scores. */
-const DEMO_PAGE_WIDTH = 1320;
-/** Extra vertical room keeps long systems intact before post-render crop. */
-const DEMO_PAGE_HEIGHT = 1800;
+/** Target output page width (post-scale) used by demo pages. */
+const DEMO_OUTPUT_PAGE_WIDTH = 1320;
+/** Target output page height (post-scale) used by demo pages. */
+const DEMO_OUTPUT_PAGE_HEIGHT = 1800;
+/**
+ * Scale-compensated logical page width for demo generation.
+ * Core renderer layout is currently scale-agnostic; demos therefore reserve a
+ * larger logical canvas so 0.7-scale output still uses page width effectively.
+ */
+const DEMO_LAYOUT_PAGE_WIDTH = Math.ceil(DEMO_OUTPUT_PAGE_WIDTH / DEMO_RENDER_SCALE);
+/** Scale-compensated logical page height for demo generation. */
+const DEMO_LAYOUT_PAGE_HEIGHT = Math.ceil(DEMO_OUTPUT_PAGE_HEIGHT / DEMO_RENDER_SCALE);
 /** Selector set used to estimate visible notation bounds for dynamic demo canvas sizing. */
 const DEMO_NOTATION_BOUNDS_SELECTOR = [
   '.vf-stavenote',
@@ -815,8 +823,8 @@ function resolveSvgViewport(svgElement) {
     }
   }
 
-  const width = parseSvgDimension(svgElement.getAttribute('width')) ?? DEMO_PAGE_WIDTH;
-  const height = parseSvgDimension(svgElement.getAttribute('height')) ?? DEMO_PAGE_HEIGHT;
+  const width = parseSvgDimension(svgElement.getAttribute('width')) ?? DEMO_LAYOUT_PAGE_WIDTH;
+  const height = parseSvgDimension(svgElement.getAttribute('height')) ?? DEMO_LAYOUT_PAGE_HEIGHT;
   return {
     x: 0,
     y: 0,
@@ -865,8 +873,8 @@ async function renderDemoFixture(demoDefinition) {
     layout: {
       scale: DEMO_RENDER_SCALE,
       page: {
-        width: DEMO_PAGE_WIDTH,
-        height: DEMO_PAGE_HEIGHT,
+        width: DEMO_LAYOUT_PAGE_WIDTH,
+        height: DEMO_LAYOUT_PAGE_HEIGHT,
         margins: {
           top: 28,
           right: 28,

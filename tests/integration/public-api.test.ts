@@ -1017,6 +1017,100 @@ describe('public API renderer placeholder', () => {
     expect(dense.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 
+  it('expands inter-part gap for extreme ledger-register passages', () => {
+    const buildMeasure = (index: number, octave: number) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              noteType: 'quarter' as const,
+              notes: [{ pitch: { step: 'C' as const, octave } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const compactScore: Score = {
+      id: 'inter-part-gap-compact-range',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 520,
+        pageMargins: { left: 80, right: 80, top: 40, bottom: 40 }
+      },
+      partList: [
+        { id: 'P1', name: 'Top' },
+        { id: 'P2', name: 'Bottom' }
+      ],
+      parts: [
+        { id: 'P1', measures: [buildMeasure(0, 4)] },
+        { id: 'P2', measures: [buildMeasure(0, 4)] }
+      ],
+      spanners: []
+    };
+
+    const extremeScore: Score = {
+      id: 'inter-part-gap-extreme-range',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 900,
+        pageHeight: 520,
+        pageMargins: { left: 80, right: 80, top: 40, bottom: 40 }
+      },
+      partList: [
+        { id: 'P1', name: 'Top Extreme' },
+        { id: 'P2', name: 'Bottom Extreme' }
+      ],
+      parts: [
+        { id: 'P1', measures: [buildMeasure(0, 7)] },
+        { id: 'P2', measures: [buildMeasure(0, 1)] }
+      ],
+      spanners: []
+    };
+
+    const compact = renderToSVGPages(compactScore, { layout: { mode: 'paginated', scale: 1 } });
+    const extreme = renderToSVGPages(extremeScore, { layout: { mode: 'paginated', scale: 1 } });
+
+    const compactStaves = extractSvgElementBounds(compact.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+    const extremeStaves = extractSvgElementBounds(extreme.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+
+    expect(compactStaves.length).toBeGreaterThanOrEqual(2);
+    expect(extremeStaves.length).toBeGreaterThanOrEqual(2);
+
+    const compactGap =
+      compactStaves[1] && compactStaves[0]
+        ? compactStaves[1].y - (compactStaves[0].y + compactStaves[0].height)
+        : 0;
+    const extremeGap =
+      extremeStaves[1] && extremeStaves[0]
+        ? extremeStaves[1].y - (extremeStaves[0].y + extremeStaves[0].height)
+        : 0;
+
+    expect(extremeGap).toBeGreaterThan(compactGap);
+    expect(extremeGap - compactGap).toBeGreaterThanOrEqual(8);
+    expect(extreme.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
   it('respects defaults system margins without shrinking content for label columns', () => {
     const buildMeasure = (index: number) => ({
       index,

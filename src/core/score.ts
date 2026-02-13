@@ -133,6 +133,10 @@ export type TimeSignatureSymbol = 'normal' | 'common' | 'cut' | 'single-number' 
 /** Direction anchor currently used for words and tempo markings. */
 export interface DirectionEvent {
   offsetTicks: number;
+  /** Optional MusicXML direction placement hint (`above` / `below`). */
+  placement?: 'above' | 'below';
+  /** Optional staff target for directions in multi-staff parts. */
+  staff?: number;
   words?: string;
   tempo?: number;
   dynamics?: string[];

@@ -6,7 +6,10 @@ export {
 export {
   drawMeasureDirections,
   drawMeasureHarmonies,
-  drawMeasureLyrics
+  drawMeasureLyrics,
+  type DirectionTextLaneState,
+  type HarmonyTextLaneState,
+  type LyricTextLaneState
 } from './render-notations-text.js';
 export {
   drawMeasureTuplets,

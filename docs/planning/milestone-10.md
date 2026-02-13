@@ -183,6 +183,100 @@ Exit checklist:
   - `lilypond-03a-rhythm-durations`: still overflow-clean (`barlineIntrusions=0`, `compressed bands=0/2`).
 - Remaining M10D blocker focus is now dynamic/text lane collisions (`B-012`) plus residual Schumann dense-band/tie spacing (`B-007`).
 
+## Latest M10D note (2026-02-12, follow-up run)
+- Added stronger generalized first-column density safeguards in `src/vexflow/render.ts`:
+  - denser opening bars receive bounded extra width and higher readability floor without disabling authored width hints,
+  - all adjustments remain proportional and fixture-agnostic.
+- Added expanded grand-staff intra-gap pressure signals (cross-staff octave proximity + curved-relation emphasis) to reduce residual treble/bass crowding in dense piano systems.
+- Added local dense-measure adaptive system splitting in pagination planning so dense windows can render with fewer measures per system instead of compressing first bars.
+- Proof-point revalidation snapshot:
+  - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/4`, `min band ratio=1.0`.
+  - `realworld-music21-mozart-k458-m1`: `barlineIntrusions=0`, `compressed bands=0/8`.
+  - `lilypond-03a-rhythm-durations`: `barlineIntrusions=0`, `compressed bands=0/3`.
+  - `lilypond-01a-pitches-pitches`: `barlineIntrusions=0`, no compressed bands.
+  - `realworld-music21-schumann-clara-polonaise-op1n1`: still `compressed bands=1/4` (`min band ratio=0.695`), but visual page-level crowding reduced.
+- Validation: `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run demos:build` all pass after these updates.
+- Direction-lane correctness fix:
+  - direction events without explicit staff targets now render once on the top staff for multi-staff parts (instead of duplicating on every staff),
+  - this removes a generalized source of duplicated dynamics/text glyph collisions in piano/ensemble pages.
+- Regression-gate hardening:
+  - tightened page-1 spacing checks for `realworld-music21-mozart-k458-m1` and `realworld-music21-bach-bwv244-10` (zero compressed bands expected),
+  - tightened category-31 direction overlap budgets (text and dynamics/text) to `<= 4`.
+
+## Latest M10D note (2026-02-13)
+- Density-aware spacing telemetry refinement:
+  - extended spacing-band summaries with per-band note-count context and `firstToMedianOtherEstimatedWidthRatio`,
+  - switched `inspect:score` compressed-band classification to use width-ratio (fallback to gap-ratio only when width-ratio is unavailable).
+- Why: raw first-bar gap ratio alone over-reports compression in dense opening bars (many noteheads can produce smaller mean gaps without true width starvation).
+- Deterministic coverage:
+  - added unit regression in `tests/unit/notation-geometry.test.ts` proving that dense first measures can have low raw gap ratio (`0.5`) while width-ratio remains healthy (`1.25`).
+  - updated integration proof-point spacing gates in `tests/integration/render-quality-regressions.test.ts` to use width-ratio classification (fallback to gap ratio).
+- Proof-point snapshot after the telemetry update:
+  - `realworld-music21-schumann-clara-polonaise-op1n1`: `compressed(<0.75 width-ratio)=0/4`, `minGapRatio=0.695`, `minWidthRatio=1.1583`.
+  - `realworld-music21-bach-bwv244-10`: `compressed(<0.75 width-ratio)=0/4`.
+  - `realworld-music21-mozart-k458-m1`: `compressed(<0.75 width-ratio)=0/8`.
+- Validation: `npm run test:unit -- tests/unit/notation-geometry.test.ts`, `npm run test:integration`, `npm run lint`, `npm run typecheck`, and `npm run demos:build` all pass.
+
+## Latest M10D note (2026-02-13, direction-lane follow-up)
+- Continued `B-012` mitigation with generalized direction/dynamics lane tuning in `src/vexflow/render-notations-text.ts`:
+  - increased row spacing for dense direction stacks,
+  - adjusted above/below dynamics baseline shifts to reduce cross-lane collisions,
+  - deduplicated direction words when they are dynamics-equivalent to parsed dynamics markers.
+- Category-31 regression checks now pass with tighter observed metrics:
+  - `text overlaps=0`
+  - `dynamics-to-text overlaps=4` (within gate budget).
+- Category-32 remains inside current text-overlap budget (`overlaps=4`).
+- Validation: `npm run test:integration -- tests/integration/render-quality-regressions.test.ts`, `npm run test`, and `npm run demos:build` all pass.
+
+## Latest M10D note (2026-02-13, harmony-label readability follow-up)
+- Continued `B-012` mitigation with generalized harmony-label rendering updates in `src/vexflow/render-notations-text.ts`:
+  - harmony row packing now uses style-accurate bold/italic width measurement (matching the actual drawn chord-symbol font),
+  - harmony row spans now include explicit side padding to avoid near-touch overlap misses,
+  - harmony row search budget was increased so dense chord systems can spill into extra rows instead of colliding.
+- Added compact harmony-kind formatting for long MusicXML kind labels (for example `major-seventh -> maj7`, `minor -> m`, `dominant -> 7`) while preserving explicitly styled custom text where present.
+- Follow-up system-gap tuning in `src/vexflow/render.ts` now separates lane-collision pressure (lyrics/harmony/direction words) from dynamics-only pressure so automatic inter-system expansion prioritizes actual collision drivers.
+- Proof-point snapshot after this pass:
+  - `71f-allchordtypes`: `text overlaps=0` (from `1`, historical baseline `10`),
+  - `71g-multiplechordnames`: `text overlaps=0`,
+  - `31d-directions-compounds`: remains bounded (`text overlaps=1`).
+- Validation: `npm run lint`, `npm run typecheck`, `npm run test` (23 files / 140 tests), and `npm run demos:build` all pass.
+
+## Latest M10D note (2026-02-13, spacing telemetry + vertical spread follow-up)
+- Tuned inter-part spacing sensitivity for ledger-heavy writing in `src/vexflow/render.ts`:
+  - `estimatePartVerticalSpread` now blends average spread, peak spread, and elevated-spread prevalence so sparse-but-extreme register passages are not diluted in long parts.
+  - `resolveInterPartGap` now weights `verticalSpread` more strongly (`*42`) to reduce adjacent-system crowding on extreme pitch fixtures.
+- Added deterministic integration coverage in `tests/integration/public-api.test.ts` that proves adjacent-part gap expansion for extreme-register passages.
+- Refined spacing-band telemetry in `src/testkit/notation-geometry.ts`:
+  - sparse first measures are no longer treated as compressed solely because they contain fewer noteheads than later measures.
+  - note-count normalization for `firstToMedianOtherEstimatedWidthRatio` now applies only when the first measure is denser than the comparison baseline.
+- Added unit coverage for sparse-opening classification in `tests/unit/notation-geometry.test.ts`.
+- Post-fix headless check: `lilypond-01a-pitches-pitches` now reports `minWidthRatio=1` and `compressed(<0.75 width-ratio)=0/5` (previously false-positive `2/5`) with unchanged intrusion/collision cleanliness.
+- Validation: `npm run test -- tests/unit/notation-geometry.test.ts`, `npm run test -- tests/integration/public-api.test.ts`, `npm run test -- tests/integration/render-quality-regressions.test.ts`, `npm run lint`, `npm run typecheck`, and `npm run demos:build` all pass.
+
+## Latest M10D note (2026-02-12, text-lane routing hardening)
+- Generalized text-lane routing was hardened in `src/vexflow/render-notations-text.ts` and `src/vexflow/render.ts`:
+  - per-system lane state now persists across adjacent measures for directions, harmonies, and lyrics,
+  - row packing now uses interval occupancy checks instead of right-edge-only checks (order-independent and safer for non-monotonic event ordering),
+  - direction bottom-lane offset and lyric/harmony row spacing were increased to reduce inter-lane collisions in text-dense fixtures.
+- Added deterministic integration guard for category-31d (`31d-directions-compounds`) with overlap budget `<= 4`.
+- Headless inspection trend after this pass:
+  - `31d-directions-compounds`: overlaps `8 -> 4`
+  - `71f-allchordtypes`: overlaps `10 -> 5`
+  - `31a-Directions`: remains `0`
+  - `61b-multiplelyrics`: remains `0`
+
+## Latest M10D note (2026-02-12, cross-system text-lane spacing follow-up)
+- Added a generalized inter-system spacing safeguard in `src/vexflow/render.ts`:
+  - when `layout.system.minSystemGap` is not explicitly pinned, system gap now auto-expands from score-level text pressure (`partLayout.textAnnotationPressure`) with bounded clamps,
+  - this addresses cross-system collisions where lower text lanes in one system overlap upper text lanes in the next.
+- Added deterministic regression guard for `71f-allchordtypes` in `tests/integration/render-quality-regressions.test.ts` (`text overlaps <= 3`).
+- Headless inspection trend after this follow-up:
+  - `71f-allchordtypes`: overlaps `5 -> 1`
+  - `31d-directions-compounds`: overlaps `4 -> 1`
+  - `31a-Directions`: overlaps `2`
+  - `61b-multiplelyrics`: overlaps `0`
+- Revalidated conformance report (`npm run test:conformance:report`): expected-pass quality summary remains stable with no critical collisions.
+
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.
 - [ ] Horizontal continuous mode remains available and tested.

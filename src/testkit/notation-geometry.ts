@@ -62,9 +62,12 @@ export interface MeasureSpacingBandSummary {
   bandIndex: number;
   barlineCount: number;
   noteheadCount: number;
+  firstMeasureNoteheadCount: number | null;
+  medianOtherMeasuresNoteheadCount: number | null;
   firstMeasureAverageGap: number | null;
   medianOtherMeasuresAverageGap: number | null;
   firstToMedianOtherGapRatio: number | null;
+  firstToMedianOtherEstimatedWidthRatio: number | null;
 }
 
 /** Tuning knobs for spacing extraction stability across floating-point jitter. */
@@ -406,27 +409,57 @@ export function summarizeMeasureSpacingByBarlines(
       (sample) => sample.noteheadCount >= minNotesPerMeasureForGap
     );
     const firstMeasureAverageGap = firstMeasureSample?.averageGap ?? null;
+    const firstMeasureNoteheadCount = firstMeasureSample?.noteheadCount ?? null;
+    const laterSamples = bandSamples
+      .slice(1)
+      .filter((sample) => sample.noteheadCount >= minNotesPerMeasureForGap);
     const medianOtherMeasuresAverageGap = median(
-      bandSamples
-        .slice(1)
-        .filter((sample) => sample.noteheadCount >= minNotesPerMeasureForGap)
+      laterSamples
         .map((sample) => sample.averageGap)
         .filter((value): value is number => value !== null)
         .sort((left, right) => left - right)
     );
+    const medianOtherMeasuresNoteheadCount = median(
+      laterSamples
+        .map((sample) => sample.noteheadCount)
+        .sort((left, right) => left - right)
+    );
+    const firstToMedianOtherGapRatio =
+      firstMeasureAverageGap !== null &&
+      medianOtherMeasuresAverageGap !== null &&
+      medianOtherMeasuresAverageGap > 0
+        ? Number((firstMeasureAverageGap / medianOtherMeasuresAverageGap).toFixed(4))
+        : null;
+    const firstToMedianOtherEstimatedWidthRatio =
+      firstToMedianOtherGapRatio !== null &&
+      firstMeasureNoteheadCount !== null &&
+      medianOtherMeasuresNoteheadCount !== null &&
+      firstMeasureNoteheadCount > 1 &&
+      medianOtherMeasuresNoteheadCount > 1
+        ? Number(
+            (
+              firstToMedianOtherGapRatio *
+              // Only scale by note-count imbalance when the first measure is
+              // denser than the comparison baseline. Sparse opening measures
+              // can legitimately contain fewer noteheads without being width-
+              // compressed, and full scaling would over-report false alarms.
+              (firstMeasureNoteheadCount >= medianOtherMeasuresNoteheadCount
+                ? (firstMeasureNoteheadCount - 1) / (medianOtherMeasuresNoteheadCount - 1)
+                : 1)
+            ).toFixed(4)
+          )
+        : null;
 
     bandSummaries.push({
       bandIndex,
       barlineCount: barlineCenters.length,
       noteheadCount: bandNoteCenters.length,
+      firstMeasureNoteheadCount,
+      medianOtherMeasuresNoteheadCount,
       firstMeasureAverageGap,
       medianOtherMeasuresAverageGap,
-      firstToMedianOtherGapRatio:
-        firstMeasureAverageGap !== null &&
-        medianOtherMeasuresAverageGap !== null &&
-        medianOtherMeasuresAverageGap > 0
-          ? Number((firstMeasureAverageGap / medianOtherMeasuresAverageGap).toFixed(4))
-          : null
+      firstToMedianOtherGapRatio,
+      firstToMedianOtherEstimatedWidthRatio
     });
   }
 

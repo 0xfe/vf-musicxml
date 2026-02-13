@@ -36,6 +36,9 @@ import {
   drawMeasureTuplets,
   drawScoreSpanners,
   registerMeasureEventNotes,
+  type DirectionTextLaneState,
+  type HarmonyTextLaneState,
+  type LyricTextLaneState,
   type RenderMeasureWindow
 } from './render-notations.js';
 import {
@@ -63,6 +66,8 @@ const MINIMUM_MEASURE_WIDTH = 160;
 const MINIMUM_FITTED_MEASURE_WIDTH = 82;
 /** Default gap between systems when not explicitly configured. */
 const DEFAULT_SYSTEM_GAP = 40;
+/** Upper bound for auto-expanded inter-system gaps under heavy text pressure. */
+const MAX_AUTO_SYSTEM_GAP = 132;
 /** Default label column width for part/staff names. */
 const DEFAULT_LABEL_WIDTH = 86;
 /** Hard cap for auto label width so it cannot consume too much system width. */
@@ -90,15 +95,37 @@ const FIRST_COLUMN_FLOOR_RATIO = 0.5;
 /** Higher floor ratio used when source-width hints strongly underweight system starts. */
 const FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO = 0.58;
 /** Additional first-column floor ratio contributed by first-measure density pressure. */
-const FIRST_COLUMN_DENSITY_FLOOR_BOOST = 0.16;
+const FIRST_COLUMN_DENSITY_FLOOR_BOOST = 0.2;
 /** Upper bound for density-added first-column floor ratio. */
-const FIRST_COLUMN_DENSITY_FLOOR_BOOST_CAP = 0.22;
+const FIRST_COLUMN_DENSITY_FLOOR_BOOST_CAP = 0.3;
 /** Maximum first-column floor ratio in normal source-width conditions. */
 const FIRST_COLUMN_FLOOR_RATIO_CAP = 0.76;
 /** Maximum first-column floor ratio under strong source-width bias. */
 const FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO_CAP = 0.82;
 /** Hard cap for first-column floor width as fraction of the system's available width. */
-const FIRST_COLUMN_FLOOR_MAX_AVAILABLE_RATIO = 0.36;
+const FIRST_COLUMN_FLOOR_MAX_AVAILABLE_RATIO = 0.4;
+/** Baseline density-aligned ratio floor used when first measure is denser than later columns. */
+const FIRST_COLUMN_DENSITY_ALIGNED_RATIO_BASE = 0.62;
+/** Additional ratio floor applied per unit of first-vs-later density imbalance. */
+const FIRST_COLUMN_DENSITY_ALIGNED_RATIO_BOOST = 0.16;
+/** Maximum density-aligned ratio floor so authored width intent can still dominate. */
+const FIRST_COLUMN_DENSITY_ALIGNED_RATIO_CAP = 0.75;
+/** Minimum first-column ratio used for dense two-measure systems. */
+const FIRST_COLUMN_TWO_MEASURE_DENSE_RATIO_FLOOR = 0.74;
+/** Extra first-column width per density unit beyond baseline hint 1. */
+const FIRST_COLUMN_DENSITY_EXTRA_WIDTH_FACTOR = 22;
+/** Maximum density-driven width addend applied to first system columns. */
+const FIRST_COLUMN_DENSITY_EXTRA_WIDTH_CAP = 44;
+/** Dense-measure threshold used to reduce measures-per-system locally. */
+const LOCAL_DENSE_MEASURE_HINT_THRESHOLD = 1.85;
+/** Extreme dense-measure threshold used for stronger local system splitting. */
+const LOCAL_EXTREME_DENSE_MEASURE_HINT_THRESHOLD = 2.25;
+/** Sparse-window threshold used to recover one extra measure per system locally. */
+const LOCAL_SPARSE_MEASURE_HINT_THRESHOLD = 1.35;
+/** Minimum measures-per-system allowed by local dense-measure adaptation. */
+const MIN_ADAPTIVE_MEASURES_PER_SYSTEM = 2;
+/** Maximum number of measures local adaptation may add beyond base planning. */
+const MAX_ADAPTIVE_MEASURE_EXPANSION = 1;
 
 /** Stable layout metadata for one score part across all systems/pages. */
 interface PartLayout {
@@ -109,6 +136,11 @@ interface PartLayout {
    * Used to adapt vertical spacing between adjacent parts.
   */
   complexity: number;
+  /**
+   * Text-annotation pressure in [0, 1].
+   * Captures how aggressively directions/harmonies/lyrics compete for space.
+   */
+  textAnnotationPressure: number;
   /**
    * Vertical spread pressure in [0, 1].
    * Tracks how often note pitch content leaves comfortable staff ranges.
@@ -304,7 +336,7 @@ function renderIntoContainer(
   const partLayouts = buildPartLayouts(score.parts);
   const config = resolveLayoutPlanConfig(score, options, partLayouts, measureCount);
   const forcedBreaks = collectForcedMeasureBreaks(partLayouts, measureCount);
-  const systemRanges = buildSystemRanges(measureCount, config, forcedBreaks);
+  const systemRanges = buildSystemRanges(measureCount, config, forcedBreaks, partLayouts);
   const systemHeight = estimateSystemHeight(partLayouts, config);
   const pagePlans = buildPagePlans(score, systemRanges, systemHeight, config);
 
@@ -358,6 +390,12 @@ function renderIntoContainer(
           if (!partLayout) {
             continue;
           }
+          // Keep text lane state stable across all measures in the same system so
+          // adjacent-measure labels (directions/harmonies) cannot be packed into
+          // conflicting rows at measure boundaries.
+          const directionLaneStateByStaff = new Map<number, DirectionTextLaneState>();
+          const harmonyLaneStateByStaff = new Map<number, HarmonyTextLaneState>();
+          const lyricLaneStateByStaff = new Map<number, LyricTextLaneState>();
           const partEventNotes = eventNotesByPart.get(partLayout.part.id) ?? new Map<string, StaveNote>();
           eventNotesByPart.set(partLayout.part.id, partEventNotes);
 
@@ -370,6 +408,15 @@ function renderIntoContainer(
             const isSystemStartColumn = measureColumn === system.startMeasure;
 
             for (let staffNumber = 1; staffNumber <= partLayout.staffCount; staffNumber += 1) {
+              const directionLaneState =
+                directionLaneStateByStaff.get(staffNumber) ??
+                createDirectionTextLaneState(directionLaneStateByStaff, staffNumber);
+              const harmonyLaneState =
+                harmonyLaneStateByStaff.get(staffNumber) ??
+                createHarmonyTextLaneState(harmonyLaneStateByStaff, staffNumber);
+              const lyricLaneState =
+                lyricLaneStateByStaff.get(staffNumber) ??
+                createLyricTextLaneState(lyricLaneStateByStaff, staffNumber);
               const y =
                 partCursorY + (staffNumber - 1) * (config.staffRowHeight + partLayout.intraStaffGap);
               const stave = new Stave(x, y, columnWidth);
@@ -430,9 +477,15 @@ function renderIntoContainer(
                 drawMeasureTuplets(noteResult.tuplets, diagnostics, context);
               }
 
-              if (staffNumber === 1) {
-                drawMeasureDirections(measure, stave, score.ticksPerQuarter, diagnostics);
-              }
+              drawMeasureDirections(
+                measure,
+                stave,
+                score.ticksPerQuarter,
+                staffNumber,
+                partLayout.staffCount,
+                diagnostics,
+                directionLaneState
+              );
 
               drawMeasureHarmonies(
                 measure,
@@ -440,9 +493,17 @@ function renderIntoContainer(
                 score.ticksPerQuarter,
                 staffNumber,
                 noteResult.noteByEventKey,
-                diagnostics
+                diagnostics,
+                harmonyLaneState
               );
-              drawMeasureLyrics(measure, stave, staffNumber, noteResult.noteByEventKey, diagnostics);
+              drawMeasureLyrics(
+                measure,
+                stave,
+                staffNumber,
+                noteResult.noteByEventKey,
+                diagnostics,
+                lyricLaneState
+              );
             }
 
             if (staves.length > 1) {
@@ -510,6 +571,43 @@ function renderIntoContainer(
   }
 
   return pagePlans.length;
+}
+
+/** Create and memoize per-staff direction text lanes for one rendered system. */
+function createDirectionTextLaneState(
+  laneStateByStaff: Map<number, DirectionTextLaneState>,
+  staffNumber: number
+): DirectionTextLaneState {
+  const laneState: DirectionTextLaneState = {
+    aboveRowSpans: new Map<number, Array<{ left: number; right: number }>>(),
+    belowRowSpans: new Map<number, Array<{ left: number; right: number }>>()
+  };
+  laneStateByStaff.set(staffNumber, laneState);
+  return laneState;
+}
+
+/** Create and memoize per-staff harmony text lanes for one rendered system. */
+function createHarmonyTextLaneState(
+  laneStateByStaff: Map<number, HarmonyTextLaneState>,
+  staffNumber: number
+): HarmonyTextLaneState {
+  const laneState: HarmonyTextLaneState = {
+    rowSpans: new Map<number, Array<{ left: number; right: number }>>()
+  };
+  laneStateByStaff.set(staffNumber, laneState);
+  return laneState;
+}
+
+/** Create and memoize per-staff lyric text lanes for one rendered system. */
+function createLyricTextLaneState(
+  laneStateByStaff: Map<number, LyricTextLaneState>,
+  staffNumber: number
+): LyricTextLaneState {
+  const laneState: LyricTextLaneState = {
+    lineSpans: new Map<number, Array<{ left: number; right: number }>>()
+  };
+  laneStateByStaff.set(staffNumber, laneState);
+  return laneState;
 }
 
 /** True when a measure-start clef changed relative to the previous measure on a staff. */
@@ -594,13 +692,15 @@ function buildPartLayouts(parts: Part[]): PartLayout[] {
   return parts.map((part) => {
     const staffCount = Math.max(1, ...part.measures.map((measure) => Math.max(1, measure.effectiveAttributes.staves)));
     const complexity = estimatePartComplexity(part);
+    const textAnnotationPressure = estimatePartTextAnnotationPressure(part);
     const verticalSpread = estimatePartVerticalSpread(part);
     return {
       part,
       staffCount,
       complexity,
+      textAnnotationPressure,
       verticalSpread,
-      intraStaffGap: estimateIntraStaffGap(part, staffCount, complexity)
+      intraStaffGap: estimateIntraStaffGap(part, staffCount, complexity, textAnnotationPressure)
     };
   });
 }
@@ -773,6 +873,8 @@ function resolveLayoutPlanConfig(
   const peakDenseMeasurePressure = estimatePeakDenseMeasurePressure(partLayouts);
   const grandStaffPressure = estimateGrandStaffPressure(partLayouts);
   const accidentalPressure = estimateAccidentalPressure(partLayouts);
+  const systemTextPressure = estimateSystemTextPressure(partLayouts);
+  const systemLaneCollisionPressure = estimateSystemLaneCollisionPressure(partLayouts);
   const targetMinimumMeasureWidth = clampInt(
     MINIMUM_MEASURE_WIDTH +
       densityPressure * 28 +
@@ -808,6 +910,23 @@ function resolveLayoutPlanConfig(
   const basePartGap = hasDefaultStaffDistance ? Math.max(18, Math.round(staffRowHeight * 0.24)) : PART_GAP;
   const partGap = clampInt(Math.round(basePartGap + densityPressure * 10), 18, 72);
   const renderScale = clampScale(options.layout?.scale ?? DEFAULT_RENDER_SCALE);
+  const explicitSystemGap = options.layout?.system?.minSystemGap;
+  const baseSystemGap = explicitSystemGap ?? defaultSystemDistance ?? DEFAULT_SYSTEM_GAP;
+  const autoSystemGapExpansion =
+    systemLaneCollisionPressure * 34 +
+    Math.max(0, systemTextPressure - systemLaneCollisionPressure) * 14 +
+    densityPressure * 6;
+  // Only apply automatic text-aware expansion when callers did not explicitly
+  // pin system gap. Dense direction/harmony/lyric fixtures otherwise suffer
+  // cross-system lane collisions (for example category-31/71 text proof points).
+  const systemGap =
+    explicitSystemGap !== undefined
+      ? explicitSystemGap
+      : clampInt(
+          Math.round(baseSystemGap + autoSystemGapExpansion),
+          Math.max(18, Math.round(baseSystemGap)),
+          MAX_AUTO_SYSTEM_GAP
+        );
 
   return {
     mode,
@@ -817,7 +936,7 @@ function resolveLayoutPlanConfig(
     contentStartX,
     contentWidth,
     measuresPerSystem,
-    systemGap: options.layout?.system?.minSystemGap ?? defaultSystemDistance ?? DEFAULT_SYSTEM_GAP,
+    systemGap,
     topSystemOffset: defaultTopSystemDistance ?? 0,
     staffRowHeight,
     partGap,
@@ -841,7 +960,8 @@ function resolveLayoutPlanConfig(
 function buildSystemRanges(
   measureCount: number,
   config: LayoutPlanConfig,
-  forcedBreaks: ForcedMeasureBreaks
+  forcedBreaks: ForcedMeasureBreaks,
+  partLayouts: PartLayout[]
 ): SystemRange[] {
   if (config.mode === 'horizontal-continuous') {
     return [
@@ -857,7 +977,18 @@ function buildSystemRanges(
   let cursor = 0;
   let index = 0;
   while (cursor < measureCount) {
-    const next = resolveSystemEndMeasure(cursor, measureCount, config.measuresPerSystem, forcedBreaks.systemStarts);
+    const adaptiveMeasuresPerSystem = resolveAdaptiveMeasuresPerSystem(
+      cursor,
+      measureCount,
+      config.measuresPerSystem,
+      partLayouts
+    );
+    const next = resolveSystemEndMeasure(
+      cursor,
+      measureCount,
+      adaptiveMeasuresPerSystem,
+      forcedBreaks.systemStarts
+    );
     ranges.push({
       index,
       startMeasure: cursor,
@@ -869,6 +1000,43 @@ function buildSystemRanges(
   }
 
   return ranges;
+}
+
+/**
+ * Adapt measures-per-system for the next system window using local measure density.
+ * This prevents dense opening bars from being squeezed into the left edge of a
+ * wide system while preserving baseline pagination for ordinary material.
+ */
+function resolveAdaptiveMeasuresPerSystem(
+  startMeasure: number,
+  measureCount: number,
+  baseMeasuresPerSystem: number,
+  partLayouts: PartLayout[]
+): number {
+  const remainingMeasures = Math.max(1, measureCount - startMeasure);
+  if (baseMeasuresPerSystem <= 1 || remainingMeasures <= 1) {
+    return 1;
+  }
+
+  const windowEnd = Math.min(measureCount, startMeasure + baseMeasuresPerSystem);
+  let peakDensityHint = 1;
+  for (let measureIndex = startMeasure; measureIndex < windowEnd; measureIndex += 1) {
+    peakDensityHint = Math.max(peakDensityHint, estimateMeasureDensityHintForIndex(partLayouts, measureIndex));
+  }
+
+  let reduction = 0;
+  if (peakDensityHint >= LOCAL_EXTREME_DENSE_MEASURE_HINT_THRESHOLD) {
+    reduction = 2;
+  } else if (peakDensityHint >= LOCAL_DENSE_MEASURE_HINT_THRESHOLD) {
+    reduction = 1;
+  }
+
+  const sparseExpansion =
+    peakDensityHint <= LOCAL_SPARSE_MEASURE_HINT_THRESHOLD ? MAX_ADAPTIVE_MEASURE_EXPANSION : 0;
+  const upperBound = Math.min(remainingMeasures, baseMeasuresPerSystem + sparseExpansion);
+  const lowerBound = Math.min(MIN_ADAPTIVE_MEASURES_PER_SYSTEM, upperBound);
+  const adapted = baseMeasuresPerSystem - reduction + sparseExpansion;
+  return clampInt(adapted, lowerBound, upperBound);
 }
 
 /** Resolve one system end, clamping to forced new-system/new-page starts. */
@@ -1044,6 +1212,10 @@ function buildMeasureColumnLayoutForSystem(
   const sourceWidthHints = resolveSystemMeasureWidthHints(partLayouts, system);
   const densityHints = resolveSystemMeasureDensityHints(partLayouts, system);
   const minimumWidths = resolveMinimumColumnWidths(densityHints, fitToWidth);
+  const sourceHintCount = sourceWidthHints.filter(
+    (hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0
+  ).length;
+  const hasStructuredSourceWidthHints = sourceHintCount >= 2;
   const columnWidths = initializeSystemColumnWidths(
     measureCount,
     availableWidth,
@@ -1055,8 +1227,21 @@ function buildMeasureColumnLayoutForSystem(
   const defaultFirstWidth = fitToWidth
     ? Math.max(minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH, Math.floor(availableWidth / measureCount))
     : MINIMUM_MEASURE_WIDTH;
-  const firstBaseWidth = Math.max(defaultFirstWidth, columnWidths[0] ?? defaultFirstWidth);
+  // When authored source widths are available, preserve their first-column
+  // signal instead of forcing an even-split baseline. This keeps explicit
+  // narrow/wide measure intent intact while collision guards still apply later.
+  const firstBaseWidth = hasStructuredSourceWidthHints
+    ? Math.max(minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH, columnWidths[0] ?? defaultFirstWidth)
+    : Math.max(defaultFirstWidth, columnWidths[0] ?? defaultFirstWidth);
   let firstExtra = estimateSystemStartExtraWidth(score, partLayouts, system.startMeasure, firstBaseWidth, diagnostics);
+  const firstDensityHint = Number.isFinite(densityHints[0]) ? Math.max(1, densityHints[0] ?? 1) : 1;
+  const firstDensityExtra = Math.round(
+    Math.min(
+      FIRST_COLUMN_DENSITY_EXTRA_WIDTH_CAP,
+      Math.max(0, firstDensityHint - 1) * FIRST_COLUMN_DENSITY_EXTRA_WIDTH_FACTOR
+    )
+  );
+  firstExtra += firstDensityExtra;
   const strongSourceWidthBias = hasStrongSourceWidthBias(sourceWidthHints);
   // When source width hints strongly prefer wider later measures, keep first-
   // column compensation bounded (instead of disabling it) so authored
@@ -1068,7 +1253,8 @@ function buildMeasureColumnLayoutForSystem(
     columnWidths,
     densityHints,
     availableWidth,
-    strongSourceWidthBias
+    strongSourceWidthBias,
+    hasStructuredSourceWidthHints
   );
   const firstTargetWidth = Math.max(
     firstBaseWidth + firstExtra,
@@ -1125,7 +1311,8 @@ function resolveFirstColumnReadabilityFloor(
   columnWidths: number[],
   densityHints: number[],
   availableWidth: number,
-  strongSourceWidthBias: boolean
+  strongSourceWidthBias: boolean,
+  hasStructuredSourceWidthHints: boolean
 ): number | undefined {
   if (columnWidths.length < 2) {
     return undefined;
@@ -1144,14 +1331,43 @@ function resolveFirstColumnReadabilityFloor(
   }
 
   const firstDensity = Number.isFinite(densityHints[0]) ? Math.max(1, densityHints[0] ?? 1) : 1;
-  const baseRatio = strongSourceWidthBias ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO : FIRST_COLUMN_FLOOR_RATIO;
+  const medianLaterDensity = medianNumber(
+    densityHints
+      .slice(1)
+      .filter((hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0)
+  );
+  const baseRatio = hasStructuredSourceWidthHints
+    ? Math.min(FIRST_COLUMN_FLOOR_RATIO, 0.42)
+    : strongSourceWidthBias
+      ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO
+      : FIRST_COLUMN_FLOOR_RATIO;
   const ratioCap = strongSourceWidthBias ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO_CAP : FIRST_COLUMN_FLOOR_RATIO_CAP;
   const densityBoost = Math.min(
     FIRST_COLUMN_DENSITY_FLOOR_BOOST_CAP,
     Math.max(0, firstDensity - 1) * FIRST_COLUMN_DENSITY_FLOOR_BOOST
   );
   const floorRatio = clamp(baseRatio + densityBoost, baseRatio, ratioCap);
-  const uncappedFloorWidth = Math.round(medianLaterWidth * floorRatio);
+  let uncappedFloorWidth = Math.round(medianLaterWidth * floorRatio);
+
+  // When first-measure notation density is materially higher than the rest of
+  // the system, enforce an additional ratio floor so opening bars are not
+  // squeezed by structured source-width hints.
+  if (Number.isFinite(medianLaterDensity) && (medianLaterDensity ?? 0) > 0) {
+    const relativeDensity = firstDensity / (medianLaterDensity ?? 1);
+    if (relativeDensity > 1) {
+      const densityAlignedRatio = clamp(
+        FIRST_COLUMN_DENSITY_ALIGNED_RATIO_BASE +
+          (relativeDensity - 1) * FIRST_COLUMN_DENSITY_ALIGNED_RATIO_BOOST,
+        FIRST_COLUMN_DENSITY_ALIGNED_RATIO_BASE,
+        FIRST_COLUMN_DENSITY_ALIGNED_RATIO_CAP
+      );
+      uncappedFloorWidth = Math.max(uncappedFloorWidth, Math.round(medianLaterWidth * densityAlignedRatio));
+    }
+  }
+  if (columnWidths.length <= 2 && !hasStructuredSourceWidthHints) {
+    const denseTwoMeasureFloor = Math.round(medianLaterWidth * FIRST_COLUMN_TWO_MEASURE_DENSE_RATIO_FLOOR);
+    uncappedFloorWidth = Math.max(uncappedFloorWidth, denseTwoMeasureFloor);
+  }
 
   // Keep the floor bounded so one oversized opening measure cannot starve
   // later columns in systems that must tightly fit within page width.
@@ -1220,63 +1436,68 @@ function resolveSystemMeasureDensityHints(partLayouts: PartLayout[], system: Sys
   const hints: number[] = [];
 
   for (let measureIndex = system.startMeasure; measureIndex < system.endMeasure; measureIndex += 1) {
-    let maxTickablesPerStaff = 1;
-    let denseRhythmCount = 0;
-    let chordCount = 0;
-    let accidentalCount = 0;
-    let tupletCount = 0;
-
-    for (const layout of partLayouts) {
-      const measure = layout.part.measures[measureIndex];
-      if (!measure) {
-        continue;
-      }
-
-      const staffTickables = new Map<number, number>();
-      for (const voice of measure.voices) {
-        for (const event of voice.events) {
-          if (event.kind !== 'note' && event.kind !== 'rest') {
-            continue;
-          }
-
-          const staffNumber = event.staff ?? 1;
-          staffTickables.set(staffNumber, (staffTickables.get(staffNumber) ?? 0) + 1);
-
-          if (event.kind !== 'note') {
-            continue;
-          }
-
-          if (isDenseNoteType(event.noteType)) {
-            denseRhythmCount += 1;
-          }
-          if (event.notes.length > 1) {
-            chordCount += 1;
-          }
-          if (event.tuplets && event.tuplets.length > 0) {
-            tupletCount += 1;
-          }
-          for (const note of event.notes) {
-            if (note.accidental?.value || (Number.isFinite(note.pitch?.alter) && Math.abs(note.pitch?.alter ?? 0) > 0)) {
-              accidentalCount += 1;
-            }
-          }
-        }
-      }
-
-      for (const tickableCount of staffTickables.values()) {
-        maxTickablesPerStaff = Math.max(maxTickablesPerStaff, tickableCount);
-      }
-    }
-
-    const tickableBoost = Math.max(0, maxTickablesPerStaff - 1) * 0.24;
-    const denseRhythmBoost = denseRhythmCount * 0.08;
-    const chordBoost = chordCount * 0.04;
-    const accidentalBoost = accidentalCount * 0.02;
-    const tupletBoost = tupletCount * 0.05;
-    hints.push(1 + Math.min(2.2, tickableBoost + denseRhythmBoost + chordBoost + accidentalBoost + tupletBoost));
+    hints.push(estimateMeasureDensityHintForIndex(partLayouts, measureIndex));
   }
 
   return hints;
+}
+
+/** Estimate one density hint for a single measure index across all parts/staves. */
+function estimateMeasureDensityHintForIndex(partLayouts: PartLayout[], measureIndex: number): number {
+  let maxTickablesPerStaff = 1;
+  let denseRhythmCount = 0;
+  let chordCount = 0;
+  let accidentalCount = 0;
+  let tupletCount = 0;
+
+  for (const layout of partLayouts) {
+    const measure = layout.part.measures[measureIndex];
+    if (!measure) {
+      continue;
+    }
+
+    const staffTickables = new Map<number, number>();
+    for (const voice of measure.voices) {
+      for (const event of voice.events) {
+        if (event.kind !== 'note' && event.kind !== 'rest') {
+          continue;
+        }
+
+        const staffNumber = event.staff ?? 1;
+        staffTickables.set(staffNumber, (staffTickables.get(staffNumber) ?? 0) + 1);
+
+        if (event.kind !== 'note') {
+          continue;
+        }
+
+        if (isDenseNoteType(event.noteType)) {
+          denseRhythmCount += 1;
+        }
+        if (event.notes.length > 1) {
+          chordCount += 1;
+        }
+        if (event.tuplets && event.tuplets.length > 0) {
+          tupletCount += 1;
+        }
+        for (const note of event.notes) {
+          if (note.accidental?.value || (Number.isFinite(note.pitch?.alter) && Math.abs(note.pitch?.alter ?? 0) > 0)) {
+            accidentalCount += 1;
+          }
+        }
+      }
+    }
+
+    for (const tickableCount of staffTickables.values()) {
+      maxTickablesPerStaff = Math.max(maxTickablesPerStaff, tickableCount);
+    }
+  }
+
+  const tickableBoost = Math.max(0, maxTickablesPerStaff - 1) * 0.24;
+  const denseRhythmBoost = denseRhythmCount * 0.08;
+  const chordBoost = chordCount * 0.04;
+  const accidentalBoost = accidentalCount * 0.02;
+  const tupletBoost = tupletCount * 0.05;
+  return 1 + Math.min(2.2, tickableBoost + denseRhythmBoost + chordBoost + accidentalBoost + tupletBoost);
 }
 
 /** Resolve per-column minimum widths from density hints for shrink-safe layouts. */
@@ -1580,8 +1801,15 @@ function estimatePartComplexity(part: Part): number {
  * Estimate additional spacing between adjacent staves inside one part.
  * The intent is to reduce treble/bass collisions in grand-staff writing where
  * both staves frequently approach the center register with ties/slurs.
+ * Text-heavy parts also get extra breathing room so direction/dynamics lanes
+ * do not collide with lyric lanes on neighboring staves.
  */
-function estimateIntraStaffGap(part: Part, staffCount: number, complexity: number): number {
+function estimateIntraStaffGap(
+  part: Part,
+  staffCount: number,
+  complexity: number,
+  textAnnotationPressure: number
+): number {
   if (staffCount < 2) {
     return 0;
   }
@@ -1590,8 +1818,18 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
   let centerRegisterRisk = 0;
   let curvedCenterRisk = 0;
   let denseRhythmRisk = 0;
+  let peakMeasureRisk = 0;
+  let crossStaffProximityRisk = 0;
+  let crossStaffComparisons = 0;
 
   for (const measure of part.measures) {
+    let measureNoteCount = 0;
+    let measureCenterRisk = 0;
+    let measureCurvedRisk = 0;
+    const measureCrossStaffBuckets = new Map<
+      number,
+      { upper: Array<{ octave: number; curved: boolean }>; lower: Array<{ octave: number; curved: boolean }> }
+    >();
     for (const voice of measure.voices) {
       for (const event of voice.events) {
         if (event.kind !== 'note') {
@@ -1603,6 +1841,22 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
         if (isDenseNoteType(event.noteType)) {
           denseRhythmRisk += 1;
         }
+        if (staffNumber === 1 || staffNumber === 2) {
+          const pitchedNotes = event.notes.filter(
+            (note): note is typeof note & { pitch: { octave: number } } => Boolean(note.pitch)
+          );
+          if (pitchedNotes.length > 0) {
+            const averageOctave =
+              pitchedNotes.reduce((sum, note) => sum + note.pitch.octave, 0) / pitchedNotes.length;
+            const bucket = measureCrossStaffBuckets.get(event.offsetTicks) ?? { upper: [], lower: [] };
+            if (staffNumber === 1) {
+              bucket.upper.push({ octave: averageOctave, curved: hasCurvedRelation });
+            } else {
+              bucket.lower.push({ octave: averageOctave, curved: hasCurvedRelation });
+            }
+            measureCrossStaffBuckets.set(event.offsetTicks, bucket);
+          }
+        }
 
         for (const note of event.notes) {
           if (!note.pitch) {
@@ -1610,6 +1864,7 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
           }
 
           noteCount += 1;
+          measureNoteCount += 1;
           const octave = note.pitch.octave;
           const nearCenterFromUpper = staffNumber === 1 && octave <= 4;
           const nearCenterFromLower = staffNumber === 2 && octave >= 3;
@@ -1618,11 +1873,59 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
           }
 
           centerRegisterRisk += 1;
+          measureCenterRisk += 1;
           if (hasCurvedRelation) {
             curvedCenterRisk += 1;
+            measureCurvedRisk += 1;
           }
         }
       }
+    }
+
+    let measureCrossStaffRisk = 0;
+    let measureCrossStaffComparisons = 0;
+    for (const bucket of measureCrossStaffBuckets.values()) {
+      if (bucket.upper.length === 0 || bucket.lower.length === 0) {
+        continue;
+      }
+
+      for (const upper of bucket.upper) {
+        for (const lower of bucket.lower) {
+          const octaveDistance = Math.abs(upper.octave - lower.octave);
+          let proximity = 0;
+          if (octaveDistance <= 0.75) {
+            proximity = 1;
+          } else if (octaveDistance <= 1.5) {
+            proximity = 0.62;
+          } else if (octaveDistance <= 2.25) {
+            proximity = 0.28;
+          }
+          if (proximity > 0 && (upper.curved || lower.curved)) {
+            proximity = Math.min(1, proximity + 0.2);
+          }
+
+          measureCrossStaffRisk += proximity;
+          measureCrossStaffComparisons += 1;
+        }
+      }
+    }
+
+    if (measureCrossStaffComparisons > 0) {
+      crossStaffProximityRisk += measureCrossStaffRisk;
+      crossStaffComparisons += measureCrossStaffComparisons;
+    }
+
+    if (measureNoteCount > 0) {
+      const measureCenterRatio = measureCenterRisk / measureNoteCount;
+      const measureCurvedRatio = measureCurvedRisk / measureNoteCount;
+      const measureCrossStaffRatio =
+        measureCrossStaffComparisons > 0 ? measureCrossStaffRisk / measureCrossStaffComparisons : 0;
+      const measureRisk = clamp(
+        measureCenterRatio * 0.65 + measureCurvedRatio * 0.85 + measureCrossStaffRatio * 0.75,
+        0,
+        1
+      );
+      peakMeasureRisk = Math.max(peakMeasureRisk, measureRisk);
     }
   }
 
@@ -1633,9 +1936,12 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
   const centerRatio = centerRegisterRisk / noteCount;
   const curvedRatio = curvedCenterRisk / noteCount;
   const denseRatio = denseRhythmRisk / noteCount;
-  const baseGap = 28 + complexity * 20;
-  const riskBoost = centerRatio * 36 + curvedRatio * 34 + denseRatio * 20;
-  return clampInt(baseGap + riskBoost, 30, 110);
+  const crossStaffRatio =
+    crossStaffComparisons > 0 ? clamp(crossStaffProximityRisk / crossStaffComparisons, 0, 1) : 0;
+  const baseGap = 28 + complexity * 20 + textAnnotationPressure * 26;
+  const riskBoost = centerRatio * 36 + curvedRatio * 34 + denseRatio * 20 + crossStaffRatio * 28;
+  const peakBoost = peakMeasureRisk * 30;
+  return clampInt(baseGap + riskBoost + peakBoost, 32, 134);
 }
 
 /**
@@ -1645,8 +1951,12 @@ function estimateIntraStaffGap(part: Part, staffCount: number, complexity: numbe
 function resolveInterPartGap(current: PartLayout, next: PartLayout, config: LayoutPlanConfig): number {
   const adjacentComplexity = (current.complexity + next.complexity) / 2;
   const complexityBoost = Math.round(adjacentComplexity * 18);
-  const verticalSpreadBoost = Math.round(((current.verticalSpread + next.verticalSpread) / 2) * 34);
-  return clampInt(config.partGap + complexityBoost + verticalSpreadBoost, 24, 120);
+  const annotationBoost = Math.round(((current.textAnnotationPressure + next.textAnnotationPressure) / 2) * 34);
+  // Give pitch-spread pressure slightly more authority than generic complexity.
+  // Extreme register writing (ledger-heavy top/bottom notes) is a common source
+  // of adjacent-staff visual crowding even when rhythms are simple.
+  const verticalSpreadBoost = Math.round(((current.verticalSpread + next.verticalSpread) / 2) * 42);
+  return clampInt(config.partGap + complexityBoost + annotationBoost + verticalSpreadBoost, 24, 132);
 }
 
 /** Resolve one clef sign for pitch-range heuristics on a staff at a given measure index. */
@@ -1670,6 +1980,8 @@ function resolveClefSignForEvent(part: Part, measureIndex: number, staffNumber: 
 function estimatePartVerticalSpread(part: Part): number {
   let noteCount = 0;
   let spreadPressure = 0;
+  let peakPressure = 0;
+  let elevatedPressureCount = 0;
 
   for (const measure of part.measures) {
     for (const voice of measure.voices) {
@@ -1685,8 +1997,13 @@ function estimatePartVerticalSpread(part: Part): number {
             continue;
           }
 
+          const penalty = estimatePitchSpreadPenalty(clefSign, note.pitch.octave);
           noteCount += 1;
-          spreadPressure += estimatePitchSpreadPenalty(clefSign, note.pitch.octave);
+          spreadPressure += penalty;
+          peakPressure = Math.max(peakPressure, penalty);
+          if (penalty >= 0.6) {
+            elevatedPressureCount += 1;
+          }
         }
       }
     }
@@ -1696,7 +2013,67 @@ function estimatePartVerticalSpread(part: Part): number {
     return 0;
   }
 
-  return clamp(spreadPressure / noteCount, 0, 1);
+  // Average pressure captures broad ledger usage, while peak/elevated pressure
+  // keeps sparse-but-extreme outliers from being diluted away in long measures.
+  const averagePressure = spreadPressure / noteCount;
+  const elevatedPressureRatio = elevatedPressureCount / noteCount;
+  const blendedPressure = averagePressure * 0.55 + peakPressure * 0.3 + elevatedPressureRatio * 0.35;
+  return clamp(blendedPressure, 0, 1);
+}
+
+/**
+ * Estimate how text-heavy one part is across directions, harmonies, and lyrics.
+ * This allows inter-part spacing to reserve vertical room before text lanes from
+ * neighboring staves collide (for example category-31 direction+dynamics tests).
+ */
+function estimatePartTextAnnotationPressure(part: Part): number {
+  let noteEventCount = 0;
+  let directionEventCount = 0;
+  let dynamicsEventCount = 0;
+  let harmonyCount = 0;
+  let lyricTokenCount = 0;
+
+  for (const measure of part.measures) {
+    harmonyCount += measure.harmonies?.length ?? 0;
+    directionEventCount += measure.directions.length;
+    for (const direction of measure.directions) {
+      const hasDynamics = Boolean(direction.dynamics && direction.dynamics.length > 0);
+      if (hasDynamics) {
+        dynamicsEventCount += 1;
+      }
+    }
+
+    for (const voice of measure.voices) {
+      for (const event of voice.events) {
+        if (event.kind !== 'note') {
+          continue;
+        }
+
+        noteEventCount += 1;
+        for (const noteData of event.notes) {
+          if (!noteData.lyrics || noteData.lyrics.length === 0) {
+            continue;
+          }
+          lyricTokenCount += noteData.lyrics.length;
+        }
+      }
+    }
+  }
+
+  if (noteEventCount === 0) {
+    return 0;
+  }
+
+  const directionRatio = directionEventCount / noteEventCount;
+  const dynamicsRatio = dynamicsEventCount / noteEventCount;
+  const harmonyRatio = harmonyCount / noteEventCount;
+  const lyricRatio = lyricTokenCount / noteEventCount;
+  const pressure =
+    directionRatio * 0.38 +
+    dynamicsRatio * 0.34 +
+    harmonyRatio * 0.18 +
+    lyricRatio * 0.28;
+  return clamp(pressure, 0, 1);
 }
 
 /** Estimate one pitch spread penalty against a clef's comfortable octave lane. */
@@ -1954,6 +2331,75 @@ function estimateAccidentalPressure(partLayouts: PartLayout[]): number {
   }
 
   return clamp(accidentalCount / noteCount, 0, 1);
+}
+
+/**
+ * Estimate score-level text pressure for inter-system spacing.
+ * This protects against cross-system collisions where dense lyric/harmony/
+ * direction lanes from one system overlap text lanes in the next system.
+ */
+function estimateSystemTextPressure(partLayouts: PartLayout[]): number {
+  if (partLayouts.length === 0) {
+    return 0;
+  }
+
+  const maxPressure = Math.max(...partLayouts.map((layout) => layout.textAnnotationPressure));
+  const averagePressure =
+    partLayouts.reduce((sum, layout) => sum + layout.textAnnotationPressure, 0) / partLayouts.length;
+  return clamp(maxPressure * 0.65 + averagePressure * 0.35, 0, 1);
+}
+
+/**
+ * Estimate inter-system lane pressure from text that materially competes for
+ * vertical space between systems (lyrics, harmony symbols, and direction words).
+ *
+ * We intentionally discount dynamics-only directions here. Dynamics glyph runs
+ * are compact and usually stay close to staff lines, while lyric/harmony/word
+ * labels are the primary source of cross-system text collisions.
+ */
+function estimateSystemLaneCollisionPressure(partLayouts: PartLayout[]): number {
+  let noteEventCount = 0;
+  let directionWordCount = 0;
+  let harmonyCount = 0;
+  let lyricTokenCount = 0;
+
+  for (const layout of partLayouts) {
+    for (const measure of layout.part.measures) {
+      harmonyCount += measure.harmonies?.length ?? 0;
+      for (const direction of measure.directions) {
+        const hasWords = Boolean(direction.words && direction.words.trim().length > 0);
+        const hasTempo = Number.isFinite(direction.tempo);
+        if (hasWords || hasTempo) {
+          directionWordCount += 1;
+        }
+      }
+
+      for (const voice of measure.voices) {
+        for (const event of voice.events) {
+          if (event.kind !== 'note') {
+            continue;
+          }
+
+          noteEventCount += 1;
+          for (const note of event.notes) {
+            if (!note.lyrics || note.lyrics.length === 0) {
+              continue;
+            }
+            lyricTokenCount += note.lyrics.length;
+          }
+        }
+      }
+    }
+  }
+
+  if (noteEventCount === 0) {
+    return 0;
+  }
+
+  const directionWordRatio = directionWordCount / noteEventCount;
+  const harmonyRatio = harmonyCount / noteEventCount;
+  const lyricRatio = lyricTokenCount / noteEventCount;
+  return clamp(directionWordRatio * 0.28 + harmonyRatio * 0.34 + lyricRatio * 0.38, 0, 1);
 }
 
 /** Clamp render scale into a safe range for layout and text rendering. */

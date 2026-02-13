@@ -5,6 +5,8 @@ import { attribute, childrenOf, firstChild, textOf } from './xml-utils.js';
 /** Parse a direction node into words/tempo metadata anchored at an offset. */
 export function parseDirection(directionNode: XmlNode, offsetTicks: number): DirectionEvent {
   const directionTypeNodes = childrenOf(directionNode, 'direction-type');
+  const placement = parseDirectionPlacement(attribute(directionNode, 'placement'));
+  const staff = parseDirectionStaff(firstChild(directionNode, 'staff'));
   const words = parseDirectionWords(directionTypeNodes);
   const soundNode = firstChild(directionNode, 'sound');
   const tempoRaw = soundNode ? attribute(soundNode, 'tempo') : undefined;
@@ -14,6 +16,8 @@ export function parseDirection(directionNode: XmlNode, offsetTicks: number): Dir
 
   const direction: DirectionEvent = {
     offsetTicks,
+    placement,
+    staff,
     words,
     tempo: Number.isFinite(tempo) ? tempo : undefined
   };
@@ -26,6 +30,27 @@ export function parseDirection(directionNode: XmlNode, offsetTicks: number): Dir
   }
 
   return direction;
+}
+
+/** Parse MusicXML direction placement into canonical above/below token. */
+function parseDirectionPlacement(rawPlacement: string | undefined): DirectionEvent['placement'] {
+  if (rawPlacement === 'above' || rawPlacement === 'below') {
+    return rawPlacement;
+  }
+  return undefined;
+}
+
+/** Parse optional direction staff assignment; invalid values are ignored. */
+function parseDirectionStaff(staffNode: XmlNode | undefined): number | undefined {
+  if (!staffNode) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(textOf(staffNode) ?? '', 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return value;
 }
 
 /** Parse `<direction-type><dynamics>` tokens into ordered dynamic markers. */
