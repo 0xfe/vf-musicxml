@@ -1,8 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import type { Score } from '../../src/core/score.js';
 import { parseMusicXML, parseMusicXMLAsync, renderToSVGPages } from '../../src/public/index.js';
 import {
   collectNotationGeometry,
@@ -12,6 +14,8 @@ import {
   summarizeMeasureSpacingByBarlines
 } from '../../src/testkit/notation-geometry.js';
 import { detectSvgOverlaps, extractSvgElementBounds } from '../../src/testkit/svg-collision.js';
+
+const pageQualityProbeScriptPath = path.resolve('scripts/probe-page-quality.mjs');
 
 /** Trim wrapper markup and return the first SVG payload for geometry audits. */
 function extractSvg(pageMarkup: string): string {
@@ -52,6 +56,93 @@ function resolveBandCompressionRatio(
   band: ReturnType<typeof summarizeMeasureSpacingByBarlines>['bandSummaries'][number]
 ): number | null {
   return band.firstToMedianOtherEstimatedWidthRatio ?? band.firstToMedianOtherGapRatio;
+}
+
+/** Collect per-segment vertical gaps for aligned paired staves (e.g., grand-staff rows). */
+function collectAlignedStaffPairGaps(svgMarkup: string): number[] {
+  const staves = extractSvgElementBounds(svgMarkup, { selector: '.vf-stave' }).map((entry) => entry.bounds);
+  const gaps: number[] = [];
+  for (let upperIndex = 0; upperIndex < staves.length; upperIndex += 1) {
+    for (let lowerIndex = upperIndex + 1; lowerIndex < staves.length; lowerIndex += 1) {
+      const upper = staves[upperIndex];
+      const lower = staves[lowerIndex];
+      if (!upper || !lower) {
+        continue;
+      }
+      if (Math.abs(upper.x - lower.x) > 0.5 || Math.abs(upper.width - lower.width) > 0.5) {
+        continue;
+      }
+      const gap = lower.y - (upper.y + upper.height);
+      if (gap >= 0 && gap <= 220) {
+        gaps.push(gap);
+      }
+    }
+  }
+  return gaps;
+}
+
+/** Count note-level non-arpeggiate ornaments preserved in parsed score data. */
+function countNonArpeggiateMarkers(score: Score): number {
+  let markerCount = 0;
+  for (const part of score.parts) {
+    for (const measure of part.measures) {
+      for (const voice of measure.voices) {
+        for (const event of voice.events) {
+          if (!event || event.kind !== 'note') {
+            continue;
+          }
+          for (const note of event.notes) {
+            markerCount += (note.ornaments ?? []).filter((ornament) => ornament.type.startsWith('non-arpeggiate')).length;
+          }
+        }
+      }
+    }
+  }
+  return markerCount;
+}
+
+/** Count distinct note events that contain any non-arpeggiate markers. */
+function countNonArpeggiateAnchorEvents(score: Score): number {
+  let eventCount = 0;
+  for (const part of score.parts) {
+    for (const measure of part.measures) {
+      for (const voice of measure.voices) {
+        for (const event of voice.events) {
+          if (!event || event.kind !== 'note') {
+            continue;
+          }
+          const hasNonArpeggiate = event.notes.some((note) =>
+            (note.ornaments ?? []).some((ornament) => ornament.type.startsWith('non-arpeggiate'))
+          );
+          if (hasNonArpeggiate) {
+            eventCount += 1;
+          }
+        }
+      }
+    }
+  }
+  return eventCount;
+}
+
+interface OutOfProcessPageProbeResult {
+  hasSvg: boolean;
+  weakestSpacingRatio: number | null;
+  evaluatedBandRatios: number[];
+  compressedBandCount: number;
+  extremeCurveCount: number;
+}
+
+/**
+ * Probe one page in a separate Node process to avoid long-form memory growth
+ * when sweeping hundreds of SVG/JSDOM page analyses in one test worker.
+ */
+async function probePageQualityOutOfProcess(pageMarkup: string): Promise<OutOfProcessPageProbeResult> {
+  const stdout = execFileSync(process.execPath, [pageQualityProbeScriptPath], {
+    input: JSON.stringify({ pageMarkup }),
+    encoding: 'utf8',
+    maxBuffer: 8 * 1024 * 1024
+  });
+  return JSON.parse(stdout) as OutOfProcessPageProbeResult;
 }
 
 describe('renderer quality regressions', () => {
@@ -322,12 +413,20 @@ describe('renderer quality regressions', () => {
       minHorizontalSpan: 70,
       minSlopeRatio: 0.5
     });
+    const unstableCurveDiagnostics = rendered.diagnostics.filter((diagnostic) =>
+      [
+        'TIE_EXTREME_ANCHOR_DELTA_UNSUPPORTED',
+        'SLUR_MIXED_STEM_DELTA_UNSUPPORTED',
+        'SLUR_EXTREME_ANCHOR_DELTA_UNSUPPORTED'
+      ].includes(diagnostic.code)
+    );
     const spacingSummary = summarizeMeasureSpacingByBarlines(collectNotationGeometry(svg));
     const evaluatedBandRatios = spacingSummary.bandSummaries
       .map((band) => resolveBandCompressionRatio(band))
       .filter((ratio): ratio is number => ratio !== null);
 
     expect(extremes.length).toBe(0);
+    expect(unstableCurveDiagnostics.length).toBe(0);
     expect(evaluatedBandRatios.length).toBeGreaterThan(0);
     expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.5);
   });
@@ -388,7 +487,7 @@ describe('renderer quality regressions', () => {
     }
   });
 
-  it('keeps Schumann proof-point staff-band spacing above compression threshold', async () => {
+  it('keeps Schumann proof-point pages stable for sparse-page spacing and curve routing', async () => {
     const fixturePath = path.resolve('fixtures/conformance/realworld/realworld-music21-schumann-clara-polonaise-op1n1.mxl');
     const archive = await readFile(fixturePath);
 
@@ -405,18 +504,301 @@ describe('renderer quality regressions', () => {
     expect(parsed.score).toBeDefined();
 
     const rendered = renderToSVGPages(parsed.score!);
-    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.pages.length).toBeGreaterThan(1);
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+    expect(
+      rendered.diagnostics.some((diagnostic) =>
+        ['TIE_EXTREME_ANCHOR_DELTA_UNSUPPORTED', 'SLUR_MIXED_STEM_DELTA_UNSUPPORTED', 'SLUR_EXTREME_ANCHOR_DELTA_UNSUPPORTED'].includes(
+          diagnostic.code
+        )
+      )
+    ).toBe(false);
 
-    const firstPageGeometry = collectNotationGeometry(extractSvg(rendered.pages[0] ?? ''));
-    const spacingSummary = summarizeMeasureSpacingByBarlines(firstPageGeometry);
-    const evaluatedBandRatios = spacingSummary.bandSummaries
-      .map((band) => resolveBandCompressionRatio(band))
-      .filter((ratio): ratio is number => ratio !== null);
+    let weakestSpacingRatio = Number.POSITIVE_INFINITY;
+    for (const pageMarkup of rendered.pages) {
+      const svg = extractSvg(pageMarkup);
+      const geometry = collectNotationGeometry(svg);
+      const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
+      const evaluatedBandRatios = spacingSummary.bandSummaries
+        .map((band) => resolveBandCompressionRatio(band))
+        .filter((ratio): ratio is number => ratio !== null);
 
-    expect(evaluatedBandRatios.length).toBeGreaterThan(0);
-    expect(Math.min(...evaluatedBandRatios)).toBeGreaterThan(0.75);
+      if (evaluatedBandRatios.length > 0) {
+        const pageMin = Math.min(...evaluatedBandRatios);
+        weakestSpacingRatio = Math.min(weakestSpacingRatio, pageMin);
+        expect(evaluatedBandRatios.filter((ratio) => ratio < 0.75)).toHaveLength(0);
+      }
+
+      const extremes = detectExtremeCurvePaths(svg, {
+        minVerticalDelta: 100,
+        minHorizontalSpan: 70,
+        minSlopeRatio: 0.5
+      });
+      expect(extremes).toHaveLength(0);
+    }
+
+    expect(weakestSpacingRatio).toBeGreaterThan(0.8);
   });
+
+  it('keeps additional multi-page proof-points stable for sparse-page spacing and curve routing', async () => {
+    const fixtures = [
+      {
+        file: 'realworld-music21-bach-bwv244-10.mxl',
+        minPages: 3,
+        minWeakestSpacingRatio: 0.9
+      },
+      {
+        file: 'realworld-music21-bach-bwv1-6.mxl',
+        minPages: 2,
+        minWeakestSpacingRatio: 0.87
+      },
+      {
+        file: 'realworld-music21-mozart-k545-exposition.mxl',
+        minPages: 3,
+        minWeakestSpacingRatio: 0.79
+      },
+      {
+        file: 'realworld-music21-berlin-alexanders-ragtime.mxl',
+        minPages: 2,
+        minWeakestSpacingRatio: 0.9
+      }
+    ];
+
+    for (const fixture of fixtures) {
+      const fixturePath = path.resolve(`fixtures/conformance/realworld/${fixture.file}`);
+      const archive = await readFile(fixturePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(archive),
+          format: 'mxl'
+        },
+        {
+          sourceName: `fixtures/conformance/realworld/${fixture.file}`,
+          mode: 'lenient'
+        }
+      );
+      expect(parsed.score).toBeDefined();
+
+      const rendered = renderToSVGPages(parsed.score!);
+      expect(rendered.pages.length).toBeGreaterThanOrEqual(fixture.minPages);
+      expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+      expect(
+        rendered.diagnostics.some((diagnostic) =>
+          ['TIE_EXTREME_ANCHOR_DELTA_UNSUPPORTED', 'SLUR_MIXED_STEM_DELTA_UNSUPPORTED', 'SLUR_EXTREME_ANCHOR_DELTA_UNSUPPORTED'].includes(
+            diagnostic.code
+          )
+        )
+      ).toBe(false);
+
+      let weakestSpacingRatio = Number.POSITIVE_INFINITY;
+      for (const pageMarkup of rendered.pages) {
+        const svg = extractSvg(pageMarkup);
+        const geometry = collectNotationGeometry(svg);
+        const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
+        const evaluatedBandRatios = spacingSummary.bandSummaries
+          .map((band) => resolveBandCompressionRatio(band))
+          .filter((ratio): ratio is number => ratio !== null);
+
+        if (evaluatedBandRatios.length > 0) {
+          const pageMin = Math.min(...evaluatedBandRatios);
+          weakestSpacingRatio = Math.min(weakestSpacingRatio, pageMin);
+          expect(evaluatedBandRatios.filter((ratio) => ratio < 0.75)).toHaveLength(0);
+        }
+
+        const extremes = detectExtremeCurvePaths(svg, {
+          minVerticalDelta: 100,
+          minHorizontalSpan: 70,
+          minSlopeRatio: 0.5
+        });
+        expect(extremes).toHaveLength(0);
+      }
+
+      expect(weakestSpacingRatio).toBeGreaterThan(fixture.minWeakestSpacingRatio);
+    }
+  });
+
+  it('keeps additional real-world sparse compaction envelopes bounded', async () => {
+    const fixtures = [
+      {
+        file: 'realworld-music21-mozart-k545-exposition.mxl',
+        minPages: 3,
+        maxCompressedBands: 0,
+        maxOverstretchedBands: 3,
+        maxBandRatio: 4.5
+      },
+      {
+        file: 'realworld-music21-berlin-alexanders-ragtime.mxl',
+        minPages: 2,
+        maxCompressedBands: 0,
+        maxOverstretchedBands: 0,
+        maxBandRatio: 2
+      }
+    ];
+
+    for (const fixture of fixtures) {
+      const fixturePath = path.resolve(`fixtures/conformance/realworld/${fixture.file}`);
+      const archive = await readFile(fixturePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(archive),
+          format: 'mxl'
+        },
+        {
+          sourceName: `fixtures/conformance/realworld/${fixture.file}`,
+          mode: 'lenient'
+        }
+      );
+      expect(parsed.score).toBeDefined();
+
+      const rendered = renderToSVGPages(parsed.score!);
+      expect(rendered.pages.length).toBeGreaterThanOrEqual(fixture.minPages);
+      expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+      let compressedBandCount = 0;
+      let overstretchedBandCount = 0;
+      let maxBandRatio = 0;
+      for (const pageMarkup of rendered.pages) {
+        const svg = extractSvg(pageMarkup);
+        const geometry = collectNotationGeometry(svg);
+        const spacingSummary = summarizeMeasureSpacingByBarlines(geometry);
+        const evaluatedBandRatios = spacingSummary.bandSummaries
+          .map((band) => resolveBandCompressionRatio(band))
+          .filter((ratio): ratio is number => ratio !== null);
+        compressedBandCount += evaluatedBandRatios.filter((ratio) => ratio < 0.75).length;
+        overstretchedBandCount += evaluatedBandRatios.filter((ratio) => ratio > 2.5).length;
+        if (evaluatedBandRatios.length > 0) {
+          maxBandRatio = Math.max(maxBandRatio, Math.max(...evaluatedBandRatios));
+        }
+      }
+
+      expect(compressedBandCount).toBeLessThanOrEqual(fixture.maxCompressedBands);
+      expect(overstretchedBandCount).toBeLessThanOrEqual(fixture.maxOverstretchedBands);
+      expect(maxBandRatio).toBeLessThanOrEqual(fixture.maxBandRatio);
+    }
+  });
+
+  it('keeps real-world grand-staff vertical gaps bounded under compaction policies', async () => {
+    const fixtures = [
+      {
+        file: 'realworld-music21-schumann-clara-polonaise-op1n1.mxl',
+        minPages: 6,
+        minPairGap: 150,
+        maxPairGap: 160
+      },
+      {
+        file: 'realworld-openscore-lieder-just-for-today.mxl',
+        minPages: 5,
+        minPairGap: 110,
+        maxPairGap: 155
+      }
+    ];
+
+    for (const fixture of fixtures) {
+      const fixturePath = path.resolve(`fixtures/conformance/realworld/${fixture.file}`);
+      const archive = await readFile(fixturePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(archive),
+          format: 'mxl'
+        },
+        {
+          sourceName: `fixtures/conformance/realworld/${fixture.file}`,
+          mode: 'lenient'
+        }
+      );
+      expect(parsed.score).toBeDefined();
+
+      const rendered = renderToSVGPages(parsed.score!);
+      expect(rendered.pages.length).toBeGreaterThanOrEqual(fixture.minPages);
+      expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+      const pairGaps = rendered.pages.flatMap((pageMarkup) => collectAlignedStaffPairGaps(pageMarkup));
+      expect(pairGaps.length).toBeGreaterThan(0);
+      expect(Math.min(...pairGaps)).toBeGreaterThanOrEqual(fixture.minPairGap);
+      expect(Math.max(...pairGaps)).toBeLessThanOrEqual(fixture.maxPairGap);
+    }
+  });
+
+  it(
+    'keeps op133-class long-form fixtures stable with out-of-process full-page gates',
+    async () => {
+      const fixtures = [
+        {
+          file: 'realworld-music21-beethoven-op133-longform.mxl',
+          minPages: 120,
+          minWeakestSpacingRatio: 0.35,
+          maxCompressedBandCount: 16,
+          maxCompressedPageCount: 14
+        },
+        {
+          file: 'realworld-music21-bach-bwv248-42-4.mxl',
+          minPages: 20,
+          minWeakestSpacingRatio: 0.35,
+          maxCompressedBandCount: 20,
+          maxCompressedPageCount: 6
+        },
+        {
+          file: 'realworld-openscore-lieder-just-for-today.mxl',
+          minPages: 5,
+          minWeakestSpacingRatio: 0.06,
+          maxCompressedBandCount: 6,
+          maxCompressedPageCount: 3
+        }
+      ];
+
+      for (const fixture of fixtures) {
+        const fixturePath = path.resolve(`fixtures/conformance/realworld/${fixture.file}`);
+        const archive = await readFile(fixturePath);
+        const parsed = await parseMusicXMLAsync(
+          {
+            data: new Uint8Array(archive),
+            format: 'mxl'
+          },
+          {
+            sourceName: `fixtures/conformance/realworld/${fixture.file}`,
+            mode: 'lenient'
+          }
+        );
+        expect(parsed.score).toBeDefined();
+
+        const rendered = renderToSVGPages(parsed.score!);
+        expect(rendered.pages.length).toBeGreaterThanOrEqual(fixture.minPages);
+        expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+        expect(
+          rendered.diagnostics.some((diagnostic) =>
+            ['TIE_EXTREME_ANCHOR_DELTA_UNSUPPORTED', 'SLUR_MIXED_STEM_DELTA_UNSUPPORTED', 'SLUR_EXTREME_ANCHOR_DELTA_UNSUPPORTED'].includes(
+              diagnostic.code
+            )
+          )
+        ).toBe(false);
+
+        let weakestSpacingRatio = Number.POSITIVE_INFINITY;
+        let compressedBandCount = 0;
+        let compressedPageCount = 0;
+        for (const pageMarkup of rendered.pages) {
+          const probe = await probePageQualityOutOfProcess(pageMarkup);
+          expect(probe.hasSvg).toBe(true);
+          expect(probe.extremeCurveCount).toBe(0);
+          compressedBandCount += probe.compressedBandCount;
+          if (probe.compressedBandCount > 0) {
+            compressedPageCount += 1;
+          }
+
+          if (probe.evaluatedBandRatios.length === 0) {
+            continue;
+          }
+          if (probe.weakestSpacingRatio !== null) {
+            weakestSpacingRatio = Math.min(weakestSpacingRatio, probe.weakestSpacingRatio);
+          }
+        }
+
+        expect(weakestSpacingRatio).toBeGreaterThan(fixture.minWeakestSpacingRatio);
+        expect(compressedBandCount).toBeLessThanOrEqual(fixture.maxCompressedBandCount);
+        expect(compressedPageCount).toBeLessThanOrEqual(fixture.maxCompressedPageCount);
+      }
+    },
+    240_000
+  );
 
   it('bounds first-system left-bar compression in realworld-music21-mozart-k458-m1', async () => {
     const fixturePath = path.resolve('fixtures/conformance/realworld/realworld-music21-mozart-k458-m1.mxl');
@@ -578,6 +960,45 @@ describe('renderer quality regressions', () => {
     expect(overlaps.length).toBeLessThanOrEqual(2);
   });
 
+  it('keeps a broader category-31/71 sweep inside tight text-overlap budgets', async () => {
+    const fixtureBudgets = [
+      { file: '31b-directions-order.musicxml', minTextCount: 2, maxOverlaps: 0 },
+      { file: '31c-metronomemarks.musicxml', minTextCount: 2, maxOverlaps: 0 },
+      { file: '31f-direction-multiline-compounds.musicxml', minTextCount: 2, maxOverlaps: 0 },
+      { file: '71a-chordnames.musicxml', minTextCount: 6, maxOverlaps: 0 },
+      { file: '71c-chordsfrets.musicxml', minTextCount: 6, maxOverlaps: 0 },
+      { file: '71d-chordsfrets-multistaff.musicxml', minTextCount: 6, maxOverlaps: 0 },
+      { file: '71e-tabstaves.musicxml', minTextCount: 20, maxOverlaps: 0 }
+    ];
+
+    for (const fixture of fixtureBudgets) {
+      const fixturePath = path.resolve(`fixtures/conformance/lilypond/${fixture.file}`);
+      const xml = await readFile(fixturePath, 'utf8');
+      const parsed = parseMusicXML(xml, {
+        sourceName: `fixtures/conformance/lilypond/${fixture.file}`,
+        mode: 'lenient'
+      });
+      expect(parsed.score).toBeDefined();
+
+      const rendered = renderToSVGPages(parsed.score!);
+      expect(rendered.pages.length).toBeGreaterThan(0);
+      expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+
+      let textCount = 0;
+      let overlapCount = 0;
+      for (const pageMarkup of rendered.pages) {
+        const svg = extractSvg(pageMarkup);
+        const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
+        const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
+        textCount += textBounds.length;
+        overlapCount += overlaps.length;
+      }
+
+      expect(textCount).toBeGreaterThanOrEqual(fixture.minTextCount);
+      expect(overlapCount).toBeLessThanOrEqual(fixture.maxOverlaps);
+    }
+  });
+
   it('keeps category-31 dynamics glyph runs separated from nearby text labels', async () => {
     const fixturePath = path.resolve('fixtures/conformance/lilypond/31a-Directions.musicxml');
     const xml = await readFile(fixturePath, 'utf8');
@@ -606,7 +1027,7 @@ describe('renderer quality regressions', () => {
     expect(dynamicsToTextOverlaps.length).toBeLessThanOrEqual(2);
   });
 
-  it('keeps category-32 notation labels bounded and maps unsupported symbols explicitly', async () => {
+  it('keeps category-32 notation labels bounded and maps non-arpeggiate with an explicit fallback', async () => {
     const fixturePath = path.resolve('fixtures/conformance/lilypond/32a-Notations.musicxml');
     const xml = await readFile(fixturePath, 'utf8');
 
@@ -615,6 +1036,10 @@ describe('renderer quality regressions', () => {
       mode: 'lenient'
     });
     expect(parsed.score).toBeDefined();
+    const expectedFallbackMarkerCount = countNonArpeggiateMarkers(parsed.score!);
+    const expectedBracketAnchorCount = countNonArpeggiateAnchorEvents(parsed.score!);
+    expect(expectedFallbackMarkerCount).toBeGreaterThan(0);
+    expect(expectedBracketAnchorCount).toBeGreaterThan(0);
 
     const rendered = renderToSVGPages(parsed.score!);
     expect(rendered.pages.length).toBeGreaterThan(0);
@@ -622,17 +1047,47 @@ describe('renderer quality regressions', () => {
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ARTICULATION')).toBe(false);
     expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ORNAMENT')).toBe(false);
 
-    const nonArpeggiateDiagnostics = rendered.diagnostics.filter(
-      (diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_UNSUPPORTED'
+    const nonArpeggiateFallbackDiagnostics = rendered.diagnostics.filter(
+      (diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_FALLBACK_RENDERED'
     );
-    expect(nonArpeggiateDiagnostics.length).toBeGreaterThan(0);
+    expect(nonArpeggiateFallbackDiagnostics).toHaveLength(expectedFallbackMarkerCount);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_UNSUPPORTED')).toBe(false);
 
     const svg = extractSvg(rendered.pages[0] ?? '');
+    const bracketCount = (svg.match(/vf-non-arpeggiate-bracket/g) ?? []).length;
+    expect(bracketCount).toBe(expectedBracketAnchorCount);
     const textBounds = extractSvgElementBounds(svg, { selector: 'text' });
     const overlaps = detectSvgOverlaps(textBounds, { minOverlapArea: 4 });
 
     expect(textBounds.length).toBeGreaterThan(80);
     expect(overlaps.length).toBeLessThanOrEqual(4);
+  });
+
+  it('renders bracket-style non-arpeggiate fallback marks in lilypond-32d-arpeggio', async () => {
+    const fixturePath = path.resolve('fixtures/conformance/lilypond/32d-arpeggio.musicxml');
+    const xml = await readFile(fixturePath, 'utf8');
+
+    const parsed = parseMusicXML(xml, {
+      sourceName: 'fixtures/conformance/lilypond/32d-arpeggio.musicxml',
+      mode: 'lenient'
+    });
+    expect(parsed.score).toBeDefined();
+    const expectedFallbackMarkerCount = countNonArpeggiateMarkers(parsed.score!);
+    const expectedBracketAnchorCount = countNonArpeggiateAnchorEvents(parsed.score!);
+    expect(expectedFallbackMarkerCount).toBeGreaterThan(0);
+    expect(expectedBracketAnchorCount).toBeGreaterThan(0);
+
+    const rendered = renderToSVGPages(parsed.score!);
+    expect(rendered.pages.length).toBeGreaterThan(0);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(false);
+    expect(rendered.diagnostics.some((diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_UNSUPPORTED')).toBe(false);
+    expect(
+      rendered.diagnostics.filter((diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_FALLBACK_RENDERED')
+    ).toHaveLength(expectedFallbackMarkerCount);
+
+    const svg = extractSvg(rendered.pages[0] ?? '');
+    const bracketCount = (svg.match(/vf-non-arpeggiate-bracket/g) ?? []).length;
+    expect(bracketCount).toBe(expectedBracketAnchorCount);
   });
 
 });

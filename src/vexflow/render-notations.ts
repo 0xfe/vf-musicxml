@@ -13,5 +13,6 @@ export {
 } from './render-notations-text.js';
 export {
   drawMeasureTuplets,
+  drawMeasureNonArpeggiates,
   drawScoreSpanners
 } from './render-notations-spanners.js';

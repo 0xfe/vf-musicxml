@@ -4,17 +4,18 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ## Status
 
-- Last updated: 2026-02-13 (US, 14:20 EST)
+- Last updated: 2026-02-14 (US, 10:38 EST)
 - Planning location: all planning artifacts now live under `/Users/mo/git/musicxml/docs/planning/`.
 - Current state: M0-M7 are completed. M8/M9/M10 remain active, but execution has been re-baselined to a linear closeout order to prevent regression churn: finish M10D blocking layout defects first, then finish M8 deterministic/golden gates, then finish M9 style gates. M11 remains planning-only. New milestone `M12` is opened for structural notation-completeness work (multi-voice, ottava, pedal, rehearsal/coda/segno, inline clef changes, and related quality-model updates) after M10/M8/M9 close.
 - Review integration: Feedback items `F-001` through `F-039` are accepted and tracked in planning (`feedback/feedback-R1-R2.md`, `feedback/feedback-R3.md`, `todo.md`, `milestone-12.md`).
 
 ### Next step when execution continues:
-  1. M10D blocker wave: close `B-012` by validating the newly tightened overlap budgets (`31a text<=2`, `31a dynamics/text<=2`, `31d<=2`, `71f<=1`, `32a<=4`) on category-31/71 plus real-world pages.
-  2. M10D closeout: resolve residual dense-spacing/tie proximity issues in `B-003` and `B-007` and make the proof-point set blocking (Schumann page-1 remains clean under width-ratio classification; later sparse pages still need calibration/heuristic cleanup).
-  3. M8B/M8C closeout: expand deterministic rule packs (presence + justification + text clearances), then calibrate and promote golden comparison thresholds.
-  4. M9 closeout: land style rule catalog + diagnostics and tighten text/dynamics/chord-name overlap budgets.
-  5. Start M12 after M10/M8/M9 are completed, beginning with multi-voice renderer architecture (`F-025`) and content-fidelity scoring (`F-031`).
+  1. M10D promotion pass: keep pushing `B-013`/`B-014`/`R-036` from MITIGATING toward blocking confidence with broader real-world fixture gates and demo pager telemetry checks.
+  2. M10D/M12 bridge: continue `B-010` from fallback mitigation toward parity/upstream readiness (`VF-GAP-002`) with deterministic proof-points.
+  3. Resume M8 closeout: deterministic rule-pack expansion + golden threshold promotion.
+  4. Resume M9 closeout: style-rule diagnostics + overlap budget tightening.
+  5. Keep `B-003`/`B-007` in an opportunistic lane while M8/M9 closeout proceeds (long-form sparse-band tightening continues only when low-risk wins are available).
+  6. Start M12 after M10/M8/M9 are completed, beginning with multi-voice renderer architecture (`F-025`) and content-fidelity scoring (`F-031`).
 
 ## Milestone progress:
 
@@ -42,6 +43,39 @@ This file is the current snapshot of planning state. Update this first as milest
 
 ### Completed in this phase
 
+  - Reprioritized sparse-page long-form work: `B-003`/`B-007` are now explicitly treated as opportunistic follow-up while mainline execution focuses on promotion confidence for `B-013`/`B-014`/`R-036`, then `B-010`, then M8/M9 closeout.
+  - Promoted compaction confidence with additional blocking real-world gates in `tests/integration/render-quality-regressions.test.ts`:
+    - new sparse horizontal-compaction envelope budgets on `realworld-music21-mozart-k545-exposition` and `realworld-music21-berlin-alexanders-ragtime`,
+    - new vertical grand-staff compaction envelope budgets on `realworld-music21-schumann-clara-polonaise-op1n1` and `realworld-openscore-lieder-just-for-today`.
+  - Promoted `R-036` confidence with additional multi-page proof-point checks:
+    - API telemetry + measure-window slicing gates on `realworld-music21-bach-bwv1-6` and `realworld-music21-schumann-clara-polonaise-op1n1` in `tests/integration/public-api.test.ts`,
+    - demo pager/telemetry payload checks on generated multi-page demo pages (`demos/site/realworld-music21-bach-bwv1-6.html`, `demos/site/realworld-music21-schumann-clara-polonaise-op1n1.html`) in `tests/integration/demos.test.ts`.
+  - Strengthened `B-010` parity proof-points by asserting marker-to-fallback and anchor-to-bracket cardinality alignment for `lilypond-32a-notations` and `lilypond-32d-arpeggio` in `tests/integration/render-quality-regressions.test.ts`.
+  - Prepared `VF-GAP-002` upstream follow-up notes by updating workaround/parity evidence in `fixtures/vexflow/gap-registry.json` and `docs/vexflow-upstream-sync-log.md`.
+  - Revalidated targeted gates for this promotion wave:
+    - `npm run test -- tests/integration/render-quality-regressions.test.ts tests/integration/public-api.test.ts tests/integration/demos.test.ts tests/integration/vexflow-gap-registry.test.ts`
+    - `npm run lint`
+    - `npm run typecheck`
+
+  - Implemented M10D generalized compaction in renderer (`src/vexflow/render.ts`): sparse justified systems now use density-aware target-width compaction (instead of unconditional full-width expansion), and vertical spacing now applies bounded low-risk compaction for intra-staff/inter-part gaps.
+  - Implemented M10D pagination/API completeness surface (`R-036`): partial measure-window rendering (`layout.window`), per-page telemetry output (`pageMetrics` with bounds + edge overflow indicators), and configurable measure-number overlays (`layout.measureNumbers`).
+  - Extended public API integration coverage for new renderer capabilities in `tests/integration/public-api.test.ts` (partial windows, overflow telemetry, measure-number overlays, sparse-system compaction differentiation, and bounded sparse grand-staff gaps).
+  - Upgraded demo generation (`scripts/build-demos.mjs`) to render all pages and include first-class prev/next navigation controls, page indicators, and page-level overflow summaries; demo build remains passing (`npm run demos:build:fixtures -- --fixtures realworld-music21-bach-bwv1-6`).
+  - Revalidated M10D regression suite after compaction/API updates (`tests/integration/render-quality-regressions.test.ts`) and tightened long-form lieder full-page budgets (`maxCompressedBands=6`, `maxCompressedPages=3`) while preserving op133/bwv248 blocking stability.
+  - Closed `B-012` by broadening category-31/71 deterministic overlap coverage in `tests/integration/render-quality-regressions.test.ts` (new sweep for `31b`, `31c`, `31f`, `71a`, `71c`, `71d`, `71e`) while preserving tighter existing gates (`31a<=2`, `31d<=2`, `71f<=1`, `31a dynamics/text<=2`).
+  - Continued `B-003`/`B-007` on later pages by extending Schumann regression coverage across all rendered pages (no compressed width-ratio bands, no extreme curve paths, no tie/slur anchor-delta fallback diagnostics) in `tests/integration/render-quality-regressions.test.ts`.
+  - Started `B-010` mitigation by introducing explicit non-arpeggiate fallback diagnostics (`NON_ARPEGGIATE_FALLBACK_RENDERED`) in note mapping and removing prior unsupported diagnostics.
+  - Updated VexFlow gap tracking for `VF-GAP-002` to `local_patch` with fixture/test linkage refresh in `fixtures/vexflow/gap-registry.json`.
+  - Added deterministic non-arpeggiate fallback unit coverage in `tests/unit/render-note-mapper.test.ts` and updated category-32 integration assertions to require fallback diagnostics (not unsupported diagnostics).
+  - Upgraded non-arpeggiate rendering from note-mapper brush approximation to a dedicated bracket-style draw pass (`drawMeasureNonArpeggiates` in `src/vexflow/render-notations-spanners.ts`) and wired it through renderer orchestration (`src/vexflow/render.ts`), including explicit SVG marker classing (`vf-non-arpeggiate-bracket`).
+  - Added explicit category-32 bracket fallback integration coverage for both `32a-Notations` and `32d-arpeggio` in `tests/integration/render-quality-regressions.test.ts`.
+  - Expanded multi-page sparse/curve stability gating beyond Schumann to additional real-world proof-points (`realworld-music21-mozart-k545-exposition`, `realworld-music21-berlin-alexanders-ragtime`) in `tests/integration/render-quality-regressions.test.ts`.
+  - Promoted `realworld-music21-bach-bwv1-6` into the same full-page sparse/curve stability gate family so another multi-page proof-point is now blocking on per-page spacing/curve checks.
+  - Promoted `realworld-music21-bach-bwv244-10` into the same full-page sparse/curve stability gate family, extending blocking multi-page coverage to another real-world choral fixture.
+  - Added sampled long-form sparse/curve stability gating for `realworld-music21-beethoven-op133-longform` (pages `0/24/52/80/120/last`) to extend blocker coverage without excessive test-runtime growth.
+  - Replaced sampled long-form gating with an out-of-process full-page probe path (`scripts/probe-page-quality.mjs`) and promoted op133-class fixtures to blocking full-page budgets in `tests/integration/render-quality-regressions.test.ts` (`realworld-music21-beethoven-op133-longform`, `realworld-music21-bach-bwv248-42-4`, `realworld-openscore-lieder-just-for-today`).
+  - Revalidated long-form full-page sparse/curve gates with deterministic subprocess page sweeps (curves stable across all pages; sparse compression now explicitly budgeted per fixture), confirming `B-003`/`B-007` remain MITIGATING rather than closed.
+  - Refreshed upstream artifact outputs for VexFlow gap tracking via `npm run vexflow:gaps:brief` (`artifacts/vexflow-upstream/upstream-brief.{md,json}`).
   - Added shared fast-loop execution tooling in `src/testkit/execution-loop.ts` (`parseCsvArgument`, `runWithConcurrency`, `summarizeDurations`) with deterministic unit coverage in `tests/unit/execution-loop.test.ts`.
   - Added reusable fixture render cache (`scripts/lib/fixture-render-cache.mjs`) and integrated it into golden/headless/inspect workflows (`run-golden-comparison`, `run-headless-visual-regression`, `inspect-score-headless`) for faster repeated triage runs.
   - Added incremental + parallel demo build controls in `scripts/build-demos.mjs` (`--fixtures`, `--changed-from`, `--concurrency`, timing budget options) and exposed them via package scripts (`demos:build:fixtures`, `demos:build:changed`).

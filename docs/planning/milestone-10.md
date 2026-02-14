@@ -277,9 +277,49 @@ Exit checklist:
   - `61b-multiplelyrics`: overlaps `0`
 - Revalidated conformance report (`npm run test:conformance:report`): expected-pass quality summary remains stable with no critical collisions.
 
+## Latest M10D note (2026-02-14, compaction + pagination/API completeness)
+- Implemented generalized sparse-system compaction in `src/vexflow/render.ts`:
+  - justified sparse systems now compact by density-aware target width (`resolveSparseSystemTargetWidth`) instead of always expanding to full content width,
+  - source-authored width hints remain authoritative (sparse compaction is skipped when structured source-width hints are present).
+- Implemented generalized vertical-compaction balancing in `src/vexflow/render.ts`:
+  - grand-staff and inter-part spacing now use bounded low-risk compaction credits, reducing over-expanded sparse layouts while preserving dense-scene clearance.
+- Implemented API completeness for `R-036`:
+  - partial rendering via `layout.window` (inclusive `startMeasure`, exclusive `endMeasure`),
+  - page-level telemetry via `pageMetrics` (`contentBounds`, `viewportBounds`, per-edge overflow flags + amounts),
+  - measure-number overlays via `layout.measureNumbers` (`enabled`, `interval`, `showFirst`).
+- Implemented demo pagination UX in `scripts/build-demos.mjs`:
+  - all rendered pages are embedded, with prev/next controls, page indicators, and per-page overflow summaries.
+- Deterministic coverage added/updated:
+  - `tests/integration/public-api.test.ts` now covers partial windows, overflow telemetry, measure-number overlays, sparse compaction differentiation, and bounded sparse grand-staff gaps.
+  - `tests/integration/render-quality-regressions.test.ts` updated for compaction-adjusted page-count baselines (`bwv1-6 minPages=2`, `lieder minPages=5`) and tighter lieder long-form budgets (`maxCompressedBands=6`, `maxCompressedPages=3`).
+- Validation for this pass:
+  - `npm run test -- tests/integration/public-api.test.ts`
+  - `npm run test -- tests/integration/render-quality-regressions.test.ts`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run demos:build:fixtures -- --fixtures realworld-music21-bach-bwv1-6`
+- Remaining blocker state:
+  - `B-003/B-007` remain MITIGATING; op133/bwv248 long-form sparse-band outliers are stable but not materially improved (`op133 compressedBands=14`, `bwv248 compressedBands=18`).
+
+## Latest M10D note (2026-02-14, promotion-confidence + B-010 parity follow-up)
+- Execution reprioritization:
+  - `B-003/B-007` are moved to an opportunistic lane (not current mainline closeout blockers) while we promote `B-013`/`B-014`/`R-036` and continue `B-010` parity/upstream prep.
+- Compaction confidence promotion (`B-013`/`B-014`):
+  - added blocking real-world sparse compaction envelope gates on `realworld-music21-mozart-k545-exposition` and `realworld-music21-berlin-alexanders-ragtime` (bounded compressed + over-stretched spacing-band budgets),
+  - added blocking real-world paired-staff vertical gap envelope gates on `realworld-music21-schumann-clara-polonaise-op1n1` and `realworld-openscore-lieder-just-for-today`.
+- Pagination/API confidence promotion (`R-036`):
+  - added blocking multi-page API telemetry + measure-window slicing gates on `realworld-music21-bach-bwv1-6` and `realworld-music21-schumann-clara-polonaise-op1n1` in `tests/integration/public-api.test.ts`,
+  - added demo pager telemetry payload checks on generated multi-page demos (`realworld-music21-bach-bwv1-6.html`, `realworld-music21-schumann-clara-polonaise-op1n1.html`) in `tests/integration/demos.test.ts`.
+- `B-010` parity track:
+  - strengthened category-32 proof-points so parsed non-arpeggiate marker counts now match fallback diagnostics and bracket-anchor counts (`32a` + `32d`), and updated `VF-GAP-002` upstream sync notes.
+- Validation:
+  - `npm run test -- tests/integration/render-quality-regressions.test.ts tests/integration/public-api.test.ts tests/integration/demos.test.ts tests/integration/vexflow-gap-registry.test.ts`
+  - `npm run lint`
+  - `npm run typecheck`
+
 ## Completion criteria
 - [ ] Default rendering is paginated and documented.
 - [ ] Horizontal continuous mode remains available and tested.
 - [ ] Core publishing metadata (title/labels/page numbers) is available in public options.
-- [ ] M10D blocker bugs (`B-003`, `B-007`, `B-011`, `B-012`) are closed or explicitly waived with rationale.
+- [ ] Primary M10D promotion blockers (`B-013`, `B-014`, `R-036`, `B-010`) are closed or explicitly waived with rationale; opportunistic long-form blockers (`B-003`, `B-007`) remain tracked with bounded budgets.
 - [ ] M10 doc renamed to `milestone-10.completed.md` with all references updated.

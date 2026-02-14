@@ -327,9 +327,10 @@ export function mapOrnaments(noteData: NoteData, diagnostics: Diagnostic[]): Orn
     }
     if (ornament.type.startsWith('non-arpeggiate')) {
       diagnostics.push({
-        code: 'NON_ARPEGGIATE_UNSUPPORTED',
-        severity: 'warning',
-        message: 'non-arpeggiate is parsed but currently has no direct VexFlow glyph mapping.'
+        code: 'NON_ARPEGGIATE_FALLBACK_RENDERED',
+        severity: 'info',
+        message:
+          'Rendered non-arpeggiate using a bracket fallback because VexFlow does not expose a dedicated non-arpeggiate glyph primitive.'
       });
       continue;
     }

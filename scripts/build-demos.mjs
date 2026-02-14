@@ -146,7 +146,13 @@ const DEMO_TEXT_HORIZONTAL_INCLUSION_PADDING = 40;
 /**
  * @typedef {{
  *   observedOutcome: 'pass' | 'parse-fail' | 'render-fail';
- *   svgMarkup: string | null;
+ *   svgPages: string[];
+ *   pageMetrics: Array<{
+ *     pageNumber: number;
+ *     pageCount: number;
+ *     measureWindow?: { startMeasure: number; endMeasure: number };
+ *     overflow: { left: boolean; right: boolean; top: boolean; bottom: boolean };
+ *   }>;
  *   diagnostics: import('../src/core/diagnostics.js').Diagnostic[];
  * }} DemoRenderOutcome
  */
@@ -242,12 +248,23 @@ function buildDemoPageHtml(demo, renderOutcome) {
     (demo.expected === 'pass' && renderOutcome.observedOutcome === 'pass') ||
     (demo.expected === 'fail' && renderOutcome.observedOutcome !== 'pass');
   const statusTone = expectedMatches ? '#1b6f3a' : '#7a2f2f';
-  const renderSurface =
-    renderOutcome.svgMarkup === null
-      ? `<p><strong>No SVG output.</strong> This fixture currently produced <code>${escapeHtml(
-          observedLabel
-        )}</code> in demo generation.</p>`
-      : renderOutcome.svgMarkup;
+  const pageCount = renderOutcome.svgPages.length;
+  const hasPages = pageCount > 0;
+  const pagePanels = hasPages
+    ? renderOutcome.svgPages
+        .map(
+          (svgMarkup, index) =>
+            `<div class="render-page${index === 0 ? ' is-active' : ''}" data-page-index="${index}" ${
+              index === 0 ? '' : 'hidden'
+            }>
+          ${svgMarkup}
+        </div>`
+        )
+        .join('\n')
+    : `<p><strong>No SVG output.</strong> This fixture currently produced <code>${escapeHtml(
+        observedLabel
+      )}</code> in demo generation.</p>`;
+  const pageMetricsJson = escapeHtml(JSON.stringify(renderOutcome.pageMetrics ?? []));
 
   return `<!doctype html>
 <html lang="en">
@@ -323,6 +340,42 @@ function buildDemoPageHtml(demo, renderOutcome) {
       .actions {
         margin-top: 10px;
       }
+
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .pager button {
+        border: 1px solid var(--border);
+        background: #f7f9fc;
+        color: var(--fg);
+        border-radius: 8px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+
+      .pager button:disabled {
+        cursor: default;
+        opacity: 0.45;
+      }
+
+      .page-indicator {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .page-metrics {
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-size: 0.9rem;
+      }
+
+      .render-page[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -338,13 +391,116 @@ function buildDemoPageHtml(demo, renderOutcome) {
       )}</span> | <strong>Parse mode:</strong> ${escapeHtml(demo.parseMode)}</p>
       ${renderDemoSource(demo)}
       <section class="surface">
-        ${renderSurface}
+        <div class="pager" ${hasPages ? '' : 'hidden'}>
+          <button type="button" id="mx-prev-page">Prev page</button>
+          <button type="button" id="mx-next-page">Next page</button>
+          <span class="page-indicator" id="mx-page-indicator"></span>
+        </div>
+        <p class="page-metrics" id="mx-page-metrics" ${hasPages ? '' : 'hidden'}></p>
+        ${pagePanels}
       </section>
       <section class="surface">
         <h2>Diagnostics</h2>
         ${renderDiagnosticsList(renderOutcome.diagnostics)}
       </section>
     </main>
+    <script id="mx-page-metrics-json" type="application/json">${pageMetricsJson}</script>
+    <script>
+      (() => {
+        const pages = [...document.querySelectorAll('.render-page')];
+        if (pages.length <= 1) {
+          const indicator = document.getElementById('mx-page-indicator');
+          if (indicator) {
+            indicator.textContent = pages.length === 1 ? 'Page 1 / 1' : '';
+          }
+          const metrics = document.getElementById('mx-page-metrics');
+          const metricsJson = document.getElementById('mx-page-metrics-json')?.textContent ?? '[]';
+          const pageMetrics = JSON.parse(metricsJson);
+          if (metrics) {
+            const metric = pageMetrics[0];
+            if (metric?.measureWindow) {
+              metrics.textContent =
+                'measures ' + (metric.measureWindow.startMeasure + 1) + '-' + metric.measureWindow.endMeasure;
+            }
+          }
+          const prev = document.getElementById('mx-prev-page');
+          const next = document.getElementById('mx-next-page');
+          if (prev) prev.setAttribute('disabled', 'true');
+          if (next) next.setAttribute('disabled', 'true');
+          return;
+        }
+
+        const metricsJson = document.getElementById('mx-page-metrics-json')?.textContent ?? '[]';
+        const pageMetrics = JSON.parse(metricsJson);
+        const prev = document.getElementById('mx-prev-page');
+        const next = document.getElementById('mx-next-page');
+        const indicator = document.getElementById('mx-page-indicator');
+        const metrics = document.getElementById('mx-page-metrics');
+        let activeIndex = 0;
+
+        const formatMetric = (metric) => {
+          if (!metric) {
+            return '';
+          }
+          const windowLabel = metric.measureWindow
+            ? 'measures ' + (metric.measureWindow.startMeasure + 1) + '-' + metric.measureWindow.endMeasure
+            : 'measures n/a';
+          const edges = [];
+          if (metric.overflow?.left) edges.push('left');
+          if (metric.overflow?.right) edges.push('right');
+          if (metric.overflow?.top) edges.push('top');
+          if (metric.overflow?.bottom) edges.push('bottom');
+          const overflowLabel = edges.length > 0 ? edges.join(', ') : 'none';
+          return windowLabel + ' | overflow: ' + overflowLabel;
+        };
+
+        const render = () => {
+          pages.forEach((page, index) => {
+            const isActive = index === activeIndex;
+            if (isActive) {
+              page.removeAttribute('hidden');
+            } else {
+              page.setAttribute('hidden', 'true');
+            }
+          });
+          if (indicator) {
+            indicator.textContent = 'Page ' + (activeIndex + 1) + ' / ' + pages.length;
+          }
+          if (metrics) {
+            metrics.textContent = formatMetric(pageMetrics[activeIndex]);
+          }
+          if (prev) {
+            if (activeIndex === 0) {
+              prev.setAttribute('disabled', 'true');
+            } else {
+              prev.removeAttribute('disabled');
+            }
+          }
+          if (next) {
+            if (activeIndex >= pages.length - 1) {
+              next.setAttribute('disabled', 'true');
+            } else {
+              next.removeAttribute('disabled');
+            }
+          }
+        };
+
+        prev?.addEventListener('click', () => {
+          if (activeIndex > 0) {
+            activeIndex -= 1;
+            render();
+          }
+        });
+        next?.addEventListener('click', () => {
+          if (activeIndex < pages.length - 1) {
+            activeIndex += 1;
+            render();
+          }
+        });
+
+        render();
+      })();
+    </script>
   </body>
 </html>
 `;
@@ -869,7 +1025,8 @@ async function renderDemoFixture(demoDefinition) {
   if (!parsed.score || parseErrors.length > 0) {
     return /** @type {DemoRenderOutcome} */ ({
       observedOutcome: 'parse-fail',
-      svgMarkup: null,
+      svgPages: [],
+      pageMetrics: [],
       diagnostics: parsed.diagnostics
     });
   }
@@ -877,6 +1034,11 @@ async function renderDemoFixture(demoDefinition) {
   const rendered = renderToSVGPages(parsed.score, {
     layout: {
       scale: DEMO_RENDER_SCALE,
+      measureNumbers: {
+        enabled: true,
+        interval: 4,
+        showFirst: true
+      },
       page: {
         width: DEMO_LAYOUT_PAGE_WIDTH,
         height: DEMO_LAYOUT_PAGE_HEIGHT,
@@ -893,14 +1055,16 @@ async function renderDemoFixture(demoDefinition) {
   if (rendered.pages.length === 0 || renderErrors.length > 0) {
     return /** @type {DemoRenderOutcome} */ ({
       observedOutcome: 'render-fail',
-      svgMarkup: rendered.pages[0] ?? null,
+      svgPages: rendered.pages.slice(0, 1),
+      pageMetrics: rendered.pageMetrics ?? [],
       diagnostics: [...parsed.diagnostics, ...rendered.diagnostics]
     });
   }
 
   return /** @type {DemoRenderOutcome} */ ({
     observedOutcome: 'pass',
-    svgMarkup: trimSvgMarkupToNotationBounds(rendered.pages[0]),
+    svgPages: rendered.pages.map((pageMarkup) => trimSvgMarkupToNotationBounds(pageMarkup)),
+    pageMetrics: rendered.pageMetrics ?? [],
     diagnostics: [...parsed.diagnostics, ...rendered.diagnostics]
   });
 }

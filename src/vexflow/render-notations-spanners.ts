@@ -1,8 +1,8 @@
 import { Curve, StaveHairpin, StaveTie, Tuplet, type Stave, type StaveNote } from 'vexflow';
 
 import type { Diagnostic } from '../core/diagnostics.js';
-import type { Score, SpannerRelation } from '../core/score.js';
-import type { RenderedTupletSpec } from './render-note-mapper.js';
+import type { Measure, Score, SpannerRelation } from '../core/score.js';
+import { buildVoiceEventKey, type RenderedTupletSpec } from './render-note-mapper.js';
 import { buildEventRefLookupKey, type RenderMeasureWindow } from './render-notations-core.js';
 
 /** Non-null render context alias used by notation drawing helpers. */
@@ -14,6 +14,14 @@ const MAX_MIXED_STEM_SLUR_ANCHOR_DELTA = 48;
 const MAX_SLUR_ANCHOR_DELTA = 68;
 /** Ties should connect equal-pitch anchors; large deltas indicate unstable pairing. */
 const MAX_TIE_ANCHOR_DELTA = 56;
+/** Horizontal offset used for bracket-style non-arpeggiate fallback drawing. */
+const NON_ARPEGGIATE_BRACKET_LEFT_OFFSET = 12;
+/** Hook length for bracket-style non-arpeggiate fallback drawing. */
+const NON_ARPEGGIATE_BRACKET_HOOK_LENGTH = 6;
+/** Minimum vertical span so single-note non-arpeggiate markers remain visible. */
+const NON_ARPEGGIATE_BRACKET_MIN_SPAN = 10;
+/** Extra pad applied above and below detected non-arpeggiate anchor notes. */
+const NON_ARPEGGIATE_BRACKET_VERTICAL_PAD = 3;
 
 /** Draw parsed tuplet groups for the current measure/staff after note formatting. */
 export function drawMeasureTuplets(
@@ -47,6 +55,36 @@ export function drawMeasureTuplets(
         severity: 'warning',
         message: error instanceof Error ? error.message : 'Tuplet render failed.'
       });
+    }
+  }
+}
+
+/** Draw non-arpeggiate ornaments as bracket-like fallbacks near chord noteheads. */
+export function drawMeasureNonArpeggiates(
+  measure: Measure,
+  staffNumber: number,
+  noteByEventKey: Map<string, StaveNote>,
+  context: VexRenderContext
+): void {
+  for (const voice of measure.voices) {
+    for (let eventIndex = 0; eventIndex < voice.events.length; eventIndex += 1) {
+      const event = voice.events[eventIndex];
+      if (!event || event.kind !== 'note' || (event.staff ?? 1) !== staffNumber) {
+        continue;
+      }
+
+      const markerIndices = collectNonArpeggiateMarkerIndices(event.notes);
+      if (markerIndices.length === 0) {
+        continue;
+      }
+
+      const mappedNote = noteByEventKey.get(buildVoiceEventKey(voice.id, eventIndex));
+      if (!mappedNote) {
+        continue;
+      }
+
+      const { topY, bottomY } = resolveNonArpeggiateBracketRange(mappedNote, markerIndices);
+      drawNonArpeggiateBracket(mappedNote, topY, bottomY, context);
     }
   }
 }
@@ -415,4 +453,88 @@ function drawWedge(
       message: error instanceof Error ? error.message : `Wedge '${spanner.id}' failed to render.`
     });
   }
+}
+
+/** Collect per-note marker indices for non-arpeggiate ornament endpoints. */
+function collectNonArpeggiateMarkerIndices(
+  noteData: Array<{ ornaments?: Array<{ type: string }> }>
+): Array<{ index: number; edge: 'top' | 'bottom' | 'any' }> {
+  const markers: Array<{ index: number; edge: 'top' | 'bottom' | 'any' }> = [];
+  for (let noteIndex = 0; noteIndex < noteData.length; noteIndex += 1) {
+    const ornaments = noteData[noteIndex]?.ornaments ?? [];
+    for (const ornament of ornaments) {
+      if (!ornament.type.startsWith('non-arpeggiate')) {
+        continue;
+      }
+
+      if (ornament.type.endsWith('-top')) {
+        markers.push({ index: noteIndex, edge: 'top' });
+        continue;
+      }
+      if (ornament.type.endsWith('-bottom')) {
+        markers.push({ index: noteIndex, edge: 'bottom' });
+        continue;
+      }
+      markers.push({ index: noteIndex, edge: 'any' });
+    }
+  }
+  return markers;
+}
+
+/** Resolve top/bottom Y anchors for a non-arpeggiate bracket from mapped chord noteheads. */
+function resolveNonArpeggiateBracketRange(
+  note: StaveNote,
+  markers: Array<{ index: number; edge: 'top' | 'bottom' | 'any' }>
+): { topY: number; bottomY: number } {
+  const yValues = note.getYs();
+  if (yValues.length === 0) {
+    const stemExtents = note.getStemExtents();
+    return {
+      topY: stemExtents.topY - NON_ARPEGGIATE_BRACKET_VERTICAL_PAD,
+      bottomY: Math.max(
+        stemExtents.baseY + NON_ARPEGGIATE_BRACKET_VERTICAL_PAD,
+        stemExtents.topY + NON_ARPEGGIATE_BRACKET_MIN_SPAN
+      )
+    };
+  }
+
+  const markerY = markers.map((marker) => yValues[Math.max(0, Math.min(yValues.length - 1, marker.index))] ?? yValues[0] ?? 0);
+  const topMarkerY = markers
+    .filter((marker) => marker.edge === 'top')
+    .map((marker) => yValues[Math.max(0, Math.min(yValues.length - 1, marker.index))] ?? yValues[0] ?? 0);
+  const bottomMarkerY = markers
+    .filter((marker) => marker.edge === 'bottom')
+    .map((marker) => yValues[Math.max(0, Math.min(yValues.length - 1, marker.index))] ?? yValues[0] ?? 0);
+
+  const allTop = Math.min(...yValues);
+  const allBottom = Math.max(...yValues);
+  const topY = (topMarkerY.length > 0 ? Math.min(...topMarkerY) : Math.min(...markerY, allTop)) - NON_ARPEGGIATE_BRACKET_VERTICAL_PAD;
+  const rawBottom =
+    (bottomMarkerY.length > 0 ? Math.max(...bottomMarkerY) : Math.max(...markerY, allBottom)) +
+    NON_ARPEGGIATE_BRACKET_VERTICAL_PAD;
+  const bottomY = Math.max(rawBottom, topY + NON_ARPEGGIATE_BRACKET_MIN_SPAN);
+  return { topY, bottomY };
+}
+
+/** Draw one bracket-style non-arpeggiate fallback to the left of one chord anchor. */
+function drawNonArpeggiateBracket(
+  note: StaveNote,
+  topY: number,
+  bottomY: number,
+  context: VexRenderContext
+): void {
+  const x = note.getAbsoluteX() - note.getLeftDisplacedHeadPx() - NON_ARPEGGIATE_BRACKET_LEFT_OFFSET;
+  context.openGroup('vf-non-arpeggiate-bracket');
+  context.save();
+  context.setLineWidth(1);
+  context.beginPath();
+  context.moveTo(x, topY);
+  context.lineTo(x, bottomY);
+  context.moveTo(x, topY);
+  context.lineTo(x + NON_ARPEGGIATE_BRACKET_HOOK_LENGTH, topY);
+  context.moveTo(x, bottomY);
+  context.lineTo(x + NON_ARPEGGIATE_BRACKET_HOOK_LENGTH, bottomY);
+  context.stroke();
+  context.restore();
+  context.closeGroup();
 }

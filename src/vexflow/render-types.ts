@@ -25,6 +25,23 @@ export interface RenderSystemOptions {
   justifyLastSystem?: boolean;
 }
 
+/** Inclusive/exclusive measure window used for partial-score rendering. */
+export interface RenderMeasureWindowOptions {
+  /** Inclusive zero-based measure index to start rendering from. */
+  startMeasure?: number;
+  /** Exclusive zero-based measure index where rendering stops. */
+  endMeasure?: number;
+}
+
+/** Measure-number overlay controls used for page-level debugging/readability. */
+export interface RenderMeasureNumberOptions {
+  enabled?: boolean;
+  /** Display one label every `interval` measures (default: `4`). */
+  interval?: number;
+  /** When true, force measure `1`/window-start labels even if interval does not align. */
+  showFirst?: boolean;
+}
+
 /** Controls for part/staff labels placed on the left of each system. */
 export interface RenderLabelOptions {
   showPartNames?: boolean;
@@ -49,10 +66,13 @@ export interface RenderLayoutOptions {
   mode?: RenderLayoutMode;
   /** Global render scale applied to notation/text drawing (`1` = current size). */
   scale?: number;
+  /** Optional partial-score window rendered within the full score timeline. */
+  window?: RenderMeasureWindowOptions;
   page?: RenderPageOptions;
   system?: RenderSystemOptions;
   labels?: RenderLabelOptions;
   headerFooter?: RenderHeaderFooterOptions;
+  measureNumbers?: RenderMeasureNumberOptions;
 }
 
 /** Internal renderer options used by the public API adapter layer. */
@@ -66,14 +86,52 @@ export interface RenderOptionsLike {
 /** Render output when generating standalone SVG page markup. */
 export interface RenderPagesResultLike {
   pages: string[];
+  pageMetrics: RenderPageMetricsLike[];
   diagnostics: Diagnostic[];
 }
 
 /** Render output when drawing into an existing DOM element. */
 export interface RenderToElementResultLike {
   pageCount: number;
+  pageMetrics: RenderPageMetricsLike[];
   diagnostics: Diagnostic[];
   dispose(): void;
+}
+
+/** One numeric bounds rectangle used in layout telemetry output. */
+export interface RenderBoundsLike {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+/** Per-edge overflow booleans and magnitudes for host fit/reflow decisions. */
+export interface RenderOverflowTelemetryLike {
+  left: boolean;
+  right: boolean;
+  top: boolean;
+  bottom: boolean;
+  leftAmount: number;
+  rightAmount: number;
+  topAmount: number;
+  bottomAmount: number;
+}
+
+/** Per-page telemetry emitted alongside rendered SVG strings. */
+export interface RenderPageMetricsLike {
+  pageIndex: number;
+  pageNumber: number;
+  pageCount: number;
+  measureWindow?: {
+    startMeasure: number;
+    endMeasure: number;
+  };
+  contentBounds: RenderBoundsLike;
+  viewportBounds: RenderBoundsLike;
+  overflow: RenderOverflowTelemetryLike;
 }
 
 /** Legacy baseline page width used by early continuous renderer output. */

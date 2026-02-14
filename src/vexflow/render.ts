@@ -33,6 +33,7 @@ import {
   drawMeasureDirections,
   drawMeasureHarmonies,
   drawMeasureLyrics,
+  drawMeasureNonArpeggiates,
   drawMeasureTuplets,
   drawScoreSpanners,
   registerMeasureEventNotes,
@@ -48,6 +49,7 @@ import {
   DEFAULT_PAGINATED_PAGE_WIDTH,
   LEFT_MARGIN,
   TOP_MARGIN,
+  type RenderPageMetricsLike,
   type RenderLayoutMode,
   type RenderOptionsLike,
   type RenderPagesResultLike,
@@ -126,6 +128,31 @@ const LOCAL_SPARSE_MEASURE_HINT_THRESHOLD = 1.35;
 const MIN_ADAPTIVE_MEASURES_PER_SYSTEM = 2;
 /** Maximum number of measures local adaptation may add beyond base planning. */
 const MAX_ADAPTIVE_MEASURE_EXPANSION = 1;
+/** Source-width compression risk threshold for first columns in local system windows. */
+const LOCAL_FIRST_COLUMN_COMPRESSION_RISK_THRESHOLD = 0.52;
+/** Additional system split reduction applied when first-column risk is high. */
+const LOCAL_FIRST_COLUMN_COMPRESSION_REDUCTION = 2;
+/** Density threshold where system justification compaction begins. */
+const SPARSE_SYSTEM_DENSITY_THRESHOLD = 1.38;
+/** Strong sparse threshold used for 1-2 measure systems. */
+const VERY_SPARSE_SYSTEM_DENSITY_THRESHOLD = 1.18;
+/** Maximum sparse-system width reduction ratio against available width. */
+const MAX_SPARSE_SYSTEM_WIDTH_REDUCTION_RATIO = 0.24;
+/** Minimum width ratio retained even for aggressively compact sparse systems. */
+const MIN_SPARSE_SYSTEM_TARGET_WIDTH_RATIO = 0.72;
+/** Measure-number CSS class used for deterministic integration checks. */
+const MEASURE_NUMBER_CLASS = 'mx-measure-number';
+/** Default measure-number interval when the overlay is enabled. */
+const DEFAULT_MEASURE_NUMBER_INTERVAL = 4;
+/** Vertical offset above top staff where measure-number overlays are drawn. */
+const DEFAULT_MEASURE_NUMBER_Y_OFFSET = 8;
+
+/** Resolved measure-number behavior used while drawing one render pass. */
+interface ResolvedMeasureNumberConfig {
+  enabled: boolean;
+  interval: number;
+  showFirst: boolean;
+}
 
 /** Stable layout metadata for one score part across all systems/pages. */
 interface PartLayout {
@@ -213,6 +240,7 @@ interface LayoutPlanConfig {
   leftFooter?: string;
   rightFooter?: string;
   renderScale: number;
+  measureNumbers: ResolvedMeasureNumberConfig;
 }
 
 /** Forced line/page break starts collected from parsed MusicXML `<print>` directives. */
@@ -232,6 +260,18 @@ interface InitialPrintPageLayout {
 interface PageRenderEnvelope {
   width: number;
   height: number;
+  contentBounds: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
+  viewportBounds: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
 }
 
 /** CSS class used to identify deterministic page background rects in SVG output. */
@@ -269,16 +309,18 @@ export function renderScoreToSVGPages(
     });
     return {
       pages: [],
+      pageMetrics: [],
       diagnostics
     };
   }
 
-  const pageCount = renderIntoContainer(score, container as unknown as HTMLElement, options, diagnostics);
+  const renderResult = renderIntoContainer(score, container as unknown as HTMLElement, options, diagnostics);
   const svgPages = [...container.querySelectorAll('svg')].map((svgElement) => svgElement.outerHTML);
   dom.window.close();
 
   return {
-    pages: pageCount > 0 ? svgPages : [],
+    pages: renderResult.pageCount > 0 ? svgPages : [],
+    pageMetrics: renderResult.pageMetrics,
     diagnostics
   };
 }
@@ -293,10 +335,11 @@ export function renderScoreToElement(
   options: RenderOptionsLike = {}
 ): RenderToElementResultLike {
   const diagnostics: Diagnostic[] = [];
-  const pageCount = renderIntoContainer(score, container, options, diagnostics);
+  const renderResult = renderIntoContainer(score, container, options, diagnostics);
 
   return {
-    pageCount,
+    pageCount: renderResult.pageCount,
+    pageMetrics: renderResult.pageMetrics,
     diagnostics,
     dispose: () => {
       container.innerHTML = '';
@@ -310,7 +353,7 @@ function renderIntoContainer(
   container: HTMLElement,
   options: RenderOptionsLike,
   diagnostics: Diagnostic[]
-): number {
+): { pageCount: number; pageMetrics: RenderPageMetricsLike[] } {
   const restoreDomGlobals = ensureDomGlobals(container.ownerDocument);
   container.innerHTML = '';
 
@@ -320,25 +363,35 @@ function renderIntoContainer(
       severity: 'error',
       message: 'Score does not contain any parts to render.'
     });
-    return 0;
+    return { pageCount: 0, pageMetrics: [] };
   }
 
-  const measureCount = Math.max(0, ...score.parts.map((part) => part.measures.length));
-  if (measureCount === 0) {
+  const totalMeasureCount = Math.max(0, ...score.parts.map((part) => part.measures.length));
+  if (totalMeasureCount === 0) {
     diagnostics.push({
       code: 'EMPTY_PART',
       severity: 'error',
       message: 'Score parts contain no measures to render.'
     });
-    return 0;
+    return { pageCount: 0, pageMetrics: [] };
+  }
+  const measureSlots = resolveMeasureSlots(totalMeasureCount, options, diagnostics);
+  if (measureSlots.length === 0) {
+    diagnostics.push({
+      code: 'EMPTY_RENDER_WINDOW',
+      severity: 'error',
+      message: 'Resolved measure window does not include any measures to render.'
+    });
+    return { pageCount: 0, pageMetrics: [] };
   }
 
   const partLayouts = buildPartLayouts(score.parts);
-  const config = resolveLayoutPlanConfig(score, options, partLayouts, measureCount);
-  const forcedBreaks = collectForcedMeasureBreaks(partLayouts, measureCount);
-  const systemRanges = buildSystemRanges(measureCount, config, forcedBreaks, partLayouts);
+  const config = resolveLayoutPlanConfig(score, options, partLayouts, measureSlots.length);
+  const forcedBreaks = collectForcedMeasureBreaks(partLayouts, measureSlots);
+  const systemRanges = buildSystemRanges(measureSlots.length, config, forcedBreaks, partLayouts, measureSlots);
   const systemHeight = estimateSystemHeight(partLayouts, config);
   const pagePlans = buildPagePlans(score, systemRanges, systemHeight, config);
+  const pageMetrics: RenderPageMetricsLike[] = [];
 
   const partDefinitionsById = new Map(score.partList.map((definition) => [definition.id, definition]));
 
@@ -354,10 +407,11 @@ function renderIntoContainer(
           score,
           partLayouts,
           system,
+          measureSlots,
           config.contentStartX,
           config.contentWidth,
           config.mode === 'paginated',
-          system.endMeasure < measureCount || config.justifyLastSystem,
+          system.endMeasure < measureSlots.length || config.justifyLastSystem,
           diagnostics
         );
         systemColumnLayouts.set(system.index, columnLayout);
@@ -400,10 +454,11 @@ function renderIntoContainer(
           eventNotesByPart.set(partLayout.part.id, partEventNotes);
 
           for (let measureColumn = system.startMeasure; measureColumn < system.endMeasure; measureColumn += 1) {
+            const absoluteMeasureIndex = measureSlots[measureColumn] ?? measureColumn;
             const localColumnIndex = measureColumn - system.startMeasure;
             const x = columnLayout.columnX[localColumnIndex] ?? config.contentStartX;
             const columnWidth = columnLayout.columnWidths[localColumnIndex] ?? MINIMUM_MEASURE_WIDTH;
-            const measure = partLayout.part.measures[measureColumn];
+            const measure = partLayout.part.measures[absoluteMeasureIndex];
             const staves: Stave[] = [];
             const isSystemStartColumn = measureColumn === system.startMeasure;
 
@@ -436,7 +491,8 @@ function renderIntoContainer(
                   }
                 }
               } else if (measure && measureColumn > 0) {
-                const previousMeasure = partLayout.part.measures[measureColumn - 1];
+                const previousAbsoluteMeasureIndex = measureSlots[measureColumn - 1] ?? measureColumn - 1;
+                const previousMeasure = partLayout.part.measures[previousAbsoluteMeasureIndex];
                 const previousClef = resolveClefForStaff(previousMeasure, staffNumber);
                 if (hasClefChanged(previousClef, clefInfo)) {
                   // Mid-system clef changes use small glyphs at measure starts.
@@ -475,6 +531,15 @@ function renderIntoContainer(
                 voice.draw(context, stave);
                 drawPreparedBeams(beams, context, diagnostics, measure.index, staffNumber);
                 drawMeasureTuplets(noteResult.tuplets, diagnostics, context);
+                drawMeasureNonArpeggiates(measure, staffNumber, noteResult.noteByEventKey, context);
+              }
+
+              if (
+                staffNumber === 1 &&
+                config.measureNumbers.enabled &&
+                shouldDrawMeasureNumberOverlay(measure, absoluteMeasureIndex, measureSlots, config.measureNumbers)
+              ) {
+                drawMeasureNumberOverlay(context, measure, absoluteMeasureIndex, stave);
               }
 
               drawMeasureDirections(
@@ -561,16 +626,23 @@ function renderIntoContainer(
         }
       }
 
-      const renderWindow = resolvePageMeasureWindow(pagePlan);
+      const renderWindow = resolvePageMeasureWindow(pagePlan, measureSlots);
       for (const [partId, partEventNotes] of eventNotesByPart.entries()) {
         drawScoreSpanners(score, partId, partEventNotes, diagnostics, context, renderWindow);
       }
+
+      pageMetrics.push(
+        buildPageMetrics(pagePlan, pagePlans.length, envelope, renderWindow)
+      );
     }
   } finally {
     restoreDomGlobals();
   }
 
-  return pagePlans.length;
+  return {
+    pageCount: pagePlans.length,
+    pageMetrics
+  };
 }
 
 /** Create and memoize per-staff direction text lanes for one rendered system. */
@@ -619,8 +691,8 @@ function hasClefChanged(previous: ClefInfo | undefined, current: ClefInfo | unde
   return previous.sign !== current.sign || previous.line !== current.line;
 }
 
-/** Resolve one inclusive measure window for all systems on the current page. */
-function resolvePageMeasureWindow(pagePlan: PagePlan): RenderMeasureWindow | undefined {
+/** Resolve one inclusive absolute measure window for all systems on one page. */
+function resolvePageMeasureWindow(pagePlan: PagePlan, measureSlots: number[]): RenderMeasureWindow | undefined {
   if (pagePlan.systems.length === 0) {
     return undefined;
   }
@@ -628,8 +700,11 @@ function resolvePageMeasureWindow(pagePlan: PagePlan): RenderMeasureWindow | und
   let startMeasure = Number.POSITIVE_INFINITY;
   let endMeasure = Number.NEGATIVE_INFINITY;
   for (const system of pagePlan.systems) {
-    startMeasure = Math.min(startMeasure, system.startMeasure);
-    endMeasure = Math.max(endMeasure, system.endMeasure);
+    const absoluteStart = measureSlots[system.startMeasure] ?? system.startMeasure;
+    const endSlot = Math.max(system.startMeasure, system.endMeasure - 1);
+    const absoluteEndExclusive = (measureSlots[endSlot] ?? endSlot) + 1;
+    startMeasure = Math.min(startMeasure, absoluteStart);
+    endMeasure = Math.max(endMeasure, absoluteEndExclusive);
   }
 
   if (!Number.isFinite(startMeasure) || !Number.isFinite(endMeasure)) {
@@ -640,6 +715,96 @@ function resolvePageMeasureWindow(pagePlan: PagePlan): RenderMeasureWindow | und
     startMeasure,
     endMeasure
   };
+}
+
+/** Build one page-level metrics envelope for public API telemetry output. */
+function buildPageMetrics(
+  pagePlan: PagePlan,
+  pageCount: number,
+  envelope: PageRenderEnvelope,
+  measureWindow: RenderMeasureWindow | undefined
+): RenderPageMetricsLike {
+  const leftAmount = Math.max(0, envelope.viewportBounds.left - envelope.contentBounds.left);
+  const rightAmount = Math.max(0, envelope.contentBounds.right - envelope.viewportBounds.right);
+  const topAmount = Math.max(0, envelope.viewportBounds.top - envelope.contentBounds.top);
+  const bottomAmount = Math.max(0, envelope.contentBounds.bottom - envelope.viewportBounds.bottom);
+
+  return {
+    pageIndex: pagePlan.pageNumber - 1,
+    pageNumber: pagePlan.pageNumber,
+    pageCount,
+    measureWindow,
+    contentBounds: toRenderBounds(envelope.contentBounds),
+    viewportBounds: toRenderBounds(envelope.viewportBounds),
+    overflow: {
+      left: leftAmount > 0,
+      right: rightAmount > 0,
+      top: topAmount > 0,
+      bottom: bottomAmount > 0,
+      leftAmount: Math.round(leftAmount),
+      rightAmount: Math.round(rightAmount),
+      topAmount: Math.round(topAmount),
+      bottomAmount: Math.round(bottomAmount)
+    }
+  };
+}
+
+/** Convert raw bounds into the public telemetry shape with width/height. */
+function toRenderBounds(bounds: { left: number; right: number; top: number; bottom: number }): RenderPageMetricsLike['contentBounds'] {
+  return {
+    left: Math.round(bounds.left),
+    top: Math.round(bounds.top),
+    right: Math.round(bounds.right),
+    bottom: Math.round(bounds.bottom),
+    width: Math.round(Math.max(0, bounds.right - bounds.left)),
+    height: Math.round(Math.max(0, bounds.bottom - bounds.top))
+  };
+}
+
+/** True when one measure-number overlay should be drawn at this measure start. */
+function shouldDrawMeasureNumberOverlay(
+  measure: Measure,
+  absoluteMeasureIndex: number,
+  measureSlots: number[],
+  config: ResolvedMeasureNumberConfig
+): boolean {
+  if (!config.enabled) {
+    return false;
+  }
+
+  const absoluteStartMeasure = measureSlots[0] ?? 0;
+  const normalizedLabel = measure.numberLabel?.trim();
+  const parsedLabel = normalizedLabel ? Number.parseInt(normalizedLabel, 10) : Number.NaN;
+  const displayIndex = Number.isFinite(parsedLabel) ? parsedLabel : absoluteMeasureIndex + 1;
+  const normalizedIndex = Math.max(0, displayIndex - 1);
+
+  if (config.showFirst && absoluteMeasureIndex === absoluteStartMeasure) {
+    return true;
+  }
+
+  return normalizedIndex % config.interval === 0;
+}
+
+/** Draw one small measure-number label above the current measure-start barline. */
+function drawMeasureNumberOverlay(
+  context: ReturnType<Renderer['getContext']>,
+  measure: Measure,
+  absoluteMeasureIndex: number,
+  stave: Stave
+): void {
+  const label = measure.numberLabel?.trim() || String(absoluteMeasureIndex + 1);
+  if (!label) {
+    return;
+  }
+
+  const svgContext = context as ReturnType<Renderer['getContext']> & {
+    openGroup?: (cls?: string) => unknown;
+    closeGroup?: () => unknown;
+  };
+  svgContext.openGroup?.(MEASURE_NUMBER_CLASS);
+  context.setFont('Times New Roman', 9, 'normal');
+  context.fillText(label, stave.getX() + 2, stave.getY() - DEFAULT_MEASURE_NUMBER_Y_OFFSET);
+  svgContext.closeGroup?.();
 }
 
 /**
@@ -705,17 +870,44 @@ function buildPartLayouts(parts: Part[]): PartLayout[] {
   });
 }
 
+/** Resolve one normalized measure-slot list from optional API render window options. */
+function resolveMeasureSlots(
+  totalMeasureCount: number,
+  options: RenderOptionsLike,
+  diagnostics: Diagnostic[]
+): number[] {
+  const requestedStart = options.layout?.window?.startMeasure ?? 0;
+  const requestedEnd = options.layout?.window?.endMeasure ?? totalMeasureCount;
+  const start = clampInt(requestedStart, 0, totalMeasureCount);
+  const end = clampInt(requestedEnd, 0, totalMeasureCount);
+
+  if (requestedEnd < requestedStart) {
+    diagnostics.push({
+      code: 'RENDER_WINDOW_INVALID',
+      severity: 'warning',
+      message: `Render window endMeasure (${requestedEnd}) is less than startMeasure (${requestedStart}); window resolves empty.`
+    });
+  }
+
+  if (end <= start) {
+    return [];
+  }
+
+  return Array.from({ length: end - start }, (_, index) => start + index);
+}
+
 /** Collect forced system/page starts from parsed measure print directives across parts. */
-function collectForcedMeasureBreaks(partLayouts: PartLayout[], measureCount: number): ForcedMeasureBreaks {
+function collectForcedMeasureBreaks(partLayouts: PartLayout[], measureSlots: number[]): ForcedMeasureBreaks {
   const systemStarts = new Set<number>();
   const pageStarts = new Set<number>();
 
-  for (let measureIndex = 0; measureIndex < measureCount; measureIndex += 1) {
+  for (let measureSlot = 0; measureSlot < measureSlots.length; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
     let forceSystem = false;
     let forcePage = false;
 
     for (const layout of partLayouts) {
-      const measure = layout.part.measures[measureIndex];
+      const measure = layout.part.measures[absoluteMeasureIndex];
       if (!measure?.print) {
         continue;
       }
@@ -724,11 +916,11 @@ function collectForcedMeasureBreaks(partLayouts: PartLayout[], measureCount: num
       forcePage ||= Boolean(measure.print.newPage);
     }
 
-    if (measureIndex > 0 && forceSystem) {
-      systemStarts.add(measureIndex);
+    if (measureSlot > 0 && forceSystem) {
+      systemStarts.add(measureSlot);
     }
-    if (measureIndex > 0 && forcePage) {
-      pageStarts.add(measureIndex);
+    if (measureSlot > 0 && forcePage) {
+      pageStarts.add(measureSlot);
     }
   }
 
@@ -847,6 +1039,11 @@ function resolveLayoutPlanConfig(
   const showPartNames = options.layout?.labels?.showPartNames ?? true;
   const showPartAbbreviations = options.layout?.labels?.showPartAbbreviations ?? true;
   const repeatOnSystemBreak = options.layout?.labels?.repeatOnSystemBreak ?? true;
+  const measureNumbers: ResolvedMeasureNumberConfig = {
+    enabled: options.layout?.measureNumbers?.enabled ?? false,
+    interval: clampInt(options.layout?.measureNumbers?.interval ?? DEFAULT_MEASURE_NUMBER_INTERVAL, 1, 999),
+    showFirst: options.layout?.measureNumbers?.showFirst ?? true
+  };
   const labelsEnabled = partLayouts.length > 0 && (showPartNames || showPartAbbreviations);
   const labelWidth = labelsEnabled
     ? clampInt(
@@ -952,7 +1149,8 @@ function resolveLayoutPlanConfig(
     rightHeader: options.layout?.headerFooter?.rightHeader ?? score.metadata?.headerRight,
     leftFooter: options.layout?.headerFooter?.leftFooter,
     rightFooter: options.layout?.headerFooter?.rightFooter,
-    renderScale
+    renderScale,
+    measureNumbers
   };
 }
 
@@ -961,7 +1159,8 @@ function buildSystemRanges(
   measureCount: number,
   config: LayoutPlanConfig,
   forcedBreaks: ForcedMeasureBreaks,
-  partLayouts: PartLayout[]
+  partLayouts: PartLayout[],
+  measureSlots: number[]
 ): SystemRange[] {
   if (config.mode === 'horizontal-continuous') {
     return [
@@ -981,7 +1180,8 @@ function buildSystemRanges(
       cursor,
       measureCount,
       config.measuresPerSystem,
-      partLayouts
+      partLayouts,
+      measureSlots
     );
     const next = resolveSystemEndMeasure(
       cursor,
@@ -1011,7 +1211,8 @@ function resolveAdaptiveMeasuresPerSystem(
   startMeasure: number,
   measureCount: number,
   baseMeasuresPerSystem: number,
-  partLayouts: PartLayout[]
+  partLayouts: PartLayout[],
+  measureSlots: number[]
 ): number {
   const remainingMeasures = Math.max(1, measureCount - startMeasure);
   if (baseMeasuresPerSystem <= 1 || remainingMeasures <= 1) {
@@ -1020,8 +1221,9 @@ function resolveAdaptiveMeasuresPerSystem(
 
   const windowEnd = Math.min(measureCount, startMeasure + baseMeasuresPerSystem);
   let peakDensityHint = 1;
-  for (let measureIndex = startMeasure; measureIndex < windowEnd; measureIndex += 1) {
-    peakDensityHint = Math.max(peakDensityHint, estimateMeasureDensityHintForIndex(partLayouts, measureIndex));
+  for (let measureSlot = startMeasure; measureSlot < windowEnd; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
+    peakDensityHint = Math.max(peakDensityHint, estimateMeasureDensityHintForIndex(partLayouts, absoluteMeasureIndex));
   }
 
   let reduction = 0;
@@ -1030,13 +1232,101 @@ function resolveAdaptiveMeasuresPerSystem(
   } else if (peakDensityHint >= LOCAL_DENSE_MEASURE_HINT_THRESHOLD) {
     reduction = 1;
   }
+  const hasStructuredSourceWidthHints = hasStructuredSourceWidthHintsInWindow(
+    partLayouts,
+    measureSlots,
+    startMeasure,
+    baseMeasuresPerSystem
+  );
+  const firstColumnCompressionRisk = estimateFirstColumnCompressionRisk(
+    partLayouts,
+    measureSlots,
+    startMeasure,
+    baseMeasuresPerSystem
+  );
+  if (!hasStructuredSourceWidthHints && firstColumnCompressionRisk >= LOCAL_FIRST_COLUMN_COMPRESSION_RISK_THRESHOLD) {
+    reduction += LOCAL_FIRST_COLUMN_COMPRESSION_REDUCTION;
+  }
 
   const sparseExpansion =
     peakDensityHint <= LOCAL_SPARSE_MEASURE_HINT_THRESHOLD ? MAX_ADAPTIVE_MEASURE_EXPANSION : 0;
   const upperBound = Math.min(remainingMeasures, baseMeasuresPerSystem + sparseExpansion);
-  const lowerBound = Math.min(MIN_ADAPTIVE_MEASURES_PER_SYSTEM, upperBound);
+  const minimumMeasuresPerSystem =
+    firstColumnCompressionRisk >= LOCAL_FIRST_COLUMN_COMPRESSION_RISK_THRESHOLD ? 1 : MIN_ADAPTIVE_MEASURES_PER_SYSTEM;
+  const lowerBound = Math.min(minimumMeasuresPerSystem, upperBound);
   const adapted = baseMeasuresPerSystem - reduction + sparseExpansion;
   return clampInt(adapted, lowerBound, upperBound);
+}
+
+/** True when a local window has at least two authored source-width columns. */
+function hasStructuredSourceWidthHintsInWindow(
+  partLayouts: PartLayout[],
+  measureSlots: number[],
+  startMeasure: number,
+  baseMeasuresPerSystem: number
+): boolean {
+  const windowEnd = Math.min(measureSlots.length, startMeasure + baseMeasuresPerSystem);
+  let hintedColumns = 0;
+  for (let measureSlot = startMeasure; measureSlot < windowEnd; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
+    let hasHint = false;
+    for (const layout of partLayouts) {
+      const hint = layout.part.measures[absoluteMeasureIndex]?.sourceWidthTenths;
+      if (Number.isFinite(hint) && (hint ?? 0) > 0) {
+        hasHint = true;
+        break;
+      }
+    }
+    if (hasHint) {
+      hintedColumns += 1;
+    }
+  }
+  return hintedColumns >= 2;
+}
+
+/**
+ * Estimate first-column compression risk in one local system window from source
+ * width hints. Narrow first columns relative to later measures need fewer
+ * measures-per-system to avoid severe opening-bar squeeze.
+ */
+function estimateFirstColumnCompressionRisk(
+  partLayouts: PartLayout[],
+  measureSlots: number[],
+  startMeasure: number,
+  baseMeasuresPerSystem: number
+): number {
+  const absoluteStartMeasure = measureSlots[startMeasure] ?? startMeasure;
+  const firstColumnHints = partLayouts
+    .map((layout) => layout.part.measures[absoluteStartMeasure]?.sourceWidthTenths)
+    .filter((hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0);
+  if (firstColumnHints.length === 0) {
+    return 0;
+  }
+
+  const firstHint = medianNumber(firstColumnHints);
+  const laterHints: number[] = [];
+  const windowEnd = Math.min(measureSlots.length, startMeasure + baseMeasuresPerSystem);
+  for (let measureSlot = startMeasure + 1; measureSlot < windowEnd; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
+    for (const layout of partLayouts) {
+      const hint = layout.part.measures[absoluteMeasureIndex]?.sourceWidthTenths;
+      if (Number.isFinite(hint) && (hint ?? 0) > 0) {
+        laterHints.push(hint ?? 0);
+      }
+    }
+  }
+
+  if (laterHints.length === 0) {
+    return 0;
+  }
+
+  const medianLaterHint = medianNumber(laterHints);
+  if (!Number.isFinite(medianLaterHint) || medianLaterHint <= 0) {
+    return 0;
+  }
+
+  const ratio = firstHint / medianLaterHint;
+  return clamp(1 - ratio, 0, 1);
 }
 
 /** Resolve one system end, clamping to forced new-system/new-page starts. */
@@ -1145,10 +1435,30 @@ function resolvePageRenderEnvelope(
 ): PageRenderEnvelope {
   const headerHeight = estimateHeaderHeight(score, config, pagePlan.pageNumber);
   const footerHeight = estimateFooterHeight(config);
+  const systemTop =
+    pagePlan.systems.length > 0
+      ? pagePlan.systems[0]!.topY
+      : config.margins.top + headerHeight + config.topSystemOffset;
   const systemBottom =
     pagePlan.systems.length > 0
       ? pagePlan.systems[pagePlan.systems.length - 1]!.topY + systemHeight
       : config.margins.top + headerHeight;
+  const viewportTop = config.margins.top + headerHeight + config.topSystemOffset;
+  const viewportBottom = config.pageHeight - config.margins.bottom - footerHeight;
+  const viewportLeft = config.contentStartX;
+  const viewportRight = config.contentStartX + config.contentWidth;
+  const contentBounds = {
+    left: config.contentStartX,
+    right: maxContentRight,
+    top: systemTop,
+    bottom: systemBottom
+  };
+  const viewportBounds = {
+    left: viewportLeft,
+    right: viewportRight,
+    top: viewportTop,
+    bottom: viewportBottom
+  };
 
   const minimumHeight = Math.ceil(systemBottom + footerHeight + config.margins.bottom);
   const height = Math.max(config.pageHeight, minimumHeight);
@@ -1156,13 +1466,17 @@ function resolvePageRenderEnvelope(
   if (config.mode === 'horizontal-continuous') {
     return {
       width: Math.max(config.pageWidth, Math.ceil(maxContentRight + config.margins.right)),
-      height
+      height,
+      contentBounds,
+      viewportBounds
     };
   }
 
   return {
     width: config.pageWidth,
-    height
+    height,
+    contentBounds,
+    viewportBounds
   };
 }
 
@@ -1202,6 +1516,7 @@ function buildMeasureColumnLayoutForSystem(
   score: Score,
   partLayouts: PartLayout[],
   system: SystemRange,
+  measureSlots: number[],
   contentStartX: number,
   availableWidth: number,
   fitToWidth: boolean,
@@ -1209,8 +1524,8 @@ function buildMeasureColumnLayoutForSystem(
   diagnostics: Diagnostic[]
 ): MeasureColumnLayout {
   const measureCount = Math.max(1, system.endMeasure - system.startMeasure);
-  const sourceWidthHints = resolveSystemMeasureWidthHints(partLayouts, system);
-  const densityHints = resolveSystemMeasureDensityHints(partLayouts, system);
+  const sourceWidthHints = resolveSystemMeasureWidthHints(partLayouts, system, measureSlots);
+  const densityHints = resolveSystemMeasureDensityHints(partLayouts, system, measureSlots);
   const minimumWidths = resolveMinimumColumnWidths(densityHints, fitToWidth);
   const sourceHintCount = sourceWidthHints.filter(
     (hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0
@@ -1271,7 +1586,14 @@ function buildMeasureColumnLayoutForSystem(
 
   if (fitToWidth) {
     if (justifySystem) {
-      const evenSplitWidth = Math.max(MINIMUM_FITTED_MEASURE_WIDTH, Math.floor(availableWidth / measureCount));
+      const targetWidth = resolveSparseSystemTargetWidth(
+        columnWidths,
+        densityHints,
+        availableWidth,
+        minimumWidths,
+        hasStructuredSourceWidthHints
+      );
+      const evenSplitWidth = Math.max(MINIMUM_FITTED_MEASURE_WIDTH, Math.floor(targetWidth / measureCount));
       const firstJustificationFloor = clampInt(
         minimumWidths[0] ?? MINIMUM_FITTED_MEASURE_WIDTH,
         MINIMUM_FITTED_MEASURE_WIDTH,
@@ -1282,7 +1604,7 @@ function buildMeasureColumnLayoutForSystem(
           ? firstJustificationFloor
           : MINIMUM_FITTED_MEASURE_WIDTH
       );
-      expandColumnWidthsToFit(columnWidths, availableWidth, justificationMinimumWidths);
+      expandColumnWidthsToFit(columnWidths, targetWidth, justificationMinimumWidths);
     } else {
       shrinkColumnWidthsToFit(columnWidths, availableWidth, minimumWidths);
     }
@@ -1337,7 +1659,7 @@ function resolveFirstColumnReadabilityFloor(
       .filter((hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0)
   );
   const baseRatio = hasStructuredSourceWidthHints
-    ? Math.min(FIRST_COLUMN_FLOOR_RATIO, 0.42)
+    ? Math.min(FIRST_COLUMN_FLOOR_RATIO, 0.5)
     : strongSourceWidthBias
       ? FIRST_COLUMN_STRONG_BIAS_FLOOR_RATIO
       : FIRST_COLUMN_FLOOR_RATIO;
@@ -1403,14 +1725,16 @@ function hasStrongSourceWidthBias(sourceWidthHints: Array<number | undefined>): 
  */
 function resolveSystemMeasureWidthHints(
   partLayouts: PartLayout[],
-  system: SystemRange
+  system: SystemRange,
+  measureSlots: number[]
 ): Array<number | undefined> {
   const widthHints: Array<number | undefined> = [];
 
-  for (let measureIndex = system.startMeasure; measureIndex < system.endMeasure; measureIndex += 1) {
+  for (let measureSlot = system.startMeasure; measureSlot < system.endMeasure; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
     const perPartWidths: number[] = [];
     for (const layout of partLayouts) {
-      const widthTenths = layout.part.measures[measureIndex]?.sourceWidthTenths;
+      const widthTenths = layout.part.measures[absoluteMeasureIndex]?.sourceWidthTenths;
       if (Number.isFinite(widthTenths) && (widthTenths ?? 0) > 0) {
         perPartWidths.push(widthTenths ?? 0);
       }
@@ -1432,11 +1756,16 @@ function resolveSystemMeasureWidthHints(
  * Dense rhythm columns (short values, tuplets, many tickables on a staff) get
  * higher hints so column allocation preserves readability.
  */
-function resolveSystemMeasureDensityHints(partLayouts: PartLayout[], system: SystemRange): number[] {
+function resolveSystemMeasureDensityHints(
+  partLayouts: PartLayout[],
+  system: SystemRange,
+  measureSlots: number[]
+): number[] {
   const hints: number[] = [];
 
-  for (let measureIndex = system.startMeasure; measureIndex < system.endMeasure; measureIndex += 1) {
-    hints.push(estimateMeasureDensityHintForIndex(partLayouts, measureIndex));
+  for (let measureSlot = system.startMeasure; measureSlot < system.endMeasure; measureSlot += 1) {
+    const absoluteMeasureIndex = measureSlots[measureSlot] ?? measureSlot;
+    hints.push(estimateMeasureDensityHintForIndex(partLayouts, absoluteMeasureIndex));
   }
 
   return hints;
@@ -1622,6 +1951,59 @@ function estimateSystemStartExtraWidth(
   const adjustedExtra = Math.max(0, dampedExtra - ignoredBaseline);
 
   return Math.min(adjustedExtra, Math.max(0, cap));
+}
+
+/**
+ * Resolve a target justified system width for sparse content.
+ * Dense windows still consume full available width; sparse windows compact
+ * proportionally to avoid over-stretched notation on low-occupancy systems.
+ */
+function resolveSparseSystemTargetWidth(
+  widths: number[],
+  densityHints: number[],
+  availableWidth: number,
+  minimumWidths: number[],
+  hasStructuredSourceWidthHints: boolean
+): number {
+  if (hasStructuredSourceWidthHints) {
+    return availableWidth;
+  }
+  const minimumRequiredWidth = minimumWidths.reduce((sum, width) => sum + width, 0);
+  if (minimumRequiredWidth >= availableWidth || widths.length === 0) {
+    return availableWidth;
+  }
+
+  const normalizedHints = densityHints
+    .filter((hint): hint is number => Number.isFinite(hint) && (hint ?? 0) > 0);
+  const meanDensity =
+    normalizedHints.length > 0
+      ? normalizedHints.reduce((sum, hint) => sum + hint, 0) / normalizedHints.length
+      : 1;
+  const peakDensity = normalizedHints.length > 0 ? Math.max(...normalizedHints) : 1;
+  if (peakDensity >= SPARSE_SYSTEM_DENSITY_THRESHOLD) {
+    return availableWidth;
+  }
+
+  const sparseDensitySignal = clamp(
+    (SPARSE_SYSTEM_DENSITY_THRESHOLD - meanDensity) /
+      Math.max(0.01, SPARSE_SYSTEM_DENSITY_THRESHOLD - VERY_SPARSE_SYSTEM_DENSITY_THRESHOLD),
+    0,
+    1
+  );
+  const peakSignal = clamp((SPARSE_SYSTEM_DENSITY_THRESHOLD - peakDensity) / 0.6, 0, 1);
+  const columnFactor = widths.length <= 2 ? 1 : widths.length <= 3 ? 0.9 : widths.length <= 4 ? 0.75 : 0.6;
+  const reductionRatio = clamp(
+    (sparseDensitySignal * 0.7 + peakSignal * 0.3) * MAX_SPARSE_SYSTEM_WIDTH_REDUCTION_RATIO * columnFactor,
+    0,
+    MAX_SPARSE_SYSTEM_WIDTH_REDUCTION_RATIO
+  );
+
+  const unclampedTarget = Math.round(availableWidth * (1 - reductionRatio));
+  const minimumTarget = Math.max(
+    minimumRequiredWidth,
+    Math.round(availableWidth * MIN_SPARSE_SYSTEM_TARGET_WIDTH_RATIO)
+  );
+  return clampInt(unclampedTarget, minimumTarget, availableWidth);
 }
 
 /**
@@ -1930,7 +2312,7 @@ function estimateIntraStaffGap(
   }
 
   if (noteCount === 0) {
-    return 14;
+    return 22;
   }
 
   const centerRatio = centerRegisterRisk / noteCount;
@@ -1938,10 +2320,22 @@ function estimateIntraStaffGap(
   const denseRatio = denseRhythmRisk / noteCount;
   const crossStaffRatio =
     crossStaffComparisons > 0 ? clamp(crossStaffProximityRisk / crossStaffComparisons, 0, 1) : 0;
-  const baseGap = 28 + complexity * 20 + textAnnotationPressure * 26;
-  const riskBoost = centerRatio * 36 + curvedRatio * 34 + denseRatio * 20 + crossStaffRatio * 28;
-  const peakBoost = peakMeasureRisk * 30;
-  return clampInt(baseGap + riskBoost + peakBoost, 32, 134);
+  const baseGap = 22 + complexity * 14 + textAnnotationPressure * 18;
+  const riskBoost = centerRatio * 26 + curvedRatio * 24 + denseRatio * 14 + crossStaffRatio * 20;
+  const peakBoost = peakMeasureRisk * 16;
+  const rawGap = clampInt(baseGap + riskBoost + peakBoost, 24, 96);
+  const lowRiskSignal = clamp(
+    1 -
+      (centerRatio * 0.5 +
+        curvedRatio * 0.7 +
+        crossStaffRatio * 0.72 +
+        denseRatio * 0.45 +
+        textAnnotationPressure * 0.55),
+    0,
+    1
+  );
+  const compactionCredit = Math.round(lowRiskSignal * 18);
+  return clampInt(rawGap - compactionCredit, 22, 96);
 }
 
 /**
@@ -1950,13 +2344,20 @@ function estimateIntraStaffGap(
  */
 function resolveInterPartGap(current: PartLayout, next: PartLayout, config: LayoutPlanConfig): number {
   const adjacentComplexity = (current.complexity + next.complexity) / 2;
-  const complexityBoost = Math.round(adjacentComplexity * 18);
-  const annotationBoost = Math.round(((current.textAnnotationPressure + next.textAnnotationPressure) / 2) * 34);
+  const complexityBoost = Math.round(adjacentComplexity * 14);
+  const annotationBoost = Math.round(((current.textAnnotationPressure + next.textAnnotationPressure) / 2) * 24);
   // Give pitch-spread pressure slightly more authority than generic complexity.
   // Extreme register writing (ledger-heavy top/bottom notes) is a common source
   // of adjacent-staff visual crowding even when rhythms are simple.
-  const verticalSpreadBoost = Math.round(((current.verticalSpread + next.verticalSpread) / 2) * 42);
-  return clampInt(config.partGap + complexityBoost + annotationBoost + verticalSpreadBoost, 24, 132);
+  const verticalSpreadBoost = Math.round(((current.verticalSpread + next.verticalSpread) / 2) * 30);
+  const rawGap = config.partGap + complexityBoost + annotationBoost + verticalSpreadBoost;
+  const lowRiskSignal = clamp(
+    1 - (adjacentComplexity * 0.55 + ((current.verticalSpread + next.verticalSpread) / 2) * 0.8),
+    0,
+    1
+  );
+  const compactionCredit = Math.round(lowRiskSignal * 16);
+  return clampInt(rawGap - compactionCredit, 20, 104);
 }
 
 /** Resolve one clef sign for pitch-range heuristics on a staff at a given measure index. */

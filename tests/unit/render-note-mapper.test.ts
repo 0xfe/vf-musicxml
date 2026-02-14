@@ -120,6 +120,58 @@ describe('render note mapper', () => {
     expect(diagnostics.some((diagnostic) => diagnostic.code === 'UNSUPPORTED_ORNAMENT')).toBe(false);
   });
 
+  it('records non-arpeggiate fallback diagnostics during note mapping', () => {
+    const xml = `
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <notations><non-arpeggiate type="bottom"/></notations>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <notations><non-arpeggiate type="top"/></notations>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const parsed = parseMusicXML(xml, { mode: 'lenient' });
+    expect(parsed.score).toBeDefined();
+    const measure = parsed.score?.parts[0]?.measures[0];
+    expect(measure).toBeDefined();
+
+    const diagnostics: Diagnostic[] = [];
+    const clef = mapClef(measure?.effectiveAttributes.clefs[0], []);
+    const noteResult = buildMeasureNotes(measure!, parsed.score!.ticksPerQuarter, clef, diagnostics);
+
+    expect(noteResult.notes).toHaveLength(1);
+    const strokes = noteResult.notes[0]?.getModifiersByType('Stroke') ?? [];
+    expect(strokes.length).toBe(0);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_UNSUPPORTED')).toBe(false);
+    expect(diagnostics.some((diagnostic) => diagnostic.code === 'NON_ARPEGGIATE_FALLBACK_RENDERED')).toBe(true);
+  });
+
   it('routes note events by staff number for multi-staff measures', () => {
     const xml = `
 <score-partwise version="4.0">

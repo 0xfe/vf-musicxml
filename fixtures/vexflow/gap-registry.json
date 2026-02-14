@@ -1,6 +1,6 @@
 {
-  "version": "2026-02-11",
-  "generated_at": "2026-02-11T00:00:00Z",
+  "version": "2026-02-14",
+  "generated_at": "2026-02-14T00:00:00Z",
   "entries": [
     {
       "id": "VF-GAP-001",
@@ -33,29 +33,31 @@
     {
       "id": "VF-GAP-002",
       "title": "Non-arpeggiate chord notation lacks direct VexFlow rendering primitive",
-      "lifecycle_stage": "reproduced",
+      "lifecycle_stage": "local_patch",
       "severity": "medium",
       "owner": "musicxml-core",
       "musicxml_fixture_ids": [
-        "lilypond-32a-notations"
+        "lilypond-32a-notations",
+        "lilypond-32d-arpeggio"
       ],
       "diagnostic_codes": [
-        "NON_ARPEGGIATE_UNSUPPORTED"
+        "NON_ARPEGGIATE_FALLBACK_RENDERED"
       ],
-      "workaround_summary": "Parser preserves non-arpeggiate semantics and renderer emits explicit diagnostics; visual fallback/patch strategy still pending.",
+      "workaround_summary": "Renderer now maps non-arpeggiate to a bracket-style fallback pass and emits explicit fallback diagnostics while upstream primitive support remains pending; parity proof-points assert fallback-marker and bracket-anchor cardinality on lilypond-32a/32d.",
       "local_patch": {
-        "type": "none",
-        "scope": "pending",
-        "path": "src/vexflow/render-note-mapper.ts"
+        "type": "wrapper",
+        "scope": "musicxml-renderer",
+        "path": "src/vexflow/render-note-mapper-mappings.ts"
       },
       "upstream": {
         "status": "planned",
         "target_branch": "codex/vexflow-non-arpeggiate-support"
       },
       "tests": [
-        "tests/integration/render-quality-regressions.test.ts"
+        "tests/integration/render-quality-regressions.test.ts",
+        "tests/unit/render-note-mapper.test.ts"
       ],
-      "updated_at": "2026-02-12"
+      "updated_at": "2026-02-14"
     }
   ]
 }

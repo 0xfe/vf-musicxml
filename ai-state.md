@@ -6,7 +6,13 @@
 - Planning was re-baselined to a linear execution order to reduce regression churn: finish M10D blockers first, then close M8, then close M9; M11 stays planning-only.
 - New structural follow-on milestone `docs/planning/milestone-12.md` was opened for Review-3 completeness items (multi-voice rendering, completeness-aware quality scoring, navigation/pedal/ottava/inline-clef notation coverage, cross-staff robustness, and layout-coefficient/API cleanup).
 - Review integration is now tracked through `F-039` (`docs/planning/feedback/feedback-R3.md` disposition section).
-- Active highest-priority bugs now include `B-011` (left-bar squeeze/overflow on `realworld-music21-bach-bwv244-10` and `realworld-music21-mozart-k458-m1`) and `B-012` (dynamic-glyph lane collisions).
+- Active mainline priorities are now promotion-confidence items `B-013`/`B-014`/`R-036` plus `B-010` parity/upstreaming; `B-003`/`B-007` remain MITIGATING but are now tracked in an opportunistic long-form lane.
+- Out-of-process page probing is now available for long-form gates (`scripts/probe-page-quality.mjs`) and is wired into blocking integration checks for op133-class fixtures.
+- M10D compaction + pagination/API follow-up is now in mitigation with expanded blocking confidence:
+  - `B-013`: generalized sparse-system horizontal compaction is active in renderer column planning.
+  - `B-014`: bounded low-risk vertical compaction is active for grand-staff/inter-part gaps.
+  - `R-036`: public APIs now support measure-window rendering + per-page overflow telemetry + measure-number options; demo pages now ship prev/next navigation and page summaries.
+  - New blocker-grade proofs now include additional real-world fixture gates for compaction envelopes and multi-page pager telemetry payloads.
 - M8A baseline landed: full active LilyPond golden-reference mapping (156 fixtures) with cached PNGs and manifest checksums.
 - M8B first slice landed: generalized first-column width compensation fixes opening-measure compression (`lilypond-01a-pitches-pitches`), and deterministic measure-spacing ratio tooling now reports first-vs-rest spacing consistency.
 - `lilypond-01a-pitches-pitches` headless visual baseline has been refreshed post-fix (`tests/visual-headless/baselines/lilypond-01a-pitches-pitches.png`).
@@ -46,7 +52,7 @@
 - Latest category-31/32 inspection deltas:
   - `31a-Directions` text overlaps: `13 -> 2`,
   - `32a-Notations` text overlaps: `21 -> 3`,
-  - remaining warning: `NON_ARPEGGIATE_UNSUPPORTED` (tracked as `VF-GAP-002`).
+  - non-arpeggiate now renders with explicit bracket fallback output (`vf-non-arpeggiate-bracket`) and diagnostics (`NON_ARPEGGIATE_FALLBACK_RENDERED`) under `VF-GAP-002` local patch tracking.
 - Latest spacing telemetry + vertical spread follow-up (2026-02-13):
   - inter-part spacing now reacts more strongly to extreme ledger-register content (`estimatePartVerticalSpread` blends average + peak + elevated spread prevalence; `resolveInterPartGap` increases vertical-spread weight),
   - spacing-band width-ratio telemetry now avoids sparse-opening false positives by applying note-count normalization only when first bars are denser than later bars,
@@ -84,7 +90,7 @@
   - full validation remains green: `npm run lint`, `npm run typecheck`, `npm run test` (23/23 files, 137/137 tests), `npm run demos:build`.
 - Latest direction-lane correctness follow-up:
   - default staff routing for MusicXML directions was corrected: when `direction.staff` is omitted in multi-staff parts, direction text/dynamics now render only on staff 1 (top staff) instead of duplicating on every staff.
-  - this reduces generalized duplicated dynamic-glyph collisions and is tracked under `B-012` (now MITIGATING, not OPEN).
+  - this reduced a generalized source of duplicated dynamic-glyph collisions and was part of the `B-012` closeout path.
   - direction/dynamics lane spacing was further tuned (`src/vexflow/render-notations-text.ts`):
     - increased direction row spacing,
     - tuned above/below dynamics baseline shifts,
@@ -105,6 +111,12 @@
   - adaptive inter-part vertical spacing based on adjacent-part complexity (`resolveInterPartGap`),
   - safer label wrap/truncation under source system margins without shrinking notation width,
   - slur side selection by endpoint skew minimization when placement is not explicit.
+- Latest M10D compaction/API pass (2026-02-14):
+  - sparse justified systems now compact by density-aware target width (`resolveSparseSystemTargetWidth`) instead of unconditional full-width stretch,
+  - grand-staff/inter-part vertical spacing now applies bounded low-risk compaction credits (keeps sparse pages tighter while preserving dense-scene headroom),
+  - renderer options now support partial windows (`layout.window`) and measure-number overlays (`layout.measureNumbers`),
+  - renderer outputs now include `pageMetrics` with `contentBounds`, `viewportBounds`, and per-edge overflow indicators/amounts,
+  - demo pages now render all pages with first-class prev/next navigation and per-page overflow summaries.
 - Integration coverage now includes explicit paginated-option assertions (title/page-number/system-label rendering under forced multi-page layout).
 - Deterministic page-background injection is now enforced (`mx-page-background`) so headless/browser screenshots do not render transparent pages as black.
 - Parser now falls back to centered `<credit><credit-words>` for `metadata.workTitle` when explicit `<work><work-title>` is absent.
@@ -286,7 +298,7 @@
     - `realworld-music21-mozart-k458-m1`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=0.9161`.
     - `realworld-music21-bach-bwv244-10`: `barlineIntrusions=0`, `compressed bands=0/8`, `min band ratio=1.0`.
     - `lilypond-03a-rhythm-durations`: `barlineIntrusions=0`, `compressed bands=0/2`.
-  - Remaining active visual-layout issues are now concentrated in dynamic/text lane collisions (`B-012`) and residual Schumann dense-band spacing/tie proximity (`B-007`).
+  - Remaining active visual-layout issues are now concentrated in later-page sparse/curve proof-point promotion (`B-003`/`B-007`) and non-arpeggiate fallback parity/upstreaming (`B-010`).
 - Latest M10D spacing telemetry status (2026-02-13):
   - Spacing-band triage now includes density-aware width estimates:
     - `firstMeasureNoteheadCount`
@@ -375,10 +387,11 @@
   - Use Playwright MCP for targeted browser checks where possible; keep deterministic headless gates as primary blockers in restricted environments.
 
 ## Next likely work (M8 + M9 + M10 execution)
-- Expand notation geometry rule coverage (presence, spacing, justification, collision severity, text clearances) and integrate as blocking deterministic gates.
-- Iterate golden comparison alignment/per-region metrics and expand proof-point set.
-- Land paginated-default rendering API and page metadata rendering (title/labels/page numbers) for real-world PDF/image parity.
-- Execute M9 proof-point workflow and style burndown waves in parallel with M8 remediation.
+- Keep `B-013`/`B-014`/`R-036` promotion gates stable across broader fixture churn and tighten where deterministic headroom remains.
+- Continue `B-010` parity/upstream prep (`VF-GAP-002`) while bracket fallback stays stable.
+- Resume M8 closeout: deterministic rule-pack expansion and golden-threshold promotion.
+- Resume M9 closeout: style-rule diagnostics and overlap-budget tightening.
+- Keep `B-003`/`B-007` in opportunistic long-form hardening only (non-blocking current sequence).
 - Latest M10D text-lane routing status (2026-02-12, follow-up):
   - Added per-system lane persistence for directions/harmonies/lyrics in `src/vexflow/render.ts`.
   - Replaced right-edge-only row packing with interval occupancy checks in `src/vexflow/render-notations-text.ts` to handle non-monotonic event ordering.
@@ -395,4 +408,16 @@
 - 2026-02-13 follow-up: harmony text packing now measures width with the same bold/italic font used at draw-time (`measureHarmonyTextWidth`), adds side-padding to packed row spans, and expands harmony row search budget. This removed the last measured overlap in `71f-allchordtypes` (`overlaps 1 -> 0`).
 - 2026-02-13 follow-up: harmony quality labels are now compactly formatted from MusicXML kind tokens (e.g., `C major-seventh` -> `Cmaj7`) while preserving explicitly styled custom text. Related SVG structure baseline test was updated to expect compact symbols.
 - 2026-02-13 follow-up: auto system-gap expansion now uses a dedicated lane-collision pressure signal (lyrics/harmony/direction words) and discounts dynamics-only pressure. This preserves collision protection but avoids over-penalizing dynamic-heavy systems.
-- Current open nuance: Schumann page 1 remains clean under density-aware spacing (`compressed 0/4`), but page 4 still reports one low-ratio band under current heuristic despite visually acceptable output; this remains tracked under `B-007` for heuristic/pagination calibration.
+- Current open nuance: long-form coverage is now full-page and out-of-process for op133-class fixtures (`realworld-music21-beethoven-op133-longform`, `realworld-music21-bach-bwv248-42-4`, `realworld-openscore-lieder-just-for-today`) via `scripts/probe-page-quality.mjs` + blocking integration gates, and curve stability remains clean across those sweeps.
+- 2026-02-14 blocker-wave follow-up:
+  - `B-012` closeout landed with a broader deterministic category-31/71 overlap sweep (`31b`, `31c`, `31f`, `71a`, `71c`, `71d`, `71e`) while preserving tight budgets on `31a`, `31d`, and `71f`.
+  - Schumann later-page regression gating now evaluates all rendered pages (8 pages) for sparse-page compression and curve stability; current baseline shows zero compressed width-ratio bands and zero extreme curve paths per page.
+  - Additional multi-page sparse/curve gates remain active for `realworld-music21-bach-bwv244-10`, `realworld-music21-bach-bwv1-6`, `realworld-music21-mozart-k545-exposition`, and `realworld-music21-berlin-alexanders-ragtime`, and long-form full-page gates now run on op133-class fixtures with bounded compressed-band budgets.
+  - Latest long-form baseline from full-page subprocess sweeps: `op133` weakest width-ratio `0.3872` (compressed bands `14`), `bwv248-42-4` weakest `0.3761` (compressed bands `18`), `just-for-today` weakest `0.0717` (compressed bands `6`); this keeps `B-003`/`B-007` in MITIGATING rather than closeable.
+  - `B-010` moved from OPEN to MITIGATING: non-arpeggiate ornaments now render via a dedicated bracket fallback pass (`drawMeasureNonArpeggiates`, SVG class `vf-non-arpeggiate-bracket`) and emit `NON_ARPEGGIATE_FALLBACK_RENDERED` instead of `NON_ARPEGGIATE_UNSUPPORTED`.
+  - Promotion-confidence follow-up landed:
+    - `B-013` now has additional real-world sparse-compaction envelope blockers on `realworld-music21-mozart-k545-exposition` and `realworld-music21-berlin-alexanders-ragtime`.
+    - `B-014` now has additional real-world paired-staff vertical-gap envelope blockers on `realworld-music21-schumann-clara-polonaise-op1n1` and `realworld-openscore-lieder-just-for-today`.
+    - `R-036` now has additional multi-page API telemetry + measure-window blockers (`bwv1-6`, `schumann`) plus demo pager telemetry payload checks on generated multi-page demo pages.
+    - `B-010` parity checks now enforce non-arpeggiate marker/diagnostic and anchor/bracket cardinality consistency on `32a` + `32d` for upstream readiness evidence.
+  - Priority reset: `B-003`/`B-007` remain MITIGATING but are now explicitly opportunistic while mainline flow moves through `B-013`/`B-014`/`R-036`/`B-010`, then M8/M9 closeout.

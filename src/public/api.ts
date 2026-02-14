@@ -2,7 +2,10 @@ import type { Diagnostic } from '../core/diagnostics.js';
 import type { Score } from '../core/score.js';
 import { extractMusicXmlFromMxl } from '../parser/mxl.js';
 import { parseScorePartwise } from '../parser/parse.js';
-import type { RenderLayoutOptions } from '../vexflow/render-types.js';
+import type {
+  RenderLayoutOptions,
+  RenderPageMetricsLike
+} from '../vexflow/render-types.js';
 import { renderScoreToElement, renderScoreToSVGPages } from '../vexflow/render.js';
 
 /** Parser configuration shared by sync and async entry points. */
@@ -34,12 +37,14 @@ export interface RenderOptions {
 /** Page-oriented rendering output used by string/SVG workflows. */
 export interface RenderPagesResult {
   pages: string[];
+  pageMetrics: RenderPageMetricsLike[];
   diagnostics: Diagnostic[];
 }
 
 /** DOM rendering output that includes lifecycle cleanup. */
 export interface RenderToElementResult {
   pageCount: number;
+  pageMetrics: RenderPageMetricsLike[];
   diagnostics: Diagnostic[];
   dispose(): void;
 }

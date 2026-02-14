@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -1168,17 +1171,12 @@ describe('public API renderer placeholder', () => {
       }
     });
 
-    const geometry = collectNotationGeometry(result.pages[0] ?? '');
-    const barlineCenters = [...new Set(
-      geometry.barlines
-        .map((barline) => Math.round((barline.bounds.x + barline.bounds.width / 2) * 100) / 100)
-    )].sort((left, right) => left - right);
-
-    expect(barlineCenters.length).toBeGreaterThanOrEqual(2);
-    const contentSpan = (barlineCenters[barlineCenters.length - 1] ?? 0) - (barlineCenters[0] ?? 0);
-    // 900 - 100 - 80 - 12 - 8 = 700 expected content width.
-    expect(contentSpan).toBeGreaterThan(695);
-    expect(contentSpan).toBeLessThan(705);
+    const metric = result.pageMetrics[0];
+    expect(metric).toBeDefined();
+    // 900 - 100 - 80 - 12 - 8 = 700 expected viewport width from page/system margins.
+    expect(metric?.viewportBounds.width ?? 0).toBeGreaterThan(695);
+    expect(metric?.viewportBounds.width ?? 0).toBeLessThan(705);
+    expect(metric?.contentBounds.width ?? 0).toBeLessThanOrEqual(metric?.viewportBounds.width ?? 0);
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 
@@ -1228,6 +1226,448 @@ describe('public API renderer placeholder', () => {
     const firstMeasureWidth = (barlineCenters[1] ?? 0) - (barlineCenters[0] ?? 0);
     const secondMeasureWidth = (barlineCenters[2] ?? 0) - (barlineCenters[1] ?? 0);
     expect(secondMeasureWidth).toBeGreaterThan(firstMeasureWidth * 1.6);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('supports partial measure-window rendering with absolute page metrics telemetry', () => {
+    const buildMeasure = (index: number, step: 'C' | 'D' | 'E' | 'F') => ({
+      index,
+      numberLabel: String(index + 1),
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'partial-window-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [buildMeasure(0, 'C'), buildMeasure(1, 'D'), buildMeasure(2, 'E'), buildMeasure(3, 'F')]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        window: {
+          startMeasure: 1,
+          endMeasure: 3
+        },
+        page: {
+          width: 900,
+          height: 420
+        },
+        system: {
+          targetMeasuresPerSystem: 2
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pageMetrics).toHaveLength(1);
+    expect(result.pageMetrics[0]?.measureWindow).toEqual({
+      startMeasure: 1,
+      endMeasure: 3
+    });
+    expect(result.pageMetrics[0]?.overflow.left).toBe(false);
+    expect(result.pageMetrics[0]?.overflow.top).toBe(false);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('reports per-edge overflow telemetry when layout exceeds viewport bounds', () => {
+    const buildMeasure = (index: number) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: Array.from({ length: 8 }, (_, eventIndex) => ({
+            kind: 'note' as const,
+            voice: '1',
+            offsetTicks: eventIndex * 60,
+            durationTicks: 60,
+            noteType: '16th' as const,
+            beams: [{ number: 1 as const, value: eventIndex === 7 ? ('end' as const) : eventIndex === 0 ? ('begin' as const) : ('continue' as const) }],
+            notes: [{ pitch: { step: 'C' as const, octave: 5 } }]
+          }))
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'overflow-telemetry-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [{ id: 'P1', measures: [buildMeasure(0), buildMeasure(1), buildMeasure(2)] }],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'horizontal-continuous',
+        page: {
+          width: 520,
+          height: 380,
+          margins: { left: 36, right: 36, top: 24, bottom: 24 }
+        },
+        system: {
+          targetMeasuresPerSystem: 3
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pageMetrics).toHaveLength(1);
+    expect(result.pageMetrics[0]?.overflow.right).toBe(true);
+    expect((result.pageMetrics[0]?.overflow.rightAmount ?? 0)).toBeGreaterThan(0);
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('keeps multi-page real-world telemetry and measure-window slicing stable', async () => {
+    const fixtures = [
+      {
+        file: 'realworld-music21-bach-bwv1-6.mxl',
+        minPages: 2,
+        window: { startMeasure: 4, endMeasure: 10 },
+        maxWindowPages: 1
+      },
+      {
+        file: 'realworld-music21-schumann-clara-polonaise-op1n1.mxl',
+        minPages: 6,
+        window: { startMeasure: 4, endMeasure: 12 },
+        maxWindowPages: 2
+      }
+    ];
+
+    for (const fixture of fixtures) {
+      const fixturePath = path.resolve(`fixtures/conformance/realworld/${fixture.file}`);
+      const archive = await readFile(fixturePath);
+      const parsed = await parseMusicXMLAsync(
+        {
+          data: new Uint8Array(archive),
+          format: 'mxl'
+        },
+        {
+          sourceName: `fixtures/conformance/realworld/${fixture.file}`,
+          mode: 'lenient'
+        }
+      );
+      expect(parsed.score).toBeDefined();
+      const score = parsed.score!;
+
+      const full = renderToSVGPages(score, {
+        layout: {
+          mode: 'paginated'
+        }
+      });
+      expect(full.pages.length).toBeGreaterThanOrEqual(fixture.minPages);
+      expect(full.pageMetrics).toHaveLength(full.pages.length);
+      expect(full.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+
+      const scoreMeasureCount = score.parts.reduce((max, part) => Math.max(max, part.measures.length), 0);
+      let fullCursor = 0;
+      for (let index = 0; index < full.pageMetrics.length; index += 1) {
+        const metric = full.pageMetrics[index];
+        expect(metric?.pageNumber).toBe(index + 1);
+        expect(metric?.pageCount).toBe(full.pages.length);
+        expect(metric?.measureWindow).toBeDefined();
+        expect(metric?.measureWindow?.startMeasure).toBe(fullCursor);
+        expect((metric?.measureWindow?.endMeasure ?? 0)).toBeGreaterThan(fullCursor);
+        fullCursor = metric?.measureWindow?.endMeasure ?? fullCursor;
+        expect(typeof metric?.overflow.left).toBe('boolean');
+        expect(typeof metric?.overflow.right).toBe('boolean');
+        expect(typeof metric?.overflow.top).toBe('boolean');
+        expect(typeof metric?.overflow.bottom).toBe('boolean');
+      }
+      expect(fullCursor).toBe(scoreMeasureCount);
+
+      const windowed = renderToSVGPages(score, {
+        layout: {
+          mode: 'paginated',
+          window: fixture.window
+        }
+      });
+      expect(windowed.pages.length).toBeGreaterThan(0);
+      expect(windowed.pages.length).toBeLessThanOrEqual(fixture.maxWindowPages);
+      expect(windowed.pages.length).toBeLessThan(full.pages.length);
+      expect(windowed.pageMetrics).toHaveLength(windowed.pages.length);
+      expect(windowed.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+
+      let windowCursor = fixture.window.startMeasure;
+      for (let index = 0; index < windowed.pageMetrics.length; index += 1) {
+        const metric = windowed.pageMetrics[index];
+        expect(metric?.pageNumber).toBe(index + 1);
+        expect(metric?.pageCount).toBe(windowed.pages.length);
+        expect(metric?.measureWindow?.startMeasure).toBe(windowCursor);
+        expect((metric?.measureWindow?.endMeasure ?? 0)).toBeGreaterThan(windowCursor);
+        windowCursor = metric?.measureWindow?.endMeasure ?? windowCursor;
+      }
+      expect(windowCursor).toBe(fixture.window.endMeasure);
+    }
+  });
+
+  it('draws configurable measure-number overlays at measure starts', () => {
+    const buildMeasure = (index: number, step: 'C' | 'D' | 'E' | 'F') => ({
+      index,
+      numberLabel: String(index + 1),
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              offsetTicks: 0,
+              durationTicks: 480,
+              notes: [{ pitch: { step, octave: 4 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'measure-number-overlay-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [
+        {
+          id: 'P1',
+          measures: [buildMeasure(0, 'C'), buildMeasure(1, 'D'), buildMeasure(2, 'E'), buildMeasure(3, 'F')]
+        }
+      ],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        measureNumbers: {
+          enabled: true,
+          interval: 2,
+          showFirst: true
+        },
+        system: {
+          targetMeasuresPerSystem: 4
+        }
+      }
+    });
+
+    expect(result.pages.length).toBe(1);
+    expect(result.pages[0]).toContain('>1<');
+    expect(result.pages[0]).toContain('>3<');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('compacts sparse justified systems instead of stretching them to full content width', () => {
+    const buildMeasure = (
+      index: number,
+      noteType: 'whole' | '16th',
+      eventsPerMeasure: number
+    ) => ({
+      index,
+      effectiveAttributes: {
+        staves: 1,
+        clefs: [{ staff: 1, sign: 'G' as const, line: 2 }],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: Array.from({ length: eventsPerMeasure }, (_, eventIndex) => ({
+            kind: 'note' as const,
+            voice: '1',
+            offsetTicks: eventIndex * (480 / eventsPerMeasure),
+            durationTicks: 480 / eventsPerMeasure,
+            noteType,
+            notes: [{ pitch: { step: 'C' as const, octave: 4 } }]
+          }))
+        }
+      ]
+    });
+
+    const sparseScore: Score = {
+      id: 'sparse-system-compact-stub',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 1100,
+        pageHeight: 500,
+        pageMargins: { left: 60, right: 60, top: 36, bottom: 36 }
+      },
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [{ id: 'P1', measures: [buildMeasure(0, 'whole', 1), buildMeasure(1, 'whole', 1)] }],
+      spanners: []
+    };
+
+    const denseScore: Score = {
+      id: 'dense-system-fullwidth-stub',
+      ticksPerQuarter: 480,
+      defaults: {
+        pageWidth: 1100,
+        pageHeight: 500,
+        pageMargins: { left: 60, right: 60, top: 36, bottom: 36 }
+      },
+      partList: [{ id: 'P1', name: 'Music' }],
+      parts: [{ id: 'P1', measures: [buildMeasure(0, '16th', 8), buildMeasure(1, '16th', 8)] }],
+      spanners: []
+    };
+
+    const sparse = renderToSVGPages(sparseScore, {
+      layout: {
+        mode: 'paginated',
+        scale: 1,
+        system: {
+          targetMeasuresPerSystem: 2
+        }
+      }
+    });
+    const dense = renderToSVGPages(denseScore, {
+      layout: {
+        mode: 'paginated',
+        scale: 1,
+        system: {
+          targetMeasuresPerSystem: 2
+        }
+      }
+    });
+
+    const sparseMetric = sparse.pageMetrics[0];
+    const denseMetric = dense.pageMetrics[0];
+    expect(sparseMetric).toBeDefined();
+    expect(denseMetric).toBeDefined();
+    const sparseWidth = sparseMetric?.contentBounds.width ?? 0;
+    const denseWidth = denseMetric?.contentBounds.width ?? 0;
+    const viewportWidth = sparseMetric?.viewportBounds.width ?? 0;
+
+    expect(viewportWidth).toBeGreaterThan(900);
+    expect(denseWidth).toBeGreaterThan(sparseWidth);
+    expect(viewportWidth - sparseWidth).toBeGreaterThanOrEqual(60);
+    expect(sparse.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+    expect(dense.diagnostics.some((d) => d.severity === 'error')).toBe(false);
+  });
+
+  it('keeps sparse grand-staff vertical gaps inside a bounded range', () => {
+    const buildMeasure = (index: number) => ({
+      index,
+      effectiveAttributes: {
+        staves: 2,
+        clefs: [
+          { staff: 1, sign: 'G' as const, line: 2 },
+          { staff: 2, sign: 'F' as const, line: 4 }
+        ],
+        timeSignature: { beats: 4, beatType: 4 },
+        keySignature: { fifths: 0 },
+        divisions: 1
+      },
+      attributeChanges: [],
+      directions: [],
+      voices: [
+        {
+          id: '1',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '1',
+              staff: 1,
+              offsetTicks: 0,
+              durationTicks: 480,
+              noteType: 'whole' as const,
+              notes: [{ pitch: { step: 'C' as const, octave: 5 } }]
+            }
+          ]
+        },
+        {
+          id: '2',
+          events: [
+            {
+              kind: 'note' as const,
+              voice: '2',
+              staff: 2,
+              offsetTicks: 0,
+              durationTicks: 480,
+              noteType: 'whole' as const,
+              notes: [{ pitch: { step: 'C' as const, octave: 3 } }]
+            }
+          ]
+        }
+      ]
+    });
+
+    const score: Score = {
+      id: 'bounded-grandstaff-gap-stub',
+      ticksPerQuarter: 480,
+      partList: [{ id: 'P1', name: 'Piano' }],
+      parts: [{ id: 'P1', measures: [buildMeasure(0), buildMeasure(1)] }],
+      spanners: []
+    };
+
+    const result = renderToSVGPages(score, {
+      layout: {
+        mode: 'paginated',
+        scale: 1,
+        system: {
+          targetMeasuresPerSystem: 2
+        }
+      }
+    });
+
+    const staves = extractSvgElementBounds(result.pages[0] ?? '', { selector: '.vf-stave' })
+      .map((entry) => entry.bounds)
+      .sort((left, right) => left.y - right.y);
+    const firstRow = staves[0];
+    const secondRow = staves.find((entry) => entry.y > (firstRow?.y ?? 0) + 8);
+    expect(firstRow).toBeDefined();
+    expect(secondRow).toBeDefined();
+
+    const gap = secondRow && firstRow ? secondRow.y - (firstRow.y + firstRow.height) : 0;
+    expect(gap).toBeGreaterThanOrEqual(20);
+    expect(gap).toBeLessThanOrEqual(140);
     expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(false);
   });
 
